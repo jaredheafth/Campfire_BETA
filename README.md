@@ -1,4 +1,4 @@
-# 🔥 Campfire Widget
+# 🔥 Campfire Widget - BETA
 
 An interactive Twitch widget that displays a campfire with viewers appearing around it when they use chat commands. Designed for OBS streaming software.
 
