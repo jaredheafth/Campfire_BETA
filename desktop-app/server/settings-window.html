@@ -1,0 +1,314 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Campfire Widget - Settings</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a1a;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }
+        .settings-header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+        .settings-header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .settings-section-item {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #2a2a2a;
+            border: 1px solid #333;
+            border-radius: 8px;
+        }
+        .settings-section-item label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .path-display {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #ccc;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+        .path-info {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 12px;
+        }
+        .path-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .button {
+            padding: 8px 16px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            background: #333;
+            color: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .button:hover {
+            background: #444;
+        }
+        .button-secondary {
+            background: #444;
+        }
+        .button-secondary:hover {
+            background: #555;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 6px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 13px;
+        }
+        input[type="number"]:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="settings-section-item">
+        <label>Default Sprites Path</label>
+        <div class="path-display" id="spritePathDisplay">Loading...</div>
+        <div class="path-info" id="spritePathInfo"></div>
+        <div class="path-actions">
+            <button class="button button-secondary" onclick="browseSpritePath()" style="flex: 1; min-width: 140px;">
+                📁 Browse Folder
+            </button>
+            <button class="button button-secondary" onclick="resetSpritePath()" id="resetSpritePathBtn" style="flex: 1; min-width: 140px; display: none;">
+                🔄 Reset to Default
+            </button>
+        </div>
+    </div>
+    
+    <div class="settings-section-item" style="border-top: 1px solid #333; padding-top: 20px; margin-top: 20px;">
+        <label>Widget Window Dimensions</label>
+        <div style="font-size: 11px; color: #888; margin-top: 5px; margin-bottom: 10px;">
+            Minimum: 600 x 600 pixels
+        </div>
+        <div style="margin-top: 10px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 120px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 5px;">Width</label>
+                <input type="number" id="windowWidth" min="600" max="7680" step="1">
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+                <label style="font-size: 11px; color: #aaa; display: block; margin-bottom: 5px;">Height</label>
+                <input type="number" id="windowHeight" min="600" max="4320" step="1">
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+                <button id="toggleLockBtn" onclick="toggleWindowLock()" class="button" style="padding: 6px 14px; white-space: nowrap;">
+                    🔓 Unlock
+                </button>
+            </div>
+        </div>
+        <div style="margin-top: 10px; display: flex; gap: 10px;">
+            <button class="button button-secondary" onclick="applyWindowDimensions()" style="flex: 1; min-width: 140px;">
+                ✅ Apply Dimensions
+            </button>
+        </div>
+        <div class="path-info" id="windowDimensionsInfo" style="margin-top: 8px; font-size: 11px; color: #888;"></div>
+    </div>
+    
+    <script>
+        let currentSpritePathInfo = null;
+        let currentWindowDimensions = null;
+        
+        async function loadSpritePathInfo() {
+            if (!window.electronAPI) {
+                document.getElementById('spritePathDisplay').textContent = 'Not available (Web version)';
+                document.getElementById('spritePathInfo').textContent = 'Sprite path settings are only available in the desktop app.';
+                return;
+            }
+            
+            try {
+                const pathInfo = await window.electronAPI.getSpritePath();
+                currentSpritePathInfo = pathInfo;
+                
+                const display = document.getElementById('spritePathDisplay');
+                const info = document.getElementById('spritePathInfo');
+                const resetBtn = document.getElementById('resetSpritePathBtn');
+                
+                display.textContent = pathInfo.effectivePath || 'Not found';
+                
+                if (pathInfo.isCustom) {
+                    info.innerHTML = `✅ Using custom path<br>Default: ${pathInfo.defaultPath}`;
+                    resetBtn.style.display = 'block';
+                } else {
+                    info.innerHTML = '✅ Using default path';
+                    resetBtn.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error loading sprite path info:', error);
+                document.getElementById('spritePathDisplay').textContent = 'Error loading path';
+            }
+        }
+        
+        async function browseSpritePath() {
+            if (!window.electronAPI) {
+                alert('❌ Sprite path settings are only available in the desktop app.');
+                return;
+            }
+            
+            try {
+                const result = await window.electronAPI.setSpritePath();
+                
+                if (result.canceled) {
+                    return;
+                }
+                
+                if (result.success) {
+                    alert(`✅ Sprite path updated!\n\n${result.path}`);
+                    await loadSpritePathInfo();
+                } else {
+                    alert(`❌ ${result.error || 'Failed to set sprite path'}`);
+                }
+            } catch (error) {
+                console.error('Error setting sprite path:', error);
+                alert(`❌ Error: ${error.message || 'Unknown error'}`);
+            }
+        }
+        
+        async function resetSpritePath() {
+            if (!window.electronAPI) {
+                alert('❌ Sprite path settings are only available in the desktop app.');
+                return;
+            }
+            
+            if (!confirm('Reset sprite path to default?\n\nThis will use the automatically detected path.')) {
+                return;
+            }
+            
+            try {
+                const result = await window.electronAPI.resetSpritePath();
+                
+                if (result.success) {
+                    alert(`✅ Sprite path reset to default!\n\n${result.path}`);
+                    await loadSpritePathInfo();
+                } else {
+                    alert(`❌ ${result.error || 'Failed to reset sprite path'}`);
+                }
+            } catch (error) {
+                console.error('Error resetting sprite path:', error);
+                alert(`❌ Error: ${error.message || 'Unknown error'}`);
+            }
+        }
+        
+        async function loadWindowDimensionsInfo() {
+            if (!window.electronAPI) {
+                document.getElementById('windowWidth').value = '1920';
+                document.getElementById('windowHeight').value = '1080';
+                document.getElementById('windowDimensionsInfo').textContent = 'Not available (Web version)';
+                document.getElementById('toggleLockBtn').style.display = 'none';
+                return;
+            }
+            
+            try {
+                const dimensions = await window.electronAPI.getWindowDimensions();
+                currentWindowDimensions = dimensions;
+                
+                document.getElementById('windowWidth').value = dimensions.width || 1920;
+                document.getElementById('windowHeight').value = dimensions.height || 1080;
+                
+                const toggleBtn = document.getElementById('toggleLockBtn');
+                if (toggleBtn) {
+                    toggleBtn.textContent = dimensions.locked ? '🔒 Locked' : '🔓 Unlocked';
+                    toggleBtn.style.background = dimensions.locked ? '#666' : '#444';
+                    
+                    document.getElementById('windowWidth').disabled = dimensions.locked;
+                    document.getElementById('windowHeight').disabled = dimensions.locked;
+                }
+                
+                const info = document.getElementById('windowDimensionsInfo');
+                if (info) {
+                    info.textContent = dimensions.locked 
+                        ? 'Window is locked - unlock to adjust dimensions'
+                        : 'Window is unlocked - you can resize the window directly';
+                }
+            } catch (error) {
+                console.error('Error loading window dimensions:', error);
+                document.getElementById('windowDimensionsInfo').textContent = 'Error loading dimensions';
+            }
+        }
+        
+        async function toggleWindowLock() {
+            if (!window.electronAPI) {
+                alert('❌ Window settings are only available in the desktop app.');
+                return;
+            }
+            
+            try {
+                const result = await window.electronAPI.toggleWindowLock();
+                if (result.locked !== undefined) {
+                    await loadWindowDimensionsInfo();
+                    alert(result.locked ? '🔒 Window locked' : '🔓 Window unlocked');
+                }
+            } catch (error) {
+                console.error('Error toggling window lock:', error);
+                alert(`❌ Error: ${error.message || 'Unknown error'}`);
+            }
+        }
+        
+        async function applyWindowDimensions() {
+            if (!window.electronAPI) {
+                alert('❌ Window settings are only available in the desktop app.');
+                return;
+            }
+            
+            const width = parseInt(document.getElementById('windowWidth').value);
+            const height = parseInt(document.getElementById('windowHeight').value);
+
+            if (isNaN(width) || isNaN(height) || width < 600 || height < 600) {
+                alert('❌ Please enter valid dimensions (min: 600x600)');
+                return;
+            }
+            
+            try {
+                const result = await window.electronAPI.setWindowDimensions({ width, height });
+                if (result.success) {
+                    alert(`✅ Window dimensions updated to ${width}x${height}`);
+                    await loadWindowDimensionsInfo();
+                } else {
+                    alert(`❌ ${result.error || 'Failed to update dimensions'}`);
+                }
+            } catch (error) {
+                console.error('Error setting window dimensions:', error);
+                alert(`❌ Error: ${error.message || 'Unknown error'}`);
+            }
+        }
+        
+        // Load data on startup
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                loadSpritePathInfo();
+                loadWindowDimensionsInfo();
+            });
+        } else {
+            loadSpritePathInfo();
+            loadWindowDimensionsInfo();
+        }
+    </script>
+</body>
+</html>
+    

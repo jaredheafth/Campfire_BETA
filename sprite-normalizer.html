@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprite Pixel Scale Normalizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #fff;
+            margin-bottom: 10px;
+        }
+
+        .info-box {
+            background: #2a2a2a;
+            border-left: 3px solid #667eea;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .info-box strong {
+            color: #667eea;
+        }
+
+        .section {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section h2 {
+            color: #fff;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .file-input-container {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #e0e0e0;
+            font-weight: 600;
+        }
+
+        input[type="file"] {
+            background: #1a1a1a;
+            color: #e0e0e0;
+            border: 2px solid #444;
+            border-radius: 6px;
+            padding: 8px;
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+
+        .button:hover {
+            background: #5568d3;
+        }
+
+        .button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .status.info {
+            background: #1f3a5f;
+            border-left: 3px solid #4facfe;
+        }
+
+        .status.success {
+            background: #1f3a2f;
+            border-left: 3px solid #43e97b;
+        }
+
+        .status.error {
+            background: #3a1f1f;
+            border-left: 3px solid #ff6b6b;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .preview-item {
+            background: #1a1a1a;
+            border: 2px solid #444;
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .preview-item img {
+            max-width: 100%;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        .preview-item .filename {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #888;
+            word-break: break-all;
+        }
+
+        .preview-item .pixel-scale {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .analysis-results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1a1a1a;
+            border-radius: 6px;
+            border: 1px solid #444;
+        }
+
+        .analysis-results table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .analysis-results th,
+        .analysis-results td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #444;
+        }
+
+        .analysis-results th {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .analysis-results td {
+            color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 Sprite Pixel Scale Normalizer</h1>
+    
+    <div class="info-box">
+        <strong>How it works:</strong> This tool analyzes pixel art sprites to detect their pixel scale (the size of each logical pixel square), then normalizes all sprites to match a reference sprite (Archer). It uses nearest-neighbor scaling to preserve pixel art quality.
+    </div>
+
+    <div class="section">
+        <h2>Step 1: Select Reference Sprite (Archer)</h2>
+        <div class="file-input-container">
+            <label for="referenceFile">Reference Sprite (Archer):</label>
+            <input type="file" id="referenceFile" accept="image/gif" />
+        </div>
+        <button class="button" onclick="analyzeReference()">Analyze Reference</button>
+        <div id="referenceStatus"></div>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Select Sprites to Normalize</h2>
+        <div class="file-input-container">
+            <label for="spriteFiles">Sprite Files (multiple):</label>
+            <input type="file" id="spriteFiles" accept="image/gif" multiple />
+        </div>
+        <button class="button" onclick="analyzeAll()">Analyze All Sprites</button>
+        <button class="button" onclick="normalizeAll()" id="normalizeBtn" disabled>Normalize All Sprites</button>
+        <div id="analysisStatus"></div>
+        <div id="analysisResults"></div>
+    </div>
+
+    <div id="previewSection" class="section" style="display: none;">
+        <h2>Preview Results</h2>
+        <div class="preview-grid" id="previewGrid"></div>
+    </div>
+
+    <script>
+        let referencePixelScale = null;
+        let spriteData = [];
+
+        // Detect pixel scale by analyzing repeating patterns
+        function detectPixelScale(imageData, width, height) {
+            // Strategy: Look for the smallest repeating block size
+            // We'll sample a region and look for patterns
+            
+            const sampleSize = Math.min(50, Math.min(width, height));
+            const startX = Math.floor((width - sampleSize) / 2);
+            const startY = Math.floor((height - sampleSize) / 2);
+            
+            // Try different block sizes (1x1, 2x2, 3x3, etc.)
+            for (let blockSize = 1; blockSize <= 10; blockSize++) {
+                if (checkBlockPattern(imageData, width, height, startX, startY, sampleSize, blockSize)) {
+                    return blockSize;
+                }
+            }
+            
+            // Fallback: return 1 if no pattern found
+            return 1;
+        }
+
+        function checkBlockPattern(imageData, width, height, startX, startY, sampleSize, blockSize) {
+            // Check if pixels within each block are consistent
+            const data = imageData.data;
+            let consistentBlocks = 0;
+            let totalBlocks = 0;
+            
+            for (let by = 0; by < Math.floor(sampleSize / blockSize); by++) {
+                for (let bx = 0; bx < Math.floor(sampleSize / blockSize); bx++) {
+                    const blockX = startX + bx * blockSize;
+                    const blockY = startY + by * blockSize;
+                    
+                    if (blockX + blockSize >= width || blockY + blockSize >= height) continue;
+                    
+                    // Get the color of the first pixel in the block
+                    const firstIdx = (blockY * width + blockX) * 4;
+                    const r = data[firstIdx];
+                    const g = data[firstIdx + 1];
+                    const b = data[firstIdx + 2];
+                    const a = data[firstIdx + 3];
+                    
+                    // Check if all pixels in the block match (within tolerance)
+                    let blockConsistent = true;
+                    for (let py = 0; py < blockSize && blockConsistent; py++) {
+                        for (let px = 0; px < blockSize && blockConsistent; px++) {
+                            const pxIdx = ((blockY + py) * width + (blockX + px)) * 4;
+                            const tolerance = 5; // Allow small variations
+                            
+                            if (Math.abs(data[pxIdx] - r) > tolerance ||
+                                Math.abs(data[pxIdx + 1] - g) > tolerance ||
+                                Math.abs(data[pxIdx + 2] - b) > tolerance ||
+                                Math.abs(data[pxIdx + 3] - a) > tolerance) {
+                                blockConsistent = false;
+                            }
+                        }
+                    }
+                    
+                    if (blockConsistent) consistentBlocks++;
+                    totalBlocks++;
+                }
+            }
+            
+            // If 80%+ of blocks are consistent, this is likely the pixel scale
+            return totalBlocks > 0 && (consistentBlocks / totalBlocks) > 0.8;
+        }
+
+        function analyzeReference() {
+            const fileInput = document.getElementById('referenceFile');
+            const statusDiv = document.getElementById('referenceStatus');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                statusDiv.innerHTML = '<div class="status error">Please select a reference sprite file.</div>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    referencePixelScale = detectPixelScale(imageData, canvas.width, canvas.height);
+                    
+                    statusDiv.innerHTML = `
+                        <div class="status success">
+                            ✅ Reference analyzed!<br>
+                            <strong>Pixel Scale:</strong> ${referencePixelScale}x${referencePixelScale}<br>
+                            <strong>Dimensions:</strong> ${canvas.width}x${canvas.height}px<br>
+                            <strong>File:</strong> ${file.name}
+                        </div>
+                    `;
+                    
+                    document.getElementById('normalizeBtn').disabled = false;
+                };
+                img.src = e.target.result;
+            };
+            
+            reader.readAsDataURL(file);
+        }
+
+        async function analyzeAll() {
+            const fileInput = document.getElementById('spriteFiles');
+            const statusDiv = document.getElementById('analysisStatus');
+            const resultsDiv = document.getElementById('analysisResults');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                statusDiv.innerHTML = '<div class="status error">Please select sprite files to analyze.</div>';
+                return;
+            }
+            
+            if (!referencePixelScale) {
+                statusDiv.innerHTML = '<div class="status error">Please analyze the reference sprite first.</div>';
+                return;
+            }
+            
+            statusDiv.innerHTML = '<div class="status info">Analyzing sprites... This may take a moment.</div>';
+            spriteData = [];
+            
+            const files = Array.from(fileInput.files);
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                            ctx.drawImage(img, 0, 0);
+                            
+                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            const pixelScale = detectPixelScale(imageData, canvas.width, canvas.height);
+                            
+                            spriteData.push({
+                                file: file,
+                                name: file.name,
+                                originalWidth: canvas.width,
+                                originalHeight: canvas.height,
+                                pixelScale: pixelScale,
+                                scaleFactor: referencePixelScale / pixelScale,
+                                imageData: imageData,
+                                canvas: canvas
+                            });
+                            
+                            resolve();
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+            
+            // Display results
+            let tableHTML = `
+                <div class="analysis-results">
+                    <h3>Analysis Results</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th>Original Size</th>
+                                <th>Pixel Scale</th>
+                                <th>Scale Factor</th>
+                                <th>New Size</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            spriteData.forEach(sprite => {
+                const newWidth = Math.round(sprite.originalWidth * sprite.scaleFactor);
+                const newHeight = Math.round(sprite.originalHeight * sprite.scaleFactor);
+                tableHTML += `
+                    <tr>
+                        <td>${sprite.name}</td>
+                        <td>${sprite.originalWidth}x${sprite.originalHeight}</td>
+                        <td>${sprite.pixelScale}x${sprite.pixelScale}</td>
+                        <td>${sprite.scaleFactor.toFixed(2)}x</td>
+                        <td>${newWidth}x${newHeight}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            resultsDiv.innerHTML = tableHTML;
+            statusDiv.innerHTML = `<div class="status success">✅ Analyzed ${spriteData.length} sprites!</div>`;
+        }
+
+        async function normalizeAll() {
+            if (spriteData.length === 0) {
+                alert('Please analyze sprites first.');
+                return;
+            }
+            
+            if (!referencePixelScale) {
+                alert('Please analyze the reference sprite first.');
+                return;
+            }
+            
+            const statusDiv = document.getElementById('analysisStatus');
+            statusDiv.innerHTML = '<div class="status info">Normalizing sprites... This may take a moment.</div>';
+            
+            // Note: For GIFs, we'd need to process each frame
+            // This is a simplified version that works with single frames
+            // For full GIF support, we'd need to use a GIF library
+            
+            alert('Note: Full GIF normalization requires processing each frame. This tool currently works with the first frame. For full GIF support, we would need to integrate a GIF parsing library.');
+            
+            // For now, show what would happen
+            const previewGrid = document.getElementById('previewGrid');
+            previewGrid.innerHTML = '';
+            
+            spriteData.forEach(sprite => {
+                const newWidth = Math.round(sprite.originalWidth * sprite.scaleFactor);
+                const newHeight = Math.round(sprite.originalHeight * sprite.scaleFactor);
+                
+                // Create resized canvas with nearest-neighbor
+                const newCanvas = document.createElement('canvas');
+                newCanvas.width = newWidth;
+                newCanvas.height = newHeight;
+                const newCtx = newCanvas.getContext('2d');
+                newCtx.imageSmoothingEnabled = false; // Nearest-neighbor scaling
+                newCtx.drawImage(sprite.canvas, 0, 0, newWidth, newHeight);
+                
+                const previewItem = document.createElement('div');
+                previewItem.className = 'preview-item';
+                previewItem.innerHTML = `
+                    <img src="${newCanvas.toDataURL()}" alt="${sprite.name}" />
+                    <div class="filename">${sprite.name}</div>
+                    <div class="pixel-scale">${sprite.originalWidth}x${sprite.originalHeight} → ${newWidth}x${newHeight}</div>
+                `;
+                previewGrid.appendChild(previewItem);
+            });
+            
+            document.getElementById('previewSection').style.display = 'block';
+            statusDiv.innerHTML = `<div class="status success">✅ Preview generated! (Note: This shows single-frame preview. Full GIF processing would require additional steps.)</div>`;
+        }
+    </script>
+</body>
+</html>

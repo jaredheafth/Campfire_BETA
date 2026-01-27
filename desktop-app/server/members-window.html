@@ -1,0 +1,391 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Campfire Widget - Members</title>
+    <style>
+        @font-face {
+            font-family: 'UsernameFont';
+            src: url('fonts/w95fa.woff2') format('woff2'),
+                 url('fonts/w95fa.woff') format('woff'),
+                 url('fonts/W95FA.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a1a;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }
+        .header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .header p {
+            color: #888;
+            font-size: 13px;
+        }
+        .members-list {
+            display: grid;
+            gap: 10px;
+        }
+        .member-item {
+            background: #2a2a2a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+        }
+        .member-info {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .member-name {
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+        }
+        .member-name.status-not-joined { color: #777; }
+        .member-name.status-active { color: #fff; }
+        .member-name.status-joined { }
+        .member-name.status-sleepy {
+            animation: sleepyPulse 2.4s ease-in-out infinite;
+        }
+        .member-zzz {
+            margin-left: 6px;
+            font-size: 11px;
+            letter-spacing: 1px;
+            opacity: 0.75;
+            animation: zzzFloat 1.8s ease-in-out infinite;
+            user-select: none;
+        }
+        @keyframes sleepyPulse {
+            0%, 100% { opacity: 0.55; }
+            50% { opacity: 1; }
+        }
+        @keyframes zzzFloat {
+            0%, 100% { opacity: 0.35; transform: translateY(0); }
+            50% { opacity: 0.95; transform: translateY(-2px); }
+        }
+        .member-status {
+            font-size: 11px;
+            color: #888;
+        }
+        .member-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            background: #444;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .toggle-switch.active {
+            background: #4caf50;
+        }
+        .btn {
+            padding: 6px 12px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            background: #333;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: #444;
+        }
+        .btn.danger {
+            background: #ff3b30;
+            border-color: #ff3b30;
+        }
+        .btn.danger:hover {
+            background: #ff2d20;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>👥 Campfire Members</h1>
+        <p>Manage viewers around the campfire</p>
+    </div>
+    <div id="membersList" class="members-list">
+        <div class="loading">Loading members...</div>
+    </div>
+    <script>
+        let allMembers = [];
+        let activeUsers = [];
+        const ACTIVE_WINDOW_MS = 10 * 60 * 1000; // "recently active in chat" window
+        let _statusInterval = null;
+        
+        async function loadMembers() {
+            if (!window.electronAPI) {
+                document.getElementById('membersList').innerHTML = '<div class="empty-state">Not available (Web version)</div>';
+                return;
+            }
+            
+            try {
+                const [active, widgetDisplay, potential] = await Promise.all([
+                    window.electronAPI.getActiveUsers(),
+                    (window.electronAPI.getWidgetDisplayUsers && window.electronAPI.getWidgetDisplayUsers()) || Promise.resolve([]),
+                    window.electronAPI.getPotentialMembers()
+                ]);
+                activeUsers = active;
+                const userMap = new Map();
+                const usernameToKey = new Map(); // usernameLower -> canonical key (prefer userId when known)
+                const normName = (v) => (v ? String(v).toLowerCase() : '');
+                const normId = (v) => (v == null ? '' : String(v));
+                const keyFor = (userId, username) => {
+                    const id = normId(userId);
+                    const name = normName(username);
+                    if (id) {
+                        if (name) usernameToKey.set(name, id);
+                        return id;
+                    }
+                    if (name) return usernameToKey.get(name) || name;
+                    return '';
+                };
+                const upsert = (rec) => {
+                    const key = keyFor(rec.userId, rec.username);
+                    if (!key) return;
+                    const existing = userMap.get(key);
+                    if (existing) {
+                        existing.joined = !!existing.joined || !!rec.joined;
+                        if (rec.username) existing.username = existing.username || rec.username;
+                        existing.userId = key;
+                        if (rec.color) existing.color = rec.color;
+                        if (rec.twitchColor) existing.twitchColor = rec.twitchColor;
+                        if (rec.lastMessage) existing.lastMessage = Math.max(existing.lastMessage || 0, rec.lastMessage);
+                        const rank = { main: 3, widget: 2, potential: 1, test: 0 };
+                        if ((rank[rec.source] || 0) > (rank[existing.source] || 0)) existing.source = rec.source;
+                    } else {
+                        userMap.set(key, { ...rec, userId: key });
+                    }
+                };
+
+                const activeSet = new Set();
+                const potentialSet = new Set();
+                const widgetSet = new Set();
+                const addPresence = (set, userId, username) => {
+                    const id = normId(userId);
+                    const name = normName(username);
+                    if (id) set.add(id);
+                    if (name) set.add(name);
+                };
+                active.forEach(u => addPresence(activeSet, u.userId, u.username));
+                potential.forEach(p => addPresence(potentialSet, p.userId, p.username));
+                (widgetDisplay || []).forEach(w => addPresence(widgetSet, w.userId, w.username));
+
+                active.forEach(u => upsert({ username: u.username, userId: u.userId, joined: true, restored: false, source: 'main', twitchColor: u.twitchColor || null, color: u.color || null }));
+                (widgetDisplay || []).forEach(u => upsert({ username: u.username, userId: u.userId, joined: true, restored: true, source: 'widget', twitchColor: u.twitchColor || null, color: u.color || null }));
+                potential.forEach(p => upsert({ username: p.username, userId: p.userId, joined: false, restored: false, source: 'potential', twitchColor: p.color || null, lastMessage: p.lastMessage || null }));
+
+                const testUsers = ['TestUser1', 'TestUser2', 'TestUser3'];
+                testUsers.forEach(testUser => {
+                    upsert({ username: testUser, userId: testUser.toLowerCase(), joined: false, restored: false, source: 'test' });
+                });
+                
+                // Convert map to array
+                allMembers = Array.from(userMap.values()).map(m => {
+                    const id = normId(m.userId);
+                    const name = normName(m.username);
+                    const inWidget = widgetSet.has(id) || (name && widgetSet.has(name));
+                    const inActive = activeSet.has(id) || (name && activeSet.has(name));
+                    const inPotential = potentialSet.has(id) || (name && potentialSet.has(name));
+                    return {
+                        ...m,
+                        inCampfire: !!(inWidget || inActive),
+                        inChat: !!inPotential,
+                        restored: !!(inWidget && !inActive && !inPotential)
+                    };
+                });
+                
+                renderMembers();
+                if (!_statusInterval) {
+                    _statusInterval = setInterval(() => {
+                        try { renderMembers(); } catch (e) { /* ignore */ }
+                    }, 30 * 1000);
+                }
+            } catch (error) {
+                console.error('Error loading members:', error);
+                document.getElementById('membersList').innerHTML = '<div class="empty-state">Error loading members</div>';
+            }
+        }
+        
+        function renderMembers() {
+            const container = document.getElementById('membersList');
+            
+            if (allMembers.length === 0) {
+                container.innerHTML = '<div class="empty-state">No members found</div>';
+                return;
+            }
+            
+            const now = Date.now();
+            container.innerHTML = allMembers.map(member => {
+                const isJoined = !!(member.inCampfire || member.joined || activeUsers.find(a => a.userId === member.userId || a.username === member.username));
+                const safeUserId = (member.userId || '').replace(/'/g, "\'").replace(/"/g, '\"');
+                const safeUsername = (member.username || '').replace(/'/g, "\'").replace(/"/g, '\"');
+                const isTestUser = member.username && member.username.startsWith('TestUser');
+                const inChat = !!member.inChat;
+                const lastMessage = member.lastMessage || 0;
+                const recentlyActive = !!(lastMessage && (now - lastMessage) <= ACTIVE_WINDOW_MS);
+                const status = isJoined ? (inChat ? 'joined' : 'sleepy') : (recentlyActive ? 'active' : 'not-joined');
+                const twitchColor = member.twitchColor || null;
+                const nameColor = (status === 'joined' || status === 'sleepy') ? (twitchColor || '#fff') : (status === 'active' ? '#fff' : '#777');
+                const zzz = (status === 'sleepy') ? '<span class="member-zzz" title="In campfire, but not in chat (sleepy/disconnected?)">zzz</span>' : '';
+                const statusText =
+                    (status === 'joined') ? 'Joined' :
+                    (status === 'sleepy') ? 'Sleeping' :
+                    (status === 'active') ? 'Active in chat' :
+                    'Not joined';
+                
+                if (isTestUser) {
+                    // Test users: Only show toggle switch (no Dashboard or Kick buttons)
+                    return `
+                        <div class="member-item" style="background: #1f1f1f; border: 1px solid #3a3a3a; border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; min-height: 40px;">
+                            <div class="member-info" style="flex: 1; display: flex; align-items: center; gap: 10px;">
+                                <span class="member-name" style="font-family: 'UsernameFont', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: bold; font-size: 14px; color: #fff;">${member.username}</span>
+                                <span class="member-status" style="font-size: 11px; color: #888;">${isJoined ? 'Joined' : 'Not joined'}</span>
+                            </div>
+                            <div class="member-actions" style="display: flex; gap: 8px; align-items: center;">
+                                <div class="toggle-switch ${isJoined ? 'active' : ''}" onclick="toggleMember('${safeUserId}', '${safeUsername}')" title="${isJoined ? 'Joined' : 'Not joined'}" style="position: relative; width: 50px; height: 24px; background: ${isJoined ? '#4caf50' : '#444'}; border-radius: 12px; cursor: pointer; transition: background 0.3s; box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);">
+                                    <div style="position: absolute; top: 2px; left: ${isJoined ? '28px' : '2px'}; width: 20px; height: 20px; background: white; border-radius: 50%; transition: left 0.3s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.15);"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const restoredIcon = member.restored ? '<span title="Restored from previous session; may have disconnected" style="margin-left:4px;opacity:0.85;">📌</span>' : '';
+                    return `
+                        <div class="member-item" style="background: #1f1f1f; border: 1px solid #3a3a3a; border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; min-height: 40px;">
+                            <div class="member-info" style="flex: 1; display: flex; align-items: center; gap: 10px;">
+                                <span class="member-name status-${status}" style="font-family: 'UsernameFont', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: bold; font-size: 14px; color: ${nameColor};">${member.username}</span>${zzz}${restoredIcon}
+                                <span class="member-status" style="font-size: 11px; color: #888;">${statusText}</span>
+                            </div>
+                            <div class="member-actions" style="display: flex; gap: 8px; align-items: center;">
+                                ${isJoined ? `<button class="btn danger" onclick="kickMember('${safeUserId}')" style="padding: 6px 12px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Leave</button>` : `<button class="btn" onclick="toggleMember('${safeUserId}', '${safeUsername}')" style="padding: 6px 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Join</button>`}
+                                <button class="btn" onclick="openMemberDashboard('${safeUserId}', '${safeUsername}')" style="padding: 6px 12px; background: #444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Dashboard</button>
+                            </div>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+        
+        async function toggleMember(userId, username) {
+            if (!window.electronAPI) return;
+            
+            try {
+                // Check if this is a test user
+                const isTestUser = username && username.startsWith('TestUser');
+                
+                if (isTestUser) {
+                    // Use the same logic as dashboard for test users
+                    const widgetUsers = await window.electronAPI.getWidgetUsers();
+                    const isInWidget = widgetUsers.find(w => {
+                        const wUserId = (w.userId || '').toLowerCase();
+                        const wUsername = (w.username || '').toLowerCase();
+                        const checkUserId = (userId || '').toLowerCase();
+                        const checkUsername = (username || '').toLowerCase();
+                        return wUserId === checkUserId || wUsername === checkUsername;
+                    });
+                    
+                    if (isInWidget) {
+                        // Remove user
+                        const result = await window.electronAPI.removeTestUserFromWidget(userId, username);
+                        if (!result || !result.success) {
+                            console.error('Failed to remove test user:', result);
+                            alert('Failed to remove test user: ' + (result?.error || 'Unknown error'));
+                            return;
+                        }
+                    } else {
+                        // Add user
+                        const result = await window.electronAPI.addTestUserToWidget(userId, username);
+                        if (!result || !result.success) {
+                            console.error('Failed to add test user:', result);
+                            alert('Failed to add test user: ' + (result?.error || 'Unknown error'));
+                            return;
+                        }
+                    }
+                } else {
+                    // Regular users: use join/kick
+                    const isJoined = activeUsers.find(a => a.userId === userId || a.username === username);
+                    if (isJoined) {
+                        await window.electronAPI.kickMember(userId);
+                    } else {
+                        await window.electronAPI.joinMember(userId, username);
+                    }
+                }
+                
+                // Refresh after a short delay
+                setTimeout(loadMembers, 200);
+            } catch (e) {
+                console.error('Error toggling member:', e);
+                alert('Error toggling member: ' + e.message);
+            }
+        }
+        
+        async function kickMember(userId) {
+            if (!window.electronAPI) return;
+            if (!confirm('Remove this member from the campfire?')) return;
+            
+            await window.electronAPI.kickMember(userId);
+            await loadMembers();
+        }
+        
+        async function openMemberDashboard(userId, username) {
+            if (!window.electronAPI) return;
+            await window.electronAPI.openMemberDashboard(userId, username);
+        }
+        
+        // Listen for member updates
+        if (window.electronAPI && window.electronAPI.onPotentialMembersUpdate) {
+            window.electronAPI.onPotentialMembersUpdate(() => {
+                loadMembers();
+            });
+        }
+        
+        // Listen for refresh-members IPC message from main process
+        if (window.electronAPI && window.electronAPI.onRefreshMembers) {
+            window.electronAPI.onRefreshMembers(() => {
+                loadMembers();
+            });
+        }
+        
+        // Load members on startup and refresh periodically
+        loadMembers();
+        setInterval(loadMembers, 2000);
+    </script>
+</body>
+</html>
+    

@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitch Chat - Campfire Widget</title>
+    <style>
+        @font-face {
+            font-family: 'W95FA';
+            src: url('fonts/w95fa.woff2') format('woff2'),
+                 url('fonts/w95fa.woff') format('woff'),
+                 url('fonts/W95FA.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            background: transparent !important;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #efeff1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Main container with semi-transparent background */
+        .chat-window {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(30, 30, 30, 0.5);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        
+        /* Top menu bar - similar to Visual Display */
+        .menu-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(18, 18, 18, 0.92);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 12px 12px 0 0;
+            -webkit-app-region: drag;
+            position: relative;
+        }
+        
+        /* Menu buttons - styled like Visual Display widget menu */
+        .menu-button {
+            padding: 6px 12px;
+            min-height: 28px;
+            background: rgba(28, 28, 28, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            -webkit-app-region: no-drag;
+            transition: all 0.2s;
+            font-size: 12px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        
+        .menu-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .menu-button:active {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .menu-button.active {
+            background: rgba(145, 71, 255, 0.3);
+            border-color: rgba(145, 71, 255, 0.5);
+        }
+        
+        /* Close button - styled like END button on widget menu */
+        .close-button {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 6px 12px;
+            min-height: 28px;
+            background: rgba(255, 59, 48, 0.3);
+            border: 1px solid rgba(255, 59, 48, 0.5);
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            -webkit-app-region: no-drag;
+            transition: all 0.2s;
+            font-size: 12px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .close-button:hover {
+            background: rgba(255, 59, 48, 0.5);
+            border-color: rgba(255, 59, 48, 0.7);
+        }
+        
+        /* Settings dropdown */
+        .settings-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(18, 18, 18, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 8px;
+            padding: 12px;
+            display: none;
+            z-index: 100;
+            min-width: 200px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+        
+        .settings-dropdown.show {
+            display: block;
+        }
+        
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .settings-row:last-child {
+            border-bottom: none;
+        }
+        
+        .settings-row label {
+            font-size: 12px;
+            color: #adadb8;
+        }
+        
+        .settings-row select {
+            background: rgba(28, 28, 28, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            color: #fff;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        /* Chat container */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        /* Chat message */
+        .chat-message {
+            padding: 6px 10px;
+            border-radius: 6px;
+            line-height: 1.4;
+            word-wrap: break-word;
+            background: rgba(255, 255, 255, 0.03);
+        }
+        
+        .chat-message:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .chat-username {
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .chat-username:hover {
+            text-decoration: underline;
+        }
+        
+        .chat-text {
+            color: #efeff1;
+        }
+        
+        /* Non-camper messages (greyed out when toggle is on) */
+        .chat-message.non-camper {
+            opacity: 0.5;
+        }
+        
+        .chat-message.non-camper .chat-username,
+        .chat-message.non-camper .chat-text {
+            color: #888;
+        }
+        
+        /* Bot response messages (narrative style) */
+        .chat-message.bot-response {
+            font-style: italic;
+            color: #b0b0b0;
+        }
+        
+        /* Emotes */
+        .chat-emote {
+            height: 28px;
+            width: auto;
+            vertical-align: middle;
+            margin: -4px 2px;
+        }
+        
+        /* Badges */
+        .chat-badge {
+            height: 18px;
+            width: auto;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+        
+        /* Empty state */
+        .empty-state {
+            color: #adadb8;
+            text-align: center;
+            padding: 40px 20px;
+            font-size: 13px;
+        }
+        
+        /* Scrollbar styling */
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+        
+        .chat-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        .chat-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* Chat input area */
+        .chat-input-area {
+            display: flex;
+            gap: 8px;
+            padding: 10px 12px;
+            background: rgba(18, 18, 18, 0.8);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0 0 12px 12px;
+        }
+        
+        .chat-input {
+            flex: 1;
+            background: rgba(28, 28, 28, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            color: #fff;
+            padding: 8px 12px;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .chat-input:focus {
+            border-color: rgba(145, 71, 255, 0.5);
+        }
+        
+        .chat-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .send-button {
+            padding: 8px 16px;
+            background: rgba(145, 71, 255, 0.3);
+            border: 1px solid rgba(145, 71, 255, 0.5);
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .send-button:hover {
+            background: rgba(145, 71, 255, 0.5);
+            border-color: rgba(145, 71, 255, 0.7);
+        }
+        
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Speaker select dropdown */
+        .speaker-select {
+            padding: 8px 10px;
+            background: rgba(28, 28, 28, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 11px;
+            min-width: 100px;
+        }
+        
+        .speaker-select:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.25);
+        }
+        
+        .speaker-select option {
+            background: #1e1e1e;
+            color: #fff;
+        }
+        
+        /* Emote picker button */
+        .emote-button {
+            padding: 8px 12px;
+            background: rgba(28, 28, 28, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 16px;
+        }
+        
+        .emote-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* Font styles */
+        body.font-w95fa {
+            font-family: 'W95FA', monospace;
+        }
+        
+        body.font-w95fa .chat-message {
+            font-size: 14px;
+        }
+        
+        body.font-w95fa .chat-input {
+            font-family: 'W95FA', monospace;
+        }
+        
+        body.font-tahoma {
+            font-family: Tahoma, Arial, sans-serif;
+        }
+        
+        body.font-tahoma .chat-message {
+            font-size: 13px;
+        }
+        
+        /* Connection status indicator */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            padding: 0 8px;
+        }
+        
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.connected {
+            background: #44ff44;
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 0.7;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        
+        /* Resize handle visual indicator */
+        .resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 16px;
+            height: 16px;
+            cursor: se-resize;
+            opacity: 0.3;
+        }
+        
+        .resize-handle::before {
+            content: '';
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            border-right: 2px solid rgba(255, 255, 255, 0.5);
+            border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body class="font-tahoma">
+    <div class="chat-window">
+        <!-- Top menu bar -->
+        <div class="menu-bar">
+            <button class="menu-button" id="btnSettings" onclick="toggleSettings()">⚙️ Settings</button>
+            <button class="menu-button" id="btnClear" onclick="clearChat()">🗑️ Clear</button>
+            <button class="menu-button" id="btnBringToFront" onclick="bringToFront()" title="Bring this window to front of all windows">📌 Front</button>
+            <div class="connection-status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Disconnected</span>
+            </div>
+            <button class="close-button" onclick="closeWindow()">✕ Close</button>
+            
+            <!-- Settings dropdown -->
+            <div class="settings-dropdown" id="settingsDropdown">
+                <div class="settings-row">
+                    <label for="fontSelect">Font:</label>
+                    <select id="fontSelect" onchange="changeFont(this.value)">
+                        <option value="tahoma">Tahoma</option>
+                        <option value="w95fa">W95FA (Retro)</option>
+                    </select>
+                </div>
+                <div class="settings-row">
+                    <label for="greyNonCampers" title="Grey out messages from users who haven't joined the campfire">Grey Non-Campers:</label>
+                    <input type="checkbox" id="greyNonCampers" onchange="toggleGreyNonCampers(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chat messages -->
+        <div class="chat-container" id="chatContainer">
+            <div class="empty-state" id="emptyState">
+                💬 Waiting for chat messages...<br>
+                <small>Connect to Twitch in the dashboard to see chat.</small>
+            </div>
+        </div>
+        
+        <!-- Chat input -->
+        <div class="chat-input-area">
+            <select class="speaker-select" id="speakerSelect" title="Send as...">
+                <option value="main">Main Account</option>
+                <option value="bot">Bot Account</option>
+            </select>
+            <input type="text" class="chat-input" id="chatInput" placeholder="Send a message..." maxlength="500">
+            <button class="send-button" id="btnSend" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+    
+    <script>
+        // Chat message storage
+        let messages = [];
+        const maxMessages = 500;
+        let autoScroll = true;
+        let isConnected = false;
+        let greyNonCampers = false;
+        
+        // Command categories that should use italic formatting (narrative style)
+        const ITALIC_COMMAND_CATEGORIES = ['STATE', 'ANIMATION', 'MOVEMENT', 'APPEARANCE'];
+        
+        // Toggle grey non-campers setting
+        function toggleGreyNonCampers(enabled) {
+            greyNonCampers = enabled;
+            localStorage.setItem('chatPopoutGreyNonCampers', enabled ? 'true' : 'false');
+            // Update existing messages
+            updateNonCamperStyles();
+        }
+        
+        // Update styles for existing non-camper messages
+        function updateNonCamperStyles() {
+            const container = document.getElementById('chatContainer');
+            const messages = container.querySelectorAll('.chat-message[data-is-camper="false"]');
+            messages.forEach(msg => {
+                if (greyNonCampers) {
+                    msg.classList.add('non-camper');
+                } else {
+                    msg.classList.remove('non-camper');
+                }
+            });
+        }
+        
+        // Load saved grey non-campers preference
+        const savedGreyNonCampers = localStorage.getItem('chatPopoutGreyNonCampers') === 'true';
+        greyNonCampers = savedGreyNonCampers;
+        document.addEventListener('DOMContentLoaded', () => {
+            const checkbox = document.getElementById('greyNonCampers');
+            if (checkbox) checkbox.checked = savedGreyNonCampers;
+        });
+        
+        // Toggle settings dropdown
+        function toggleSettings() {
+            const dropdown = document.getElementById('settingsDropdown');
+            dropdown.classList.toggle('show');
+        }
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('settingsDropdown');
+            const btnSettings = document.getElementById('btnSettings');
+            if (!dropdown.contains(e.target) && e.target !== btnSettings) {
+                dropdown.classList.remove('show');
+            }
+        });
+        
+        // Change font
+        function changeFont(font) {
+            document.body.classList.remove('font-tahoma', 'font-w95fa');
+            document.body.classList.add(`font-${font}`);
+            localStorage.setItem('chatPopoutFont', font);
+        }
+        
+        // Load saved font preference
+        const savedFont = localStorage.getItem('chatPopoutFont') || 'tahoma';
+        document.getElementById('fontSelect').value = savedFont;
+        changeFont(savedFont);
+        
+        // Clear chat
+        function clearChat() {
+            messages = [];
+            const container = document.getElementById('chatContainer');
+            container.innerHTML = '<div class="empty-state" id="emptyState">💬 Chat cleared.</div>';
+        }
+        
+        // Close window
+        function closeWindow() {
+            window.close();
+        }
+        
+        // Bring widget window to front (so it appears above other applications)
+        function bringToFront() {
+            if (window.electronAPI && window.electronAPI.bringWidgetToFront) {
+                window.electronAPI.bringWidgetToFront();
+            }
+        }
+        
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            isConnected = connected;
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const sendBtn = document.getElementById('btnSend');
+            const input = document.getElementById('chatInput');
+            
+            if (connected) {
+                dot.classList.add('connected');
+                text.textContent = 'Connected';
+                sendBtn.disabled = false;
+                input.placeholder = 'Send a message...';
+            } else {
+                dot.classList.remove('connected');
+                text.textContent = 'Disconnected';
+                sendBtn.disabled = true;
+                input.placeholder = 'Connect to Twitch to chat...';
+            }
+        }
+        
+        // Build emote HTML (Twitch emotes)
+        function buildEmoteHtml(message, emotes) {
+            if (!emotes || Object.keys(emotes).length === 0) {
+                return escapeHtml(message);
+            }
+            
+            // Parse emote positions
+            const emotePositions = [];
+            for (const [emoteId, positions] of Object.entries(emotes)) {
+                for (const pos of positions) {
+                    const [start, end] = pos.split('-').map(Number);
+                    emotePositions.push({ id: emoteId, start, end });
+                }
+            }
+            
+            // Sort by position (descending to replace from end)
+            emotePositions.sort((a, b) => b.start - a.start);
+            
+            // Replace emotes with images
+            let result = message;
+            for (const emote of emotePositions) {
+                const emoteText = message.substring(emote.start, emote.end + 1);
+                const emoteUrl = `https://static-cdn.jtvnw.net/emoticons/v2/${emote.id}/default/dark/2.0`;
+                const emoteHtml = `<img src="${emoteUrl}" alt="${escapeHtml(emoteText)}" class="chat-emote" title="${escapeHtml(emoteText)}">`;
+                result = result.substring(0, emote.start) + emoteHtml + result.substring(emote.end + 1);
+            }
+            
+            return result;
+        }
+        
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Add chat message
+        function addChatMessage(data) {
+            const container = document.getElementById('chatContainer');
+            const emptyState = document.getElementById('emptyState');
+            
+            // Remove empty state
+            if (emptyState) {
+                emptyState.remove();
+            }
+            
+            // Update connection status
+            updateConnectionStatus(true);
+            
+            // Create message element
+            const msgEl = document.createElement('div');
+            msgEl.className = 'chat-message';
+            
+            // Check if this is an action message (/me) or a special command category
+            const isAction = data.isAction || false;
+            const commandCategory = data.commandCategory || null;
+            const isCamper = data.isCamper !== false; // Default to true if not specified
+            const isSpecialCategory = commandCategory && ITALIC_COMMAND_CATEGORIES.includes(commandCategory);
+            
+            // Store camper status for later style updates
+            msgEl.setAttribute('data-is-camper', isCamper ? 'true' : 'false');
+            
+            // Apply non-camper styling if enabled
+            if (!isCamper && greyNonCampers) {
+                msgEl.classList.add('non-camper');
+            }
+            
+            // Apply bot response styling for special categories
+            if (isSpecialCategory) {
+                msgEl.classList.add('bot-response');
+            }
+            
+            if (isAction) msgEl.classList.add('action-message');
+            
+            // Build username with color
+            const color = data.color || '#9147ff';
+            const displayName = data.displayName || data.username;
+            
+            // Build message content with emotes
+            const messageHtml = buildEmoteHtml(data.message, data.emotes);
+            
+            // For special command categories (STATE, ANIMATION, MOVEMENT, APPEARANCE),
+            // show in italics without bot name prefix (narrative style)
+            if (isSpecialCategory || isAction) {
+                msgEl.innerHTML = `<em><span class="chat-text">${messageHtml}</span></em>`;
+            } else if (displayName) {
+                // Regular message with username
+                msgEl.innerHTML = `<span class="chat-username" style="color: ${color}">${escapeHtml(displayName)}</span>: <span class="chat-text">${messageHtml}</span>`;
+            } else {
+                // Bot message without username (but not a special category)
+                msgEl.innerHTML = `<span class="chat-text">${messageHtml}</span>`;
+            }
+            
+            container.appendChild(msgEl);
+            
+            // Store message
+            messages.push(data);
+            
+            // Limit messages
+            if (messages.length > maxMessages) {
+                messages.shift();
+                if (container.firstChild) {
+                    container.removeChild(container.firstChild);
+                }
+            }
+            
+            // Auto-scroll if at bottom
+            if (autoScroll) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+        
+        // Send message
+        // Get selected speaker account
+        function getSelectedSpeaker() {
+            const select = document.getElementById('speakerSelect');
+            return select ? select.value : 'main';
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            const speaker = getSelectedSpeaker();
+            
+            if (!message || !isConnected) return;
+            
+            try {
+                if (window.electronAPI && window.electronAPI.sendChatMessage) {
+                    const result = await window.electronAPI.sendChatMessage(message, speaker);
+                    if (result.ok) {
+                        input.value = '';
+                    } else {
+                        console.error('Failed to send message:', result.error);
+                    }
+                }
+            } catch (err) {
+                console.error('Error sending message:', err);
+            }
+        }
+        
+        // Handle Enter key in input
+        document.getElementById('chatInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        // Check if scrolled to bottom
+        const container = document.getElementById('chatContainer');
+        container.addEventListener('scroll', () => {
+            const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+            autoScroll = isAtBottom;
+        });
+        
+        // Load speaker dropdown with account names
+        async function loadSpeakerOptions() {
+            if (!window.electronAPI || !window.electronAPI.getTwitchConfig) return;
+            try {
+                const config = await window.electronAPI.getTwitchConfig();
+                const select = document.getElementById('speakerSelect');
+                if (!select) return;
+                
+                // Get account names
+                // botUsername = main account (the one that listens to chat)
+                // chatBotUsername = separate bot account (for sending messages)
+                const mainName = config.botUsername || 'Main Account';
+                const botName = config.chatBotUsername || null;
+                
+                // Check if a separate bot account is configured
+                const hasSeparateBot = botName && botName.toLowerCase() !== mainName.toLowerCase();
+                
+                // Update option labels
+                if (hasSeparateBot) {
+                    select.innerHTML = `
+                        <option value="main">${mainName} (User)</option>
+                        <option value="bot">${botName} (Bot)</option>
+                    `;
+                } else {
+                    // Only one account configured
+                    select.innerHTML = `
+                        <option value="main">${mainName}</option>
+                    `;
+                }
+                
+                // Default to main account
+                select.value = 'main';
+            } catch (e) {
+                console.error('Error loading speaker options:', e);
+            }
+        }
+        
+        // Listen for chat messages from main process
+        if (window.electronAPI) {
+            // Listen for chatMessage channel (same as widget uses)
+            window.electronAPI.onChatMessage((data) => {
+                addChatMessage(data);
+            });
+            
+            // Listen for Twitch connection status changes
+            if (window.electronAPI.onTwitchConnected) {
+                window.electronAPI.onTwitchConnected(() => {
+                    updateConnectionStatus(true);
+                });
+            }
+            
+            if (window.electronAPI.onTwitchDisconnected) {
+                window.electronAPI.onTwitchDisconnected(() => {
+                    updateConnectionStatus(false);
+                });
+            }
+            
+            // Get initial connection status
+            if (window.electronAPI.getTwitchStatus) {
+                window.electronAPI.getTwitchStatus().then(status => {
+                    updateConnectionStatus(status && status.connected);
+                }).catch(() => {
+                    updateConnectionStatus(false);
+                });
+            }
+            
+            // Load speaker options
+            loadSpeakerOptions();
+        }
+    </script>
+</body>
+</html>

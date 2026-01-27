@@ -1,0 +1,11 @@
+# Files to ignore when deploying to Railway
+node_modules/
+.git/
+*.md
+!README.md
+desktop-app/
+*.pid
+.DS_Store
+*.log
+temp/
+dist/

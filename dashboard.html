@@ -1,0 +1,3204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campfire Widget - Settings Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1a1a1a;
+            height: 100vh;
+            margin: 0;
+            padding: 15px;
+            color: #e0e0e0;
+            overflow: hidden; /* Prevent scrolling */
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #2a2a2a;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            border: 1px solid #3a3a3a;
+            height: calc(100vh - 30px); /* Full height minus body padding */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #1f1f1f;
+            color: #fff;
+            padding: 15px 20px;
+            text-align: center;
+            border-bottom: 1px solid #3a3a3a;
+            flex-shrink: 0;
+            position: relative;
+        }
+        
+        .header-settings-btn {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: #3a3a3a;
+            border: 1px solid #4a4a4a;
+            color: #fff;
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+        
+        .header-settings-btn:hover {
+            background: #4a4a4a;
+            border-color: #5a5a5a;
+        }
+        
+        .settings-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .settings-modal.active {
+            display: flex;
+        }
+        
+        .settings-modal-content {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 12px;
+            padding: 25px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        
+        .settings-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #3a3a3a;
+        }
+        
+        .settings-modal-header h2 {
+            color: #fff;
+            font-size: 20px;
+        }
+        
+        .settings-modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .settings-modal-close:hover {
+            background: #3a3a3a;
+            color: #fff;
+        }
+        
+        .settings-section-item {
+            margin-bottom: 30px;
+        }
+        
+        .settings-section-item label {
+            display: block;
+            color: #fff;
+            font-weight: 600;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        
+        .settings-section-item .path-display {
+            background: #1a1a1a;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            padding: 12px 14px;
+            color: #aaa;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        
+        .settings-section-item .path-info {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        .settings-section-item .path-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            margin-bottom: 3px;
+        }
+
+        .header p {
+            opacity: 0.8;
+            font-size: 12px;
+        }
+
+        .main-layout {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .settings-panel {
+            flex: 1;
+            padding: 15px 20px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
+        }
+
+        .preview-panel {
+            background: #1a1a1a;
+            border-top: 1px solid #3a3a3a;
+            padding: 15px 20px;
+            display: flex;
+            flex-direction: column;
+            height: 380px;
+            flex-shrink: 0;
+        }
+
+        .preview-panel h3 {
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .full-preview {
+            flex: 1;
+            background: #0a0a0a;
+            border: 1px solid #3a3a3a;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #3a3a3a;
+            flex-wrap: wrap;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 10px 16px;
+            background: none;
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            color: #fff;
+            background: #2a2a2a;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: #2a2a2a;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .settings-section {
+            display: none;
+        }
+
+        .settings-section.active {
+            display: block;
+        }
+
+        .form-section {
+            margin-bottom: 25px;
+        }
+
+        .form-section h3 {
+            display: none; /* Hide section titles since tab already shows title */
+        }
+
+        .section-toggle {
+            color: #888;
+            font-size: 18px;
+            transition: transform 0.3s;
+        }
+
+        .section-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .section-content {
+            padding: 15px;
+            display: block;
+        }
+
+        .section-content.collapsed {
+            display: none;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            align-items: flex-start;
+        }
+
+        .form-group-compact {
+            flex: 1;
+            margin-bottom: 0;
+            min-width: 0;
+        }
+
+        .form-group-compact label {
+            font-size: 12px;
+        }
+
+        .form-group-compact .label-hint {
+            font-size: 10px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .label-hint {
+            font-weight: 400;
+            font-size: 11px;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        input[type="text"],
+        input[type="url"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            font-size: 13px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .range-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            background: #1a1a1a;
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .range-value {
+            min-width: 60px;
+            text-align: right;
+            font-weight: 600;
+            color: #667eea;
+            font-size: 13px;
+        }
+
+        .direction-button {
+            transition: all 0.2s ease;
+        }
+
+        .direction-button:hover {
+            background: #2a2a2a !important;
+            border-color: #667eea !important;
+        }
+
+        .direction-button.active {
+            background: #667eea !important;
+            border-color: #667eea !important;
+        }
+
+        .range-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .button {
+            background: #ff6b35; /* Orange/fire color */
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .button:hover {
+            background: #e55a2b;
+        }
+
+        .button-secondary {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .button-secondary:hover {
+            background: #555;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin: 0;
+            padding: 0;
+            border: none;
+        }
+
+        .info-box {
+            background: #1f1f1f;
+            border-left: 3px solid #667eea;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            line-height: 1.4;
+            font-size: 12px;
+        }
+
+        .info-box strong {
+            color: #667eea;
+        }
+
+        .code-section {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .code-section h3 {
+            color: white;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .copy-button {
+            margin-top: 10px;
+        }
+
+        .sprite-preview {
+            margin-top: 10px;
+            min-height: 60px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #fullWidgetPreview {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        @media (max-width: 1200px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+            .preview-panel {
+                border-left: none;
+                border-top: 1px solid #3a3a3a;
+            }
+        }
+
+        /* Notification popup (fade in/out) */
+        .notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2a2a2a;
+            color: #e0e0e0;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+            border: 1px solid #3a3a3a;
+            z-index: 10000;
+            font-size: 16px;
+            font-weight: 500;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .notification.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Confirmation popup */
+        .confirmation-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2a2a2a;
+            color: #e0e0e0;
+            padding: 25px 30px;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+            border: 1px solid #3a3a3a;
+            z-index: 10001;
+            min-width: 300px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .confirmation-popup.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .confirmation-popup h3 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            color: #fff;
+        }
+
+        .confirmation-popup p {
+            margin: 0 0 20px 0;
+            font-size: 14px;
+            color: #ccc;
+        }
+
+        .confirmation-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .confirmation-buttons button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .confirmation-buttons .cancel-btn {
+            background: #444;
+            color: #e0e0e0;
+        }
+
+        .confirmation-buttons .cancel-btn:hover {
+            background: #555;
+        }
+
+        .confirmation-buttons .confirm-btn {
+            background: #ff6b35;
+            color: white;
+        }
+
+        .confirmation-buttons .confirm-btn:hover {
+            background: #e55a2b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button class="header-settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
+            <h1>🔥 Campfire Widget Settings</h1>
+            <p>Configure your custom campfire widget for OBS</p>
+            <div id="versionDisplay" style="margin-top: 8px; font-size: 11px; color: #888;">
+                Version: <span id="versionNumber">Loading...</span>
+            </div>
+        </div>
+        
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="settings-modal" onclick="if(event.target === this) closeSettings()">
+            <div class="settings-modal-content" onclick="event.stopPropagation()">
+                <div class="settings-modal-header">
+                    <h2>⚙️ Settings</h2>
+                    <button class="settings-modal-close" onclick="closeSettings()">×</button>
+                </div>
+                
+                <div class="settings-section-item">
+                    <label>Default Sprites Path</label>
+                    <div class="path-display" id="spritePathDisplay">Loading...</div>
+                    <div class="path-info" id="spritePathInfo"></div>
+                    <div class="path-actions">
+                        <button class="button button-secondary" onclick="browseSpritePath()" style="flex: 1; min-width: 140px;">
+                            📁 Browse Folder
+                        </button>
+                        <button class="button button-secondary" onclick="resetSpritePath()" id="resetSpritePathBtn" style="flex: 1; min-width: 140px; display: none;">
+                            🔄 Reset to Default
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-layout">
+            <div class="settings-panel">
+                <div class="info-box">
+                    <strong>📋 How to Use:</strong> Configure your settings below, then copy the generated code and paste it into OBS as a Browser Source or Custom Widget.
+                    <div style="margin-top: 10px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <div class="checkbox-group" style="margin: 0;">
+                                <input type="checkbox" id="showTestUsers" checked onchange="updateFullPreview();">
+                                <label for="showTestUsers" style="margin: 0; font-size: 12px;">Show Test Users</label>
+                            </div>
+                            <button onclick="checkForUpdates()" class="button button-secondary" style="padding: 8px 16px; font-size: 12px;">
+                                🔄 Check for Updates
+                            </button>
+                            <button onclick="localStorage.clear(); location.reload();" class="button button-secondary" style="padding: 8px 16px; font-size: 12px; background: #4472c4; color: #fff;" title="Clear All Data & Reload">🔧 Repair</button>
+                            <button onclick="shutdownWidget()" class="button" style="padding: 8px 16px; font-size: 12px; background: #ff4444;">
+                                🛑 END
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab active" onclick="switchSettingsTab('campfire', this)">🔥 Campfire</button>
+                    <button class="tab" onclick="switchSettingsTab('sprites', this)">🎨 Sprites</button>
+                    <button class="tab" onclick="switchSettingsTab('glow', this)">✨ Glow</button>
+                    <button class="tab" onclick="switchSettingsTab('size', this)">📏 Size</button>
+                    <button class="tab" onclick="switchSettingsTab('circle', this)">🔄 Perspective</button>
+                    <button class="tab" onclick="switchSettingsTab('twitch', this)">📺 Twitch</button>
+                    <button class="tab" onclick="switchSettingsTab('join', this)">🔥 Join</button>
+                    <button class="tab" onclick="switchTab('members', this)">👥 Members</button>
+                    <button class="tab" onclick="switchTab('code', this)">📝 Code</button>
+                </div>
+
+                <div id="settingsTab" class="tab-content active">
+                    <!-- Campfire Graphic Tab -->
+                    <div id="campfireTab" class="settings-section active">
+                        <div class="form-section">
+                            <div class="form-group">
+                                <label>
+                                    Upload Method
+                                    <span class="label-hint">Choose how to provide the campfire graphic</span>
+                                </label>
+                                <select id="campfireMethod" onchange="updateCampfireMethod(); updateFullPreview();">
+                                    <option value="url">URL (Link to hosted file)</option>
+                                    <option value="upload">Upload File</option>
+                                </select>
+                            </div>
+
+                            <div id="campfireUrlSection" class="form-group">
+                                <label for="campfireUrl">
+                                    Campfire GIF/Video URL
+                                    <span class="label-hint">Enter a direct URL to a GIF or video file. You can upload to Imgur, Giphy, or any image hosting service.</span>
+                                </label>
+                                <input type="url" id="campfireUrl" placeholder="https://example.com/campfire.gif" oninput="updateFullPreview()">
+                            </div>
+
+                            <div id="campfireUploadSection" class="form-group" style="display: none;">
+                                <label for="campfireUpload">
+                                    Upload Campfire Graphic
+                                    <span class="label-hint">Upload a GIF, image, or video file for your campfire</span>
+                                </label>
+                                <input type="file" id="campfireUpload" accept="image/*,.gif,video/*,.mp4,.webm,.mov" onchange="handleCampfireUpload(event)">
+                                <div style="margin-top: 8px;">
+                                    <button type="button" class="button button-secondary" onclick="clearCampfireUpload()" style="padding: 6px 12px; font-size: 12px; margin-right: 8px;">🗑️ Clear Upload</button>
+                                    <button type="button" class="button button-secondary" onclick="clearAllGraphics()" style="padding: 6px 12px; font-size: 12px;">🗑️ Clear All Graphics (Fix Issues)</button>
+                                </div>
+                                <div id="campfirePreview" class="sprite-preview" style="margin-top: 10px;">
+                                    <span style="color: #888; font-size: 12px;">No campfire graphic uploaded</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Glow Settings Tab -->
+                    <div id="glowTab" class="settings-section">
+                        <div class="form-section">
+                            <div class="form-group">
+                                <label for="glowSize">
+                                    Glow Size
+                                    <span class="label-hint">Size of the glow effect around the campfire</span>
+                                </label>
+                                <div class="range-container">
+                                    <input type="range" id="glowSize" min="100" max="800" value="500" step="10" oninput="updateGlowSizeDisplay(); updateFullPreview();">
+                                    <div class="range-value" id="glowSizeValue">500px</div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="glowIntensity">
+                                    Glow Intensity
+                                    <span class="label-hint">Overall opacity/brightness of the glow</span>
+                                </label>
+                                <div class="range-container">
+                                    <input type="range" id="glowIntensity" min="0" max="100" value="77" step="1" oninput="updateGlowIntensityDisplay(); updateFullPreview();">
+                                    <div class="range-value" id="glowIntensityValue">77%</div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="shadowIntensity">
+                                    Shadow Intensity
+                                    <span class="label-hint">Intensity of drop shadows on the fire emoji</span>
+                                </label>
+                                <div class="range-container">
+                                    <input type="range" id="shadowIntensity" min="0" max="100" value="91" step="1" oninput="updateShadowIntensityDisplay(); updateFullPreview();">
+                                    <div class="range-value" id="shadowIntensityValue">91%</div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="glowSpread">
+                                    Glow Spread
+                                    <span class="label-hint">How far the glow extends outward</span>
+                                </label>
+                                <div class="range-container">
+                                    <input type="range" id="glowSpread" min="20" max="100" value="64" step="1" oninput="updateGlowSpreadDisplay(); updateFullPreview();">
+                                    <div class="range-value" id="glowSpreadValue">64%</div>
+                                </div>
+                                <div class="range-labels">
+                                    <span>Concentrated</span>
+                                    <span>Diffused</span>
+                                </div>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="animatedGlow" checked onchange="updateFullPreview()">
+                                    <label for="animatedGlow" style="margin: 0;">Animated Glow</label>
+                                </div>
+                                <span class="label-hint">Creates a gentle pulsing fire effect</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Size Settings Tab -->
+                    <div id="sizeTab" class="settings-section">
+                        <div class="form-section">
+                            <div class="form-group">
+                                <label for="fireSize">
+                                    Fire Size
+                                    <span class="label-hint">Size of the fire emoji/graphic (in pixels)</span>
+                                </label>
+                                <div class="range-container">
+                                    <input type="range" id="fireSize" min="24" max="120" value="48" step="2" oninput="updateFireSizeDisplay(); updateFullPreview();">
+                                    <div class="range-value" id="fireSizeValue">48px</div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="spriteSize">
+                                    Sprite Size
+                                    <span class="label-hint">Size of user sprites/shapes (in pixels)</span>
+                                </label>
+                                <div class="range-container">
+                                    <input type="range" id="spriteSize" min="20" max="300" value="40" step="5" oninput="updateSpriteSizeDisplay(); updateFullPreview();">
+                                    <div class="range-value" id="spriteSizeValue">40px</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Circle Perspective Tab -->
+                    <div id="circleTab" class="settings-section">
+                        <div class="form-section">
+                            <div class="form-group">
+                                <label for="circleAngle">
+                                    View Angle
+                                    <span class="label-hint">Adjust from top-down view (circle) to side view (ellipse/line)</span>
+                                </label>
+                                <div class="range-container">
+                                    <input type="range" id="circleAngle" min="0" max="90" value="64" step="1" oninput="updateAngleDisplay(); updateFullPreview();">
+                                    <div class="range-value" id="angleValue">64°</div>
+                                </div>
+                                <div class="range-labels">
+                                    <span>Top-Down (Circle)</span>
+                                    <span>Side View (Line)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Twitch Connection Tab -->
+                    <div id="twitchTab" class="settings-section">
+                        <div class="form-section">
+                            <div class="form-group">
+                                <label>
+                                    Twitch Connection
+                                    <span class="label-hint">Connect your Twitch account to enable chat integration</span>
+                                </label>
+                                <div id="twitchConnectionStatus" style="padding: 15px; background: #2a2a2a; border-radius: 8px; margin-bottom: 15px;">
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                        <span id="twitchStatusIcon">⚪</span>
+                                        <span id="twitchStatusText">Not Connected</span>
+                                    </div>
+                                    <div id="twitchConfigDisplay" style="display: none; font-size: 12px; color: #888; margin-top: 10px;">
+                                        <div>Username: <span id="twitchUsernameDisplay">-</span></div>
+                                        <div>Channel: <span id="twitchChannelDisplay">-</span></div>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                    <button type="button" class="button button-primary" id="generateTwitchToken" onclick="generateTwitchToken()" style="flex: 1; min-width: 200px;">
+                                        🔑 Generate Twitch Token
+                                    </button>
+                                    <button type="button" class="button button-secondary" id="testTwitchConnection" onclick="testTwitchConnection()" style="flex: 1; min-width: 200px;">
+                                        🧪 Test Connection
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group" style="margin-top: 20px;">
+                                <label for="twitchBotUsername">
+                                    Twitch Username
+                                    <span class="label-hint">Your Twitch username (the account that will connect to chat)</span>
+                                </label>
+                                <input type="text" id="twitchBotUsername" placeholder="your_username" oninput="updateTwitchConfig()">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="twitchOAuthToken">
+                                    OAuth Token
+                                    <span class="label-hint">Generated automatically when you click "Generate Twitch Token"</span>
+                                </label>
+                                <div style="display: flex; gap: 10px;">
+                                    <input type="password" id="twitchOAuthToken" placeholder="oauth:..." readonly style="flex: 1;">
+                                    <button type="button" class="button button-secondary" onclick="toggleTokenVisibility()" style="white-space: nowrap;">
+                                        👁️ Show
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="twitchChannelName">
+                                    Channel Name
+                                    <span class="label-hint">Your Twitch channel name (without the #)</span>
+                                </label>
+                                <input type="text" id="twitchChannelName" placeholder="your_channel" oninput="updateTwitchConfig()">
+                            </div>
+                            
+                            <div class="form-group" style="margin-top: 20px;">
+                                <button type="button" class="button button-primary" onclick="saveTwitchConfig()" style="width: 100%;">
+                                    💾 Save Twitch Configuration
+                                </button>
+                            </div>
+                            
+                            <div style="margin-top: 20px; padding: 15px; background: #1a1a1a; border-radius: 8px; border-left: 3px solid #ff6b35;">
+                                <strong style="color: #ff6b35;">ℹ️ How it works:</strong>
+                                <ol style="margin-top: 10px; padding-left: 20px; font-size: 13px; line-height: 1.8;">
+                                    <li>Click "Generate Twitch Token" - a window will open for you to authorize</li>
+                                    <li>Log in to Twitch and authorize the app</li>
+                                    <li>Enter your Twitch username and channel name</li>
+                                    <li>Click "Save Twitch Configuration"</li>
+                                    <li>Restart the server (or it will auto-restart) to apply changes</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Join Settings Tab -->
+                    <div id="joinTab" class="settings-section">
+                        <div class="form-section">
+                            <!-- Join Method, Command/Emote/Cheer, and Max Users in one row -->
+                            <div class="form-row">
+                                <!-- Join Method -->
+                                <div class="form-group form-group-compact">
+                                    <label for="joinMethod">
+                                        Join Method
+                                        <span class="label-hint">How viewers join</span>
+                                    </label>
+                                    <select id="joinMethod" onchange="updateJoinMethod(); updateFullPreview();">
+                                        <option value="command">Chat Command</option>
+                                        <option value="emote">Emote</option>
+                                        <option value="cheer">Cheer/Payment</option>
+                                    </select>
+                                </div>
+
+                                <!-- Command Settings (shown when method is "command") -->
+                                <div id="commandSettings" class="form-group form-group-compact">
+                                    <label for="command">
+                                        Command Text
+                                        <span class="label-hint">e.g., !join, !camp</span>
+                                    </label>
+                                    <input type="text" id="command" value="!join" placeholder="!join" oninput="updateFullPreview();">
+                                </div>
+
+                                <!-- Emote Settings (shown when method is "emote") -->
+                                <div id="emoteSettings" class="form-group form-group-compact" style="display: none;">
+                                    <label for="emoteName">
+                                        Emote Name
+                                        <span class="label-hint">e.g., Campfire</span>
+                                    </label>
+                                    <input type="text" id="emoteName" value="" placeholder="Campfire" oninput="updateFullPreview();">
+                                </div>
+
+                                <!-- Cheer Settings (shown when method is "cheer") -->
+                                <div id="cheerSettings" class="form-group form-group-compact" style="display: none;">
+                                    <label for="cheerMethod">
+                                        Payment Type
+                                        <span class="label-hint">What they pay with</span>
+                                    </label>
+                                    <select id="cheerMethod" onchange="updateFullPreview();">
+                                        <option value="bits">Bits</option>
+                                        <option value="giftsubs">Gift Subs</option>
+                                        <option value="both">Bits or Gift Subs</option>
+                                    </select>
+                                </div>
+
+                                <!-- Cheer Amount (shown when method is "cheer") -->
+                                <div id="cheerAmountSettings" class="form-group form-group-compact" style="display: none;">
+                                    <label for="cheerAmount">
+                                        Amount
+                                        <span class="label-hint">Required amount</span>
+                                    </label>
+                                    <input type="number" id="cheerAmount" value="100" min="1" oninput="updateFullPreview();">
+                                </div>
+
+                                <!-- Maximum Users -->
+                                <div class="form-group form-group-compact">
+                                    <label for="maxUsers">
+                                        Maximum Users
+                                        <span class="label-hint">Max around campfire</span>
+                                    </label>
+                                    <input type="number" id="maxUsers" value="20" min="1" max="50" oninput="updateFullPreview();">
+                                </div>
+                            </div>
+
+                            <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
+
+                            <!-- Restrictions (Two Columns) -->
+                            <div class="form-group">
+                                <label>
+                                    Restrictions
+                                    <span class="label-hint">Who can join the campfire</span>
+                                </label>
+                                <div style="display: flex; gap: 20px; margin-top: 8px;">
+                                    <!-- Left Column: Subscriber Requirements -->
+                                    <div style="flex: 1;">
+                                        <div style="font-size: 12px; font-weight: 600; color: #aaa; margin-bottom: 8px;">Subscriber Requirements</div>
+                                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                                            <div class="checkbox-group">
+                                                <input type="checkbox" id="subscriberOnly" onchange="updateFullPreview();">
+                                                <label for="subscriberOnly" style="margin: 0;">Any Subscriber (Tier 1, 2, or 3)</label>
+                                            </div>
+                                            <div class="checkbox-group">
+                                                <input type="checkbox" id="subTier2Only" onchange="updateFullPreview();">
+                                                <label for="subTier2Only" style="margin: 0;">Tier 2+ Subscribers Only</label>
+                                            </div>
+                                            <div class="checkbox-group">
+                                                <input type="checkbox" id="subTier3Only" onchange="updateFullPreview();">
+                                                <label for="subTier3Only" style="margin: 0;">Tier 3 Subscribers Only</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Right Column: Other Restrictions -->
+                                    <div style="flex: 1;">
+                                        <div style="font-size: 12px; font-weight: 600; color: #aaa; margin-bottom: 8px;">Other Restrictions</div>
+                                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                                            <div class="checkbox-group">
+                                                <input type="checkbox" id="vipOnly" onchange="updateFullPreview();">
+                                                <label for="vipOnly" style="margin: 0;">VIP Only</label>
+                                            </div>
+                                            <div class="checkbox-group">
+                                                <input type="checkbox" id="primeOnly" onchange="updateFullPreview();">
+                                                <label for="primeOnly" style="margin: 0;">Prime/Turbo Only</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <span class="label-hint" style="margin-top: 8px; display: block;">
+                                    Leave all unchecked to allow all viewers
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sprite Settings Tab -->
+                    <div id="spritesTab" class="settings-section">
+                        <div class="form-section">
+                            <div class="form-group">
+                                <label for="spriteMode">
+                                    Sprite Mode
+                                    <span class="label-hint">Choose how user sprites are displayed</span>
+                                </label>
+                                <select id="spriteMode" onchange="updateSpriteMode(); updateFullPreview();">
+                                    <option value="circle">SHADOWS</option>
+                                    <option value="rpg-characters">ADVENTURERS</option>
+                                    <option value="pixel-morphs">MORPHS</option>
+                                    <option value="custom">CUSTOM</option>
+                                </select>
+                            </div>
+
+                            <!-- Circle Mode (SHADOWS) -->
+                            <div id="circleSpriteSection" class="form-group" style="display: none;">
+                                <label>
+                                    SHADOWS Sprites
+                                    <span class="label-hint">Preloaded pixel art circles (black shapes that will be colorized by Twitch username colors)</span>
+                                </label>
+                                <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 15px; margin-top: 10px;">
+                                    <div style="color: #4caf50; font-size: 13px; margin-bottom: 8px;">✅ Default sprites are preloaded with the installer</div>
+                                    <div style="color: #888; font-size: 12px;">No upload needed - sprites are included automatically</div>
+                                </div>
+                                <div id="circleSpritesList" class="sprite-list" style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 10px;">
+                                    <span style="color: #888; font-size: 12px; grid-column: 1 / -1;">Loading default sprites...</span>
+                                </div>
+                            </div>
+
+                            <!-- RPG Characters Mode (ADVENTURERS) -->
+                            <div id="rpgSpriteSection" class="form-group" style="display: none;">
+                                <label>
+                                    ADVENTURERS Sprites
+                                    <span class="label-hint">Preloaded RPG character sprites. Viewers can choose from these, or they'll be randomly assigned.</span>
+                                </label>
+                                <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 15px; margin-top: 10px;">
+                                    <div style="color: #4caf50; font-size: 13px; margin-bottom: 8px;">✅ Default sprites are preloaded with the installer</div>
+                                    <div style="color: #888; font-size: 12px;">No upload needed - sprites are included automatically</div>
+                                </div>
+                                <div id="rpgSpritesList" class="sprite-list" style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 10px;">
+                                    <span style="color: #888; font-size: 12px; grid-column: 1 / -1;">Loading default sprites...</span>
+                                </div>
+                            </div>
+
+                            <!-- Pixel Morphs Mode (MORPHS) -->
+                            <div id="morphSpriteSection" class="form-group" style="display: none;">
+                                <label>
+                                    MORPHS Sprites
+                                    <span class="label-hint">Preloaded pixel art shapes (black shapes that will be colorized by Twitch username colors)</span>
+                                </label>
+                                <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 15px; margin-top: 10px;">
+                                    <div style="color: #4caf50; font-size: 13px; margin-bottom: 8px;">✅ Default sprites are preloaded with the installer</div>
+                                    <div style="color: #888; font-size: 12px;">No upload needed - sprites are included automatically</div>
+                                </div>
+                                <div id="morphSpritesList" class="sprite-list" style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 10px;">
+                                    <span style="color: #888; font-size: 12px; grid-column: 1 / -1;">Loading default sprites...</span>
+                                </div>
+                            </div>
+
+                            <!-- Custom Mode -->
+                            <div id="customSpriteSection" class="form-group" style="display: none;">
+                                <label for="customSpriteUpload">
+                                    Custom Sprite
+                                    <span class="label-hint">Upload a custom sprite/GIF/image for users (or allow viewers to upload their own)</span>
+                                </label>
+                                <input type="file" id="customSpriteUpload" accept="image/*,.gif" onchange="handleCustomSpriteUpload(event)">
+                                <div id="customSpritePreview" class="sprite-preview">
+                                    <span style="color: #888; font-size: 12px;">No custom sprite uploaded</span>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>
+                                    Sprite Default Direction
+                                    <span class="label-hint">Which direction is your sprite facing by default? This ensures the flip mechanics work correctly.</span>
+                                </label>
+                                <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px;">
+                                    <button type="button" id="spriteDirectionLeft" class="direction-button" onclick="setSpriteDirection('left')" style="flex: 1; padding: 12px; background: #1a1a1a; border: 2px solid #333; border-radius: 8px; cursor: pointer; font-size: 24px; transition: all 0.2s;">
+                                        ←
+                                    </button>
+                                    <button type="button" id="spriteDirectionRight" class="direction-button" onclick="setSpriteDirection('right')" style="flex: 1; padding: 12px; background: #1a1a1a; border: 2px solid #333; border-radius: 8px; cursor: pointer; font-size: 24px; transition: all 0.2s;">
+                                        →
+                                    </button>
+                                </div>
+                                <div id="spriteDirectionDisplay" style="margin-top: 8px; color: #888; font-size: 12px; text-align: center;">
+                                    Default: Left
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>
+                                    Viewer Dashboard Link
+                                    <span class="label-hint">Share this link with your viewers</span>
+                                </label>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <input type="text" id="viewerDashboardLink" readonly value="viewer-dashboard.html" style="flex: 1;">
+                                    <button class="button button-secondary" onclick="copyViewerLink()" style="padding: 8px 16px; font-size: 13px;">Copy</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div id="membersTab" class="tab-content">
+                    <div class="info-box" style="margin-bottom: 20px;">
+                        <strong>👥 Campfire Members</strong>
+                        <p style="margin-top: 10px; font-size: 13px; opacity: 0.8;">
+                            Manage viewers around the campfire. Members persist across page refreshes.
+                        </p>
+                    </div>
+                    
+                    <div id="membersList" style="display: grid; gap: 10px;">
+                        <!-- Member list will be populated here -->
+                        <div style="text-align: center; padding: 40px; color: #888;">
+                            <p>Loading members...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="codeTab" class="tab-content">
+                    <div class="info-box">
+                        <strong>📝 Instructions:</strong>
+                        <ol style="margin-left: 20px; margin-top: 10px;">
+                            <li>Go to OBS and add a Browser Source, or use your streaming software's custom widget feature</li>
+                            <li>Click "Create New Widget" or edit existing</li>
+                            <li>Paste the HTML code below into the HTML section</li>
+                            <li>Save and add to your scene in OBS</li>
+                        </ol>
+                    </div>
+                    <div class="code-section">
+                        <h3>HTML Code (paste this entire code block):</h3>
+                        <pre id="widgetCode"></pre>
+                    </div>
+                    <button class="button copy-button" onclick="copyCode()">📋 Copy Code</button>
+                </div>
+            </div>
+
+            <div class="preview-panel">
+                <h3>
+                    <span>Live Preview</span>
+                    <div class="actions" style="margin: 0; gap: 10px; display: flex;">
+                        <button class="button button-secondary" onclick="resetSettings()">🔄 Reset</button>
+                        <button class="button button-secondary" onclick="testWidget()">🧪 Test</button>
+                        <button class="button" onclick="saveSettings()">💾 Apply</button>
+                    </div>
+                </h3>
+                <div class="full-preview">
+                    <iframe id="fullWidgetPreview" src="widget.html"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let widgetCode = '';
+
+        async function loadWidgetCode() {
+            try {
+                const response = await fetch('widget.html');
+                widgetCode = await response.text();
+            } catch (e) {
+                console.error('Could not load widget.html.');
+            }
+        }
+
+        function switchSettingsTab(tabName, clickedButton) {
+            try {
+                // Hide code tab content and show settings tab content
+                const codeTab = document.getElementById('codeTab');
+                const settingsTab = document.getElementById('settingsTab');
+                if (codeTab) codeTab.classList.remove('active');
+                if (settingsTab) settingsTab.classList.add('active');
+                
+                // Hide all settings sections
+                document.querySelectorAll('.settings-section').forEach(section => {
+                    section.classList.remove('active');
+                });
+                
+                // Remove active class from all tabs
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                
+                // Show selected section
+                const section = document.getElementById(tabName + 'Tab');
+                if (section) {
+                    section.classList.add('active');
+                } else {
+                    console.error('Tab section not found:', tabName + 'Tab');
+                }
+                
+                // Activate corresponding tab button
+                if (clickedButton) {
+                    clickedButton.classList.add('active');
+                } else {
+                    // Fallback: find tab by text content
+                    const tabButtons = document.querySelectorAll('.tab');
+                    tabButtons.forEach(tab => {
+                        const tabText = tab.textContent.trim();
+                        if ((tabName === 'campfire' && tabText.includes('🔥 Campfire')) ||
+                            (tabName === 'glow' && tabText.includes('✨ Glow')) ||
+                            (tabName === 'size' && tabText.includes('📏 Size')) ||
+                            (tabName === 'circle' && tabText.includes('🔄 Perspective')) ||
+                            (tabName === 'join' && tabText.includes('🔥 Join')) ||
+                            (tabName === 'sprites' && tabText.includes('🎨 Sprites'))) {
+                            tab.classList.add('active');
+                        }
+                    });
+                }
+                
+                updateFullPreview();
+            } catch (error) {
+                console.error('Error switching tab:', error);
+            }
+        }
+
+        function toggleSection(header) {
+            const content = header.nextElementSibling;
+            const toggle = header.querySelector('.section-toggle');
+            content.classList.toggle('collapsed');
+            toggle.classList.toggle('collapsed');
+        }
+
+        function switchTab(tabName, element) {
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            
+            // Add active class to clicked tab
+            if (element) {
+                element.classList.add('active');
+            } else {
+                // Fallback: find tab by text content
+                document.querySelectorAll('.tab').forEach(tab => {
+                    if (tab.textContent.includes('📝')) {
+                        tab.classList.add('active');
+                    }
+                });
+            }
+            
+            // Hide/show tab contents
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            const targetTab = document.getElementById(tabName + 'Tab');
+            if (targetTab) {
+                targetTab.classList.add('active');
+            }
+            
+            if (tabName === 'code') {
+                // Only generate code when Code tab is clicked, with error handling
+                setTimeout(() => {
+                    try {
+                        const codeTab = document.getElementById('codeTab');
+                        if (codeTab && codeTab.classList.contains('active')) {
+                            generateCode();
+                        }
+                    } catch (e) {
+                        console.error('Error generating code:', e);
+                        const codeArea = document.getElementById('widgetCode');
+                        if (codeArea) {
+                            codeArea.textContent = '<!-- Error generating code. Please refresh the page and try again. -->';
+                        }
+                    }
+                }, 100);
+            } else {
+                // Clear code area when switching away from Code tab to prevent text leakage
+                const codeArea = document.getElementById('widgetCode');
+                if (codeArea) {
+                    codeArea.textContent = '';
+                }
+            }
+        }
+
+        // Debounce updateFullPreview to prevent excessive calls while dragging sliders
+        let previewUpdateTimeout = null;
+        function updateFullPreview() {
+            // Clear existing timeout
+            if (previewUpdateTimeout) {
+                clearTimeout(previewUpdateTimeout);
+            }
+            
+            // Debounce by 50ms - only update after user stops dragging
+            previewUpdateTimeout = setTimeout(() => {
+                // Save current settings to localStorage so preview can access them
+                const settings = getSettings();
+                localStorage.setItem('campfireWidgetSettings', JSON.stringify(settings));
+                
+                // Try to update preview via postMessage (if same origin)
+                const iframe = document.getElementById('fullWidgetPreview');
+                try {
+                    iframe.contentWindow.postMessage({
+                        type: 'updateSettings',
+                        settings: settings
+                    }, '*');
+                } catch (e) {
+                    // If postMessage fails, reload iframe
+                    const currentSrc = iframe.src.split('?')[0];
+                    iframe.src = currentSrc + '?t=' + Date.now();
+                }
+            }, 50);
+        }
+
+        function updateAngleDisplay() {
+            const angle = document.getElementById('circleAngle').value;
+            document.getElementById('angleValue').textContent = angle + '°';
+        }
+
+        function updateGlowSizeDisplay() {
+            const size = document.getElementById('glowSize').value;
+            document.getElementById('glowSizeValue').textContent = size + 'px';
+        }
+
+        function updateGlowIntensityDisplay() {
+            const intensity = document.getElementById('glowIntensity').value;
+            document.getElementById('glowIntensityValue').textContent = intensity + '%';
+        }
+
+        function updateShadowIntensityDisplay() {
+            const intensity = document.getElementById('shadowIntensity').value;
+            document.getElementById('shadowIntensityValue').textContent = intensity + '%';
+        }
+
+        function updateGlowSpreadDisplay() {
+            const spread = document.getElementById('glowSpread').value;
+            document.getElementById('glowSpreadValue').textContent = spread + '%';
+        }
+
+        function updateFireSizeDisplay() {
+            const size = document.getElementById('fireSize').value;
+            document.getElementById('fireSizeValue').textContent = size + 'px';
+            // Save to localStorage immediately for real-time preview
+            const settings = getSettings();
+            localStorage.setItem('campfireWidgetSettings', JSON.stringify(settings));
+        }
+
+        function updateSpriteSizeDisplay() {
+            const size = document.getElementById('spriteSize').value;
+            document.getElementById('spriteSizeValue').textContent = size + 'px';
+            // Save to localStorage immediately for real-time preview
+            const settings = getSettings();
+            localStorage.setItem('campfireWidgetSettings', JSON.stringify(settings));
+        }
+
+        function updateSpriteMode() {
+            const mode = document.getElementById('spriteMode').value;
+            
+            // Hide all sections
+            document.getElementById('circleSpriteSection').style.display = 'none';
+            document.getElementById('rpgSpriteSection').style.display = 'none';
+            document.getElementById('morphSpriteSection').style.display = 'none';
+            document.getElementById('customSpriteSection').style.display = 'none';
+            
+            // Show relevant section
+            if (mode === 'circle') {
+                document.getElementById('circleSpriteSection').style.display = 'block';
+                loadSpriteList('circle');
+            } else if (mode === 'rpg-characters') {
+                document.getElementById('rpgSpriteSection').style.display = 'block';
+                loadSpriteList('rpg');
+            } else if (mode === 'pixel-morphs') {
+                document.getElementById('morphSpriteSection').style.display = 'block';
+                loadSpriteList('morph');
+            } else if (mode === 'custom') {
+                document.getElementById('customSpriteSection').style.display = 'block';
+            }
+        }
+        
+        // Load and display sprite lists
+        function loadSpriteList(type) {
+            const listKey = `${type}SpritesList`;
+            const container = document.getElementById(listKey);
+            if (!container) return;
+            
+            const sprites = JSON.parse(localStorage.getItem(`${type}Sprites`) || '[]');
+            
+            if (sprites.length === 0) {
+                container.innerHTML = '<span style="color: #888; font-size: 12px; grid-column: 1 / -1;">No sprites uploaded</span>';
+                return;
+            }
+            
+            container.innerHTML = sprites.map((sprite, index) => `
+                <div style="position: relative; border: 2px solid #333; border-radius: 4px; overflow: hidden;">
+                    <img src="${sprite.data}" style="width: 100%; height: 60px; object-fit: contain; background: #1a1a1a;" alt="${sprite.name}">
+                    <button onclick="removeSprite('${type}', ${index})" style="position: absolute; top: 2px; right: 2px; background: rgba(255,0,0,0.8); color: white; border: none; border-radius: 3px; width: 20px; height: 20px; cursor: pointer; font-size: 12px;">×</button>
+                </div>
+            `).join('');
+        }
+        
+        // Handle sprite uploads (multiple files)
+        function handleCircleSpriteUpload(event) {
+            handleMultiSpriteUpload(event, 'circle');
+        }
+        
+        function handleRpgSpriteUpload(event) {
+            handleMultiSpriteUpload(event, 'rpg');
+        }
+        
+        function handleMorphSpriteUpload(event) {
+            handleMultiSpriteUpload(event, 'morph');
+        }
+        
+        function handleMultiSpriteUpload(event, type) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) return;
+            
+            const sprites = JSON.parse(localStorage.getItem(`${type}Sprites`) || '[]');
+            let loaded = 0;
+            
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64 = e.target.result;
+                    sprites.push({
+                        name: file.name,
+                        data: base64,
+                        size: file.size
+                    });
+                    loaded++;
+                    
+                    if (loaded === files.length) {
+                        localStorage.setItem(`${type}Sprites`, JSON.stringify(sprites));
+                        loadSpriteList(type);
+                        updateFullPreview();
+                        event.target.value = ''; // Clear input
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        function removeSprite(type, index) {
+            const sprites = JSON.parse(localStorage.getItem(`${type}Sprites`) || '[]');
+            sprites.splice(index, 1);
+            localStorage.setItem(`${type}Sprites`, JSON.stringify(sprites));
+            loadSpriteList(type);
+            updateFullPreview();
+        }
+        
+        // Load RPG sprites from the server folder
+        async function loadRpgSpritesFromFolder() {
+            // Only load if accessed via HTTP (not file://)
+            if (window.location.protocol === 'file:') {
+                console.log('Skipping sprite loading - dashboard opened as file:// (use http://localhost:3000/dashboard.html)');
+                return;
+            }
+            
+            // Check if we're in Electron - sprites should be available via server
+            console.log('🔄 Loading RPG sprites from:', window.location.origin + '/sprites/defaults/rpg-characters/');
+            
+            // Check if RPG sprites are already loaded (but allow reload if count doesn't match)
+            const existingSprites = JSON.parse(localStorage.getItem('rpgSprites') || '[]');
+            const expectedCount = 20; // We expect 20 RPG sprites
+            if (existingSprites.length === expectedCount) {
+                console.log(`RPG sprites already loaded: ${existingSprites.length} sprites`);
+                return;
+            } else if (existingSprites.length > 0) {
+                console.log(`Reloading RPG sprites (found ${existingSprites.length}, expected ${expectedCount})`);
+            }
+            
+            // List of RPG character files found in the folder (updated with normalized sprites)
+            const rpgCharacterFiles = [
+                'Archer.gif',
+                'Armored Axeman.gif',
+                'Armored Orc.gif',
+                'Armored Skeleton.gif',
+                'Elite Orc.gif',
+                'Greatsword Skeleton.gif',
+                'Knight.gif',
+                'Knight Templar.gif',
+                'Lancer.gif',
+                'Orc.gif',
+                'Orc rider.gif',
+                'Priest.gif',
+                'Skeleton.gif',
+                'Skeleton Archer.gif',
+                'Slime.gif',
+                'Soldier.gif',
+                'Swordsman.gif',
+                'Werebear.gif',
+                'Werewolf.gif',
+                'Wizard.gif'
+            ];
+            
+            console.log(`Loading ${rpgCharacterFiles.length} RPG sprites from server...`);
+            
+            const loadedSprites = [];
+            let loadedCount = 0;
+            
+            // Load each sprite file
+            for (const filename of rpgCharacterFiles) {
+                try {
+                    // URL encode the filename to handle spaces
+                    const encodedFilename = encodeURIComponent(filename);
+                    // Use absolute path to ensure it works from the server root
+                    const spriteUrl = `/sprites/defaults/rpg-characters/${encodedFilename}`;
+                    const response = await fetch(spriteUrl);
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const reader = new FileReader();
+                        
+                        await new Promise((resolve, reject) => {
+                            reader.onload = (e) => {
+                                const base64 = e.target.result;
+                                // Clean up filename to get sprite name (remove .gif extension)
+                                const spriteName = filename.replace('.gif', '').trim();
+                                loadedSprites.push({
+                                    name: spriteName,
+                                    filename: filename,
+                                    data: base64,
+                                    size: blob.size
+                                });
+                                loadedCount++;
+                                resolve();
+                            };
+                            reader.onerror = reject;
+                            reader.readAsDataURL(blob);
+                        });
+                    } else {
+                        console.warn(`❌ Could not load ${filename}: HTTP ${response.status} - ${response.statusText}`);
+                        console.warn(`   Attempted URL: ${spriteUrl}`);
+                        console.warn(`   Full URL: ${window.location.origin}${spriteUrl}`);
+                    }
+                } catch (error) {
+                    console.error(`❌ Error loading ${filename}:`, error);
+                    console.error(`   Attempted URL: ${spriteUrl}`);
+                    console.error(`   Full URL: ${window.location.origin}${spriteUrl}`);
+                }
+            }
+            
+            if (loadedSprites.length > 0) {
+                localStorage.setItem('rpgSprites', JSON.stringify(loadedSprites));
+                console.log(`✅ Loaded ${loadedSprites.length} RPG sprites from folder`);
+                
+                // Update the sprite list if RPG mode is active
+                const currentMode = document.getElementById('spriteMode')?.value;
+                if (currentMode === 'rpg-characters') {
+                    loadSpriteList('rpg');
+                }
+            } else {
+                console.warn('No RPG sprites could be loaded from server');
+            }
+        }
+
+        async function loadCircleSpritesFromFolder() {
+            // Only load if accessed via HTTP (not file://)
+            if (window.location.protocol === 'file:') {
+                console.log('Skipping sprite loading - dashboard opened as file:// (use http://localhost:3000/dashboard.html)');
+                return;
+            }
+            
+            console.log('🔄 Loading circle sprites from:', window.location.origin + '/sprites/defaults/circles/');
+            
+            // Check if circle sprites are already loaded
+            const existingSprites = JSON.parse(localStorage.getItem('circleSprites') || '[]');
+            if (existingSprites.length > 0) {
+                console.log(`Circle sprites already loaded: ${existingSprites.length} sprites`);
+                return;
+            }
+            
+            // Try to load GIF files from the circles folder
+            const circleFiles = [
+                '3dgifmaker92871.gif' // Add more GIF filenames as they're added
+            ];
+            
+            console.log(`Loading circle sprites from server...`);
+            
+            const loadedSprites = [];
+            
+            // Load each circle GIF file
+            for (const filename of circleFiles) {
+                try {
+                    const encodedFilename = encodeURIComponent(filename);
+                    // Use absolute path to ensure it works from the server root
+                    const spriteUrl = `/sprites/defaults/circles/${encodedFilename}`;
+                    const response = await fetch(spriteUrl);
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const reader = new FileReader();
+                        
+                        await new Promise((resolve, reject) => {
+                            reader.onload = (e) => {
+                                const base64 = e.target.result;
+                                const spriteName = filename.replace('.gif', '').trim();
+                                loadedSprites.push({
+                                    name: spriteName,
+                                    filename: filename,
+                                    data: base64,
+                                    size: blob.size
+                                });
+                                resolve();
+                            };
+                            reader.onerror = reject;
+                            reader.readAsDataURL(blob);
+                        });
+                    } else {
+                        console.warn(`❌ Could not load ${filename}: HTTP ${response.status} - ${response.statusText}`);
+                        console.warn(`   Attempted URL: ${spriteUrl}`);
+                        console.warn(`   Full URL: ${window.location.origin}${spriteUrl}`);
+                    }
+                } catch (error) {
+                    console.error(`❌ Error loading ${filename}:`, error);
+                    console.error(`   Attempted URL: ${spriteUrl}`);
+                    console.error(`   Full URL: ${window.location.origin}${spriteUrl}`);
+                }
+            }
+            
+            if (loadedSprites.length > 0) {
+                localStorage.setItem('circleSprites', JSON.stringify(loadedSprites));
+                console.log(`✅ Loaded ${loadedSprites.length} circle sprites from folder`);
+                
+                // Update the sprite list if circle mode is active
+                const currentMode = document.getElementById('spriteMode')?.value;
+                if (currentMode === 'circle') {
+                    loadSpriteList('circle');
+                }
+            } else {
+                console.log('No circle GIFs found, will use SVG fallback');
+            }
+        }
+
+        async function loadMorphSpritesFromFolder() {
+            // Only load if accessed via HTTP (not file://)
+            if (window.location.protocol === 'file:') {
+                console.log('Skipping sprite loading - dashboard opened as file:// (use http://localhost:3000/dashboard.html)');
+                return;
+            }
+            
+            console.log('🔄 Loading pixel morph sprites from:', window.location.origin + '/sprites/defaults/pixel-morphs/');
+            
+            // Check if morph sprites are already loaded (but allow reload if count doesn't match)
+            const existingSprites = JSON.parse(localStorage.getItem('morphSprites') || '[]');
+            const expectedCount = 10; // We expect 10 pixel morph sprites
+            if (existingSprites.length === expectedCount) {
+                console.log(`Pixel morph sprites already loaded: ${existingSprites.length} sprites`);
+                return;
+            } else if (existingSprites.length > 0) {
+                console.log(`Reloading pixel morph sprites (found ${existingSprites.length}, expected ${expectedCount})`);
+            }
+            
+            // List of pixel morph files found in the folder
+            const morphFiles = [
+                'pixelmorph_blue.gif',
+                'pixelmorph_brown.gif',
+                'pixelmorph_gray.gif',
+                'pixelmorph_green.gif',
+                'pixelmorph_lavender.gif',
+                'pixelmorph_orange.gif',
+                'pixelmorph_purple.gif',
+                'pixelmorph_teal.gif',
+                'pixelmorph_white.gif',
+                'pixelmorph_yellow.gif'
+            ];
+            
+            console.log(`Loading ${morphFiles.length} pixel morph sprites from server...`);
+            
+            const loadedSprites = [];
+            
+            // Load each sprite file
+            for (const filename of morphFiles) {
+                try {
+                    const encodedFilename = encodeURIComponent(filename);
+                    // Use absolute path to ensure it works from the server root
+                    const spriteUrl = `/sprites/defaults/pixel-morphs/${encodedFilename}`;
+                    const response = await fetch(spriteUrl);
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const reader = new FileReader();
+                        
+                        await new Promise((resolve, reject) => {
+                            reader.onload = (e) => {
+                                const base64 = e.target.result;
+                                // Clean up filename to get sprite name (remove .gif extension and pixelmorph_ prefix)
+                                const spriteName = filename.replace('pixelmorph_', '').replace('.gif', '').trim();
+                                loadedSprites.push({
+                                    name: spriteName.charAt(0).toUpperCase() + spriteName.slice(1), // Capitalize first letter
+                                    filename: filename,
+                                    data: base64,
+                                    size: blob.size
+                                });
+                                resolve();
+                            };
+                            reader.onerror = reject;
+                            reader.readAsDataURL(blob);
+                        });
+                    } else {
+                        console.warn(`❌ Could not load ${filename}: HTTP ${response.status} - ${response.statusText}`);
+                        console.warn(`   Attempted URL: ${spriteUrl}`);
+                        console.warn(`   Full URL: ${window.location.origin}${spriteUrl}`);
+                    }
+                } catch (error) {
+                    console.error(`❌ Error loading ${filename}:`, error);
+                    console.error(`   Attempted URL: ${spriteUrl}`);
+                    console.error(`   Full URL: ${window.location.origin}${spriteUrl}`);
+                }
+            }
+            
+            if (loadedSprites.length > 0) {
+                localStorage.setItem('morphSprites', JSON.stringify(loadedSprites));
+                console.log(`✅ Loaded ${loadedSprites.length} pixel morph sprites from folder`);
+                
+                // Update the sprite list if pixel morph mode is active
+                const currentMode = document.getElementById('spriteMode')?.value;
+                if (currentMode === 'pixel-morphs') {
+                    loadSpriteList('morph');
+                }
+            } else {
+                console.warn('No pixel morph sprites could be loaded from server');
+            }
+        }
+
+        function clearCampfireUpload() {
+            if (confirm('Are you sure you want to clear the uploaded campfire graphic?')) {
+                localStorage.removeItem('campfireGraphicData');
+                const uploadInput = document.getElementById('campfireUpload');
+                if (uploadInput) {
+                    uploadInput.value = '';
+                }
+                const preview = document.getElementById('campfirePreview');
+                if (preview) {
+                    preview.innerHTML = '<span style="color: #888; font-size: 12px;">No campfire graphic uploaded</span>';
+                }
+                updateFullPreview();
+            }
+        }
+
+        function clearAllGraphics() {
+            if (confirm('This will clear ALL uploaded graphics (campfire, sprites). This may fix dashboard issues. Continue?')) {
+                localStorage.removeItem('campfireGraphicData');
+                localStorage.removeItem('defaultSpriteData');
+                localStorage.removeItem('customSpriteData');
+                
+                // Reset file inputs
+                const campfireUpload = document.getElementById('campfireUpload');
+                const defaultSpriteUpload = document.getElementById('defaultSpriteUpload');
+                const customSpriteUpload = document.getElementById('customSpriteUpload');
+                if (campfireUpload) campfireUpload.value = '';
+                if (defaultSpriteUpload) defaultSpriteUpload.value = '';
+                if (customSpriteUpload) customSpriteUpload.value = '';
+                
+                // Reset previews
+                const campfirePreview = document.getElementById('campfirePreview');
+                const defaultSpritePreview = document.getElementById('defaultSpritePreview');
+                const customSpritePreview = document.getElementById('customSpritePreview');
+                if (campfirePreview) campfirePreview.innerHTML = '<span style="color: #888; font-size: 12px;">No campfire graphic uploaded</span>';
+                if (defaultSpritePreview) defaultSpritePreview.innerHTML = '<span style="color: #888; font-size: 12px;">No sprite uploaded</span>';
+                if (customSpritePreview) customSpritePreview.innerHTML = '<span style="color: #888; font-size: 12px;">No sprite uploaded</span>';
+                
+                alert('✅ All graphics cleared! Please refresh the page.');
+                location.reload();
+            }
+        }
+
+        function clearAllDataAndReload() {
+            if (confirm('This will clear ALL data (settings, graphics, everything) and reload the page. This should fix any dashboard issues. Continue?')) {
+                try {
+                    localStorage.clear();
+                    alert('✅ All data cleared! Reloading page...');
+                    location.reload();
+                } catch (e) {
+                    alert('Error clearing data: ' + e.message + '\n\nPlease manually clear your browser cache and localStorage.');
+                }
+            }
+        }
+
+        function updateCampfireMethod() {
+            const method = document.getElementById('campfireMethod').value;
+            const urlSection = document.getElementById('campfireUrlSection');
+            const uploadSection = document.getElementById('campfireUploadSection');
+            
+            if (!urlSection || !uploadSection) {
+                console.error('Campfire sections not found');
+                return;
+            }
+            
+            if (method === 'url') {
+                urlSection.style.display = 'block';
+                uploadSection.style.display = 'none';
+            } else {
+                urlSection.style.display = 'none';
+                uploadSection.style.display = 'block';
+                
+                // Show preview if there's uploaded data
+                const campfireData = localStorage.getItem('campfireGraphicData');
+                if (campfireData) {
+                    const preview = document.getElementById('campfirePreview');
+                    if (preview) {
+                        // Check if it's a video or image
+                        const isVideo = campfireData.startsWith('data:video/');
+                        if (isVideo) {
+                            preview.innerHTML = `<video src="${campfireData}" style="max-width: 100%; max-height: 100px; border-radius: 4px;" controls autoplay loop muted></video>`;
+                        } else {
+                            preview.innerHTML = `<img src="${campfireData}" style="max-width: 100%; max-height: 100px; border-radius: 4px;" alt="Campfire Graphic">`;
+                        }
+                    }
+                }
+            }
+        }
+
+        function handleCampfireUpload(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                // Clear the input if no file selected
+                event.target.value = '';
+                return;
+            }
+            
+            // Check file size (limit to 10MB to prevent localStorage issues)
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            if (file.size > maxSize) {
+                alert('⚠️ File is too large! Maximum size is 10MB. Please use a smaller file or compress it.');
+                event.target.value = '';
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onerror = function() {
+                alert('❌ Error reading file. Please try again.');
+                event.target.value = '';
+            };
+            
+            reader.onload = function(e) {
+                try {
+                    const base64 = e.target.result;
+                    localStorage.setItem('campfireGraphicData', base64);
+                    
+                    // Ensure upload section is visible
+                    const uploadSection = document.getElementById('campfireUploadSection');
+                    const urlSection = document.getElementById('campfireUrlSection');
+                    if (uploadSection && urlSection) {
+                        uploadSection.style.display = 'block';
+                        urlSection.style.display = 'none';
+                        // Update method selector
+                        const methodSelect = document.getElementById('campfireMethod');
+                        if (methodSelect) {
+                            methodSelect.value = 'upload';
+                        }
+                    }
+                    
+                    // Update preview
+                    const preview = document.getElementById('campfirePreview');
+                    if (preview) {
+                        const fileExtension = file.name.split('.').pop().toLowerCase();
+                        const isVideo = ['mp4', 'webm', 'mov', 'avi'].includes(fileExtension);
+                        const isGif = fileExtension === 'gif';
+                        
+                        if (isVideo || file.type.startsWith('video/')) {
+                            preview.innerHTML = `<video src="${base64}" style="max-width: 100%; max-height: 100px; border-radius: 4px;" controls autoplay loop muted></video>`;
+                        } else if (isGif || file.type === 'image/gif') {
+                            preview.innerHTML = `<img src="${base64}" style="max-width: 100%; max-height: 100px; border-radius: 4px;" alt="Campfire GIF">`;
+                        } else {
+                            preview.innerHTML = `<img src="${base64}" style="max-width: 100%; max-height: 100px; border-radius: 4px;" alt="Campfire Graphic">`;
+                        }
+                    }
+                    
+                    updateFullPreview();
+                } catch (error) {
+                    console.error('Error handling upload:', error);
+                    alert('❌ Error processing file. Please try again.');
+                    event.target.value = '';
+                }
+            };
+            
+            reader.readAsDataURL(file);
+        }
+
+        function updateJoinMethod() {
+            const method = document.getElementById('joinMethod').value;
+            const commandSettings = document.getElementById('commandSettings');
+            const emoteSettings = document.getElementById('emoteSettings');
+            const cheerSettings = document.getElementById('cheerSettings');
+            const cheerAmountSettings = document.getElementById('cheerAmountSettings');
+            
+            // Hide all first
+            commandSettings.style.display = 'none';
+            emoteSettings.style.display = 'none';
+            cheerSettings.style.display = 'none';
+            cheerAmountSettings.style.display = 'none';
+            
+            // Show relevant ones
+            if (method === 'command') {
+                commandSettings.style.display = 'block';
+            } else if (method === 'emote') {
+                emoteSettings.style.display = 'block';
+            } else if (method === 'cheer') {
+                cheerSettings.style.display = 'block';
+                cheerAmountSettings.style.display = 'block';
+            }
+        }
+
+        function handleDefaultSpriteUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64 = e.target.result;
+                localStorage.setItem('defaultSpriteData', base64);
+                const preview = document.getElementById('defaultSpritePreview');
+                preview.innerHTML = `<img src="${base64}" style="max-width: 100%; max-height: 60px; border-radius: 4px;">`;
+                updateFullPreview();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function handleCustomSpriteUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64 = e.target.result;
+                localStorage.setItem('customSpriteData', base64);
+                const preview = document.getElementById('customSpritePreview');
+                preview.innerHTML = `<img src="${base64}" style="max-width: 100%; max-height: 60px; border-radius: 4px;">`;
+                updateFullPreview();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function setSpriteDirection(direction, updatePreview = true) {
+            const leftBtn = document.getElementById('spriteDirectionLeft');
+            const rightBtn = document.getElementById('spriteDirectionRight');
+            const display = document.getElementById('spriteDirectionDisplay');
+            
+            // Remove active class from both buttons
+            leftBtn.classList.remove('active');
+            rightBtn.classList.remove('active');
+            
+            // Add active class to selected button
+            if (direction === 'left') {
+                leftBtn.classList.add('active');
+                display.textContent = 'Default: Left';
+            } else {
+                rightBtn.classList.add('active');
+                display.textContent = 'Default: Right';
+            }
+            
+            if (updatePreview) {
+                updateFullPreview();
+            }
+        }
+
+        function copyViewerLink() {
+            // Get the viewer dashboard link
+            let link;
+            if (window.location.protocol === 'file:') {
+                // If opened as file://, use localhost
+                link = 'http://localhost:3000/viewer-dashboard.html';
+            } else {
+                link = window.location.origin + window.location.pathname.replace('dashboard.html', 'viewer-dashboard.html');
+            }
+            // Update the input field
+            const input = document.getElementById('viewerDashboardLink');
+            if (input) input.value = link;
+            
+            navigator.clipboard.writeText(link).then(() => {
+                alert('✅ Viewer dashboard link copied!');
+            }).catch(() => {
+                if (input) {
+                    input.select();
+                    document.execCommand('copy');
+                }
+                alert('✅ Viewer dashboard link copied!');
+            });
+        }
+        
+        // Update viewer dashboard link on page load
+        function updateViewerDashboardLink() {
+            const input = document.getElementById('viewerDashboardLink');
+            if (input) {
+                if (window.location.protocol === 'file:') {
+                    input.value = 'http://localhost:3000/viewer-dashboard.html';
+                } else {
+                    input.value = window.location.origin + window.location.pathname.replace('dashboard.html', 'viewer-dashboard.html');
+                }
+            }
+        }
+
+        function getSettings() {
+            return {
+                campfireMethod: document.getElementById('campfireMethod').value,
+                campfireGraphicUrl: document.getElementById('campfireUrl').value,
+                campfireGraphicData: localStorage.getItem('campfireGraphicData') || '',
+                circleAngle: parseInt(document.getElementById('circleAngle').value),
+                showTestUsers: document.getElementById('showTestUsers').checked,
+                joinMethod: document.getElementById('joinMethod').value,
+                command: document.getElementById('command').value,
+                emoteName: document.getElementById('emoteName').value,
+                maxUsers: parseInt(document.getElementById('maxUsers').value),
+                subscriberOnly: document.getElementById('subscriberOnly').checked,
+                subTier2Only: document.getElementById('subTier2Only').checked,
+                subTier3Only: document.getElementById('subTier3Only').checked,
+                vipOnly: document.getElementById('vipOnly').checked,
+                primeOnly: document.getElementById('primeOnly').checked,
+                cheerMethod: document.getElementById('joinMethod').value === 'cheer' ? document.getElementById('cheerMethod').value : null,
+                cheerAmount: document.getElementById('joinMethod').value === 'cheer' ? parseInt(document.getElementById('cheerAmount').value) : 0,
+                spriteMode: document.getElementById('spriteMode').value,
+                glowSize: parseInt(document.getElementById('glowSize').value),
+                glowIntensity: parseInt(document.getElementById('glowIntensity').value),
+                shadowIntensity: parseInt(document.getElementById('shadowIntensity').value),
+                glowSpread: parseInt(document.getElementById('glowSpread').value),
+                animatedGlow: document.getElementById('animatedGlow').checked,
+                // Legacy support (for backward compatibility)
+                defaultSpriteData: localStorage.getItem('defaultSpriteData') || '',
+                customSpriteData: localStorage.getItem('customSpriteData') || '',
+                // New sprite collections
+                circleSprites: JSON.parse(localStorage.getItem('circleSprites') || '[]'),
+                rpgSprites: JSON.parse(localStorage.getItem('rpgSprites') || '[]'),
+                morphSprites: JSON.parse(localStorage.getItem('morphSprites') || '[]'),
+                fireSize: parseInt(document.getElementById('fireSize').value),
+                spriteSize: parseInt(document.getElementById('spriteSize').value),
+                spriteDefaultDirection: document.getElementById('spriteDirectionLeft').classList.contains('active') ? 'left' : 'right'
+            };
+        }
+
+        function loadSettings() {
+            const saved = localStorage.getItem('campfireWidgetSettings');
+            if (saved) {
+                try {
+                    const settings = JSON.parse(saved);
+                    // Handle campfire method - if there's uploaded data, default to upload method
+                    const hasUploadedData = settings.campfireGraphicData && settings.campfireGraphicData.length > 0;
+                    const campfireMethod = hasUploadedData ? 'upload' : (settings.campfireMethod || 'url');
+                    
+                    document.getElementById('campfireMethod').value = campfireMethod;
+                    document.getElementById('campfireUrl').value = settings.campfireGraphicUrl || '';
+                    updateCampfireMethod();
+                    
+                    // Update preview if there's uploaded data
+                    if (settings.campfireGraphicData && settings.campfireGraphicData.length > 0) {
+                        const preview = document.getElementById('campfirePreview');
+                        if (preview) {
+                            const isVideo = settings.campfireGraphicData.startsWith('data:video/');
+                            if (isVideo) {
+                                preview.innerHTML = `<video src="${settings.campfireGraphicData}" style="max-width: 100%; max-height: 100px; border-radius: 4px;" controls autoplay loop muted></video>`;
+                            } else {
+                                preview.innerHTML = `<img src="${settings.campfireGraphicData}" style="max-width: 100%; max-height: 100px; border-radius: 4px;" alt="Campfire Graphic">`;
+                            }
+                        }
+                    }
+                    document.getElementById('circleAngle').value = settings.circleAngle !== undefined ? settings.circleAngle : 64;
+                    document.getElementById('showTestUsers').checked = settings.showTestUsers !== undefined ? settings.showTestUsers : true;
+                    document.getElementById('joinMethod').value = settings.joinMethod || 'command';
+                    document.getElementById('command').value = settings.command || '!join';
+                    document.getElementById('emoteName').value = settings.emoteName || '';
+                    document.getElementById('maxUsers').value = settings.maxUsers || 20;
+                    document.getElementById('subscriberOnly').checked = settings.subscriberOnly || false;
+                    document.getElementById('subTier2Only').checked = settings.subTier2Only || false;
+                    document.getElementById('subTier3Only').checked = settings.subTier3Only || false;
+                    document.getElementById('vipOnly').checked = settings.vipOnly || false;
+                    document.getElementById('primeOnly').checked = settings.primeOnly || false;
+                    // Handle cheer settings (backward compatible with bitsRequired)
+                    if (settings.cheerMethod || settings.joinMethod === 'cheer') {
+                        document.getElementById('joinMethod').value = 'cheer';
+                        document.getElementById('cheerMethod').value = settings.cheerMethod || 'bits';
+                        document.getElementById('cheerAmount').value = settings.cheerAmount || 100;
+                    } else if (settings.bitsRequired && settings.bitsRequired > 0) {
+                        // Legacy: convert old bitsRequired to new cheer system
+                        document.getElementById('joinMethod').value = 'cheer';
+                        document.getElementById('cheerMethod').value = 'bits';
+                        document.getElementById('cheerAmount').value = settings.bitsRequired;
+                    }
+                    updateJoinMethod();
+                    document.getElementById('glowSize').value = settings.glowSize || 500;
+                    document.getElementById('glowIntensity').value = settings.glowIntensity || 77;
+                    document.getElementById('shadowIntensity').value = settings.shadowIntensity || 91;
+                    document.getElementById('glowSpread').value = settings.glowSpread || 64;
+                    document.getElementById('animatedGlow').checked = settings.animatedGlow !== undefined ? settings.animatedGlow : true;
+                    document.getElementById('spriteMode').value = settings.spriteMode || 'circle';
+                    document.getElementById('fireSize').value = settings.fireSize || 48;
+                    document.getElementById('spriteSize').value = settings.spriteSize || 40;
+                    
+                    // Load sprite collections
+                    if (settings.circleSprites && settings.circleSprites.length > 0) {
+                        localStorage.setItem('circleSprites', JSON.stringify(settings.circleSprites));
+                    }
+                    if (settings.rpgSprites && settings.rpgSprites.length > 0) {
+                        localStorage.setItem('rpgSprites', JSON.stringify(settings.rpgSprites));
+                    }
+                    if (settings.morphSprites && settings.morphSprites.length > 0) {
+                        localStorage.setItem('morphSprites', JSON.stringify(settings.morphSprites));
+                    }
+                    
+                    // Legacy support
+                    const defaultSpritePreview = document.getElementById('defaultSpritePreview');
+                    if (settings.defaultSpriteData && defaultSpritePreview) {
+                        defaultSpritePreview.innerHTML = `<img src="${settings.defaultSpriteData}" style="max-width: 100%; max-height: 60px; border-radius: 4px;">`;
+                    }
+                    const customSpritePreview = document.getElementById('customSpritePreview');
+                    if (settings.customSpriteData && customSpritePreview) {
+                        customSpritePreview.innerHTML = `<img src="${settings.customSpriteData}" style="max-width: 100%; max-height: 60px; border-radius: 4px;">`;
+                    }
+                    
+                    // Set sprite default direction
+                    const spriteDirection = settings.spriteDefaultDirection || 'left';
+                    setSpriteDirection(spriteDirection, false);
+                    
+                    updateSpriteMode();
+                    updateAngleDisplay();
+                    updateGlowSizeDisplay();
+                    updateGlowIntensityDisplay();
+                    updateShadowIntensityDisplay();
+                    updateGlowSpreadDisplay();
+                    updateFireSizeDisplay();
+                    updateSpriteSizeDisplay();
+                    updateFullPreview();
+                } catch (e) {
+                    console.error('Error loading settings:', e);
+                }
+            } else {
+                updateGlowSizeDisplay();
+                updateGlowIntensityDisplay();
+                updateShadowIntensityDisplay();
+                updateGlowSpreadDisplay();
+                updateFireSizeDisplay();
+                updateSpriteSizeDisplay();
+                updateAngleDisplay();
+                updateFullPreview();
+            }
+        }
+
+        function saveSettings() {
+            const settings = getSettings();
+            localStorage.setItem('campfireWidgetSettings', JSON.stringify(settings));
+            window.dispatchEvent(new CustomEvent('campfireSettingsUpdate', { detail: settings }));
+            updateFullPreview();
+            
+            // If Code tab is active, regenerate the code with new settings
+            const codeTab = document.getElementById('codeTab');
+            if (codeTab && codeTab.classList.contains('active')) {
+                generateCode();
+            }
+            
+            showNotification('✅ Settings saved!');
+        }
+
+        function resetSettings() {
+            showConfirmation(
+                'Reset Settings',
+                'Are you sure you want to reset all settings to defaults?',
+                () => {
+                    localStorage.removeItem('campfireWidgetSettings');
+                    showNotification('✅ Settings reset! Reloading...');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                }
+            );
+        }
+
+        function testWidget() {
+            window.open('widget.html', '_blank');
+        }
+
+        async function generateCode() {
+            // Wrap entire function in try-catch to prevent breaking the page
+            try {
+                const codeArea = document.getElementById('widgetCode');
+                if (!codeArea) {
+                    console.error('Code area not found');
+                    return;
+                }
+                
+                // Show loading message
+                codeArea.textContent = '<!-- Generating code... -->';
+                
+                const settings = getSettings();
+                
+                let widgetCode = '';
+                try {
+                    const response = await fetch('widget.html');
+                    widgetCode = await response.text();
+                } catch (e) {
+                    console.error('Could not fetch widget.html:', e);
+                    codeArea.textContent = '<!-- Error: Could not load widget.html. Please ensure the file exists. -->';
+                    return;
+                }
+                
+                const baseUrl = window.location.origin + window.location.pathname.replace('dashboard.html', 'widget.html');
+                const params = new URLSearchParams();
+                if (settings.campfireGraphicUrl) params.append('graphic', settings.campfireGraphicUrl);
+                params.append('angle', settings.circleAngle);
+                params.append('joinMethod', settings.joinMethod || 'command');
+                params.append('command', settings.command);
+                params.append('emoteName', settings.emoteName || '');
+                params.append('maxUsers', settings.maxUsers);
+                if (settings.subscriberOnly) params.append('subOnly', 'true');
+                if (settings.subTier2Only) params.append('subTier2', 'true');
+                if (settings.subTier3Only) params.append('subTier3', 'true');
+                if (settings.vipOnly) params.append('vipOnly', 'true');
+                if (settings.primeOnly) params.append('primeOnly', 'true');
+                // Handle cheer/payment method
+                if (settings.joinMethod === 'cheer' && settings.cheerMethod) {
+                    params.append('joinMethod', 'cheer');
+                    params.append('cheerMethod', settings.cheerMethod);
+                    params.append('cheerAmount', settings.cheerAmount || 100);
+                }
+                params.append('glowSize', settings.glowSize || 500);
+                params.append('glowIntensity', settings.glowIntensity || 77);
+                params.append('shadowIntensity', settings.shadowIntensity || 91);
+                params.append('glowSpread', settings.glowSpread || 64);
+                if (settings.animatedGlow !== false) params.append('animatedGlow', 'true');
+                params.append('spriteMode', settings.spriteMode || 'default');
+                params.append('fireSize', settings.fireSize || 48);
+                params.append('spriteSize', settings.spriteSize || 40);
+                params.append('spriteDefaultDirection', settings.spriteDefaultDirection || 'left');
+                
+                // Embed base64 graphics and settings directly into widget code
+                // Skip embedding for now to prevent syntax errors - graphics will be loaded from localStorage
+                // This prevents the script from breaking with large base64 strings
+                let embeddedDataScript = '';
+                
+                // Only embed if data is small enough and won't break the script
+                try {
+                    const hasSmallCampfire = settings.campfireGraphicData && settings.campfireGraphicData.length > 0 && settings.campfireGraphicData.length < 100000;
+                    const hasSmallDefault = settings.defaultSpriteData && settings.defaultSpriteData.length > 0 && settings.defaultSpriteData.length < 100000;
+                    const hasSmallCustom = settings.customSpriteData && settings.customSpriteData.length > 0 && settings.customSpriteData.length < 100000;
+                    
+                    // Check sprite collections - calculate total size
+                    const hasCircleSprites = settings.circleSprites && settings.circleSprites.length > 0;
+                    const hasRpgSprites = settings.rpgSprites && settings.rpgSprites.length > 0;
+                    const hasMorphSprites = settings.morphSprites && settings.morphSprites.length > 0;
+                    
+                    // Calculate total size of sprite collections
+                    let spriteCollectionsSize = 0;
+                    if (hasCircleSprites) {
+                        const circleJson = JSON.stringify(settings.circleSprites);
+                        spriteCollectionsSize += circleJson.length;
+                    }
+                    if (hasRpgSprites) {
+                        const rpgJson = JSON.stringify(settings.rpgSprites);
+                        spriteCollectionsSize += rpgJson.length;
+                    }
+                    if (hasMorphSprites) {
+                        const morphJson = JSON.stringify(settings.morphSprites);
+                        spriteCollectionsSize += morphJson.length;
+                    }
+                    
+                    // Allow sprite collections to be larger (up to 5MB total) since they're essential
+                    const hasSpriteCollections = (hasCircleSprites || hasRpgSprites || hasMorphSprites) && spriteCollectionsSize < 5000000;
+                    
+                    if (hasSmallCampfire || hasSmallDefault || hasSmallCustom || hasSpriteCollections) {
+                        embeddedDataScript = '\n<' + 'script>\n';
+                        embeddedDataScript += '(function() {\n';
+                        
+                        if (hasSmallCampfire) {
+                            try {
+                                const campfireJson = JSON.stringify(settings.campfireGraphicData);
+                                embeddedDataScript += 'localStorage.setItem(\'campfireGraphicData\', ' + campfireJson + ');\n';
+                            } catch (e) {
+                                console.warn('Could not embed campfire graphic:', e);
+                            }
+                        }
+                        if (hasSmallDefault) {
+                            try {
+                                const defaultSpriteJson = JSON.stringify(settings.defaultSpriteData);
+                                embeddedDataScript += 'localStorage.setItem(\'defaultSpriteData\', ' + defaultSpriteJson + ');\n';
+                            } catch (e) {
+                                console.warn('Could not embed default sprite:', e);
+                            }
+                        }
+                        if (hasSmallCustom) {
+                            try {
+                                const customSpriteJson = JSON.stringify(settings.customSpriteData);
+                                embeddedDataScript += 'localStorage.setItem(\'customSpriteData\', ' + customSpriteJson + ');\n';
+                            } catch (e) {
+                                console.warn('Could not embed custom sprite:', e);
+                            }
+                        }
+                        
+                        // Embed sprite collections
+                        if (hasCircleSprites && spriteCollectionsSize < 5000000) {
+                            try {
+                                const circleJson = JSON.stringify(settings.circleSprites);
+                                embeddedDataScript += 'localStorage.setItem(\'circleSprites\', ' + circleJson + ');\n';
+                            } catch (e) {
+                                console.warn('Could not embed circle sprites:', e);
+                            }
+                        }
+                        if (hasRpgSprites && spriteCollectionsSize < 5000000) {
+                            try {
+                                const rpgJson = JSON.stringify(settings.rpgSprites);
+                                embeddedDataScript += 'localStorage.setItem(\'rpgSprites\', ' + rpgJson + ');\n';
+                            } catch (e) {
+                                console.warn('Could not embed RPG sprites:', e);
+                            }
+                        }
+                        if (hasMorphSprites && spriteCollectionsSize < 5000000) {
+                            try {
+                                const morphJson = JSON.stringify(settings.morphSprites);
+                                embeddedDataScript += 'localStorage.setItem(\'morphSprites\', ' + morphJson + ');\n';
+                            } catch (e) {
+                                console.warn('Could not embed morph sprites:', e);
+                            }
+                        }
+                        
+                        embeddedDataScript += '})();\n';
+                        embeddedDataScript += '<' + '/script>\n';
+                    }
+                } catch (e) {
+                    console.warn('Could not create embedded script:', e);
+                    embeddedDataScript = '';
+                }
+                
+                // Insert before closing body tag, or at end if no body tag
+                // Skip embedding if it might cause issues
+                try {
+                    // Allow larger scripts for sprite collections (up to 10MB)
+                    if (embeddedDataScript.length < 10000000) { // 10MB limit for embedded script (to accommodate sprite collections)
+                        if (widgetCode.includes('</body>')) {
+                            widgetCode = widgetCode.replace('</body>', embeddedDataScript + '</body>');
+                        } else {
+                            widgetCode += embeddedDataScript;
+                        }
+                    } else {
+                        console.warn('Embedded script too large (' + (embeddedDataScript.length / 1000000).toFixed(2) + 'MB), skipping embedding');
+                    }
+                } catch (e) {
+                    console.warn('Could not embed script, continuing without embedded data:', e);
+                }
+                
+                // Build the code string safely using string concatenation
+                const header = '<!-- \n' +
+                    'OBS CAMPFIRE WIDGET\n' +
+                    '==========================================\n\n' +
+                    'INSTRUCTIONS:\n' +
+                    '1. Copy the ENTIRE code below (everything between the comment markers)\n' +
+                    '2. In OBS, add a Browser Source\n' +
+                    '3. Set the URL to a local file path or hosted URL, OR paste this code into your streaming software\'s custom widget feature\n' +
+                    '4. Save and add to your scene\n\n' +
+                    'NOTE: Custom graphics (campfire and sprites) are embedded in this code.\n\n' +
+                    '==========================================\n' +
+                    '-->\n\n';
+                
+                const footer = '\n\n<!-- \n' +
+                    'END OF WIDGET CODE\n' +
+                    'Copy everything above this line into OBS Browser Source or your streaming software\'s custom widget feature\n\n' +
+                    'NOTE: Custom graphics (campfire and sprites) are embedded in this code as base64 data.\n' +
+                    '-->';
+                
+                // Use string concatenation to avoid issues with large strings
+                // Only set textContent if codeArea exists and is visible
+                if (codeArea) {
+                    try {
+                        codeArea.textContent = header + widgetCode + footer;
+                    } catch (e) {
+                        console.error('Error setting code text:', e);
+                        codeArea.textContent = '<!-- Error: Code too large to display. Please use smaller graphics or refresh the page. -->';
+                    }
+                }
+            } catch (e) {
+                console.error('Error generating code:', e);
+                const codeArea = document.getElementById('widgetCode');
+                if (codeArea) {
+                    codeArea.textContent = '<!-- \n' +
+                        'ERROR: Could not generate widget code.\n\n' +
+                        'Error: ' + (e.message || 'Unknown error') + '\n\n' +
+                        'Please try:\n' +
+                        '1. Refresh the page\n' +
+                        '2. Clear your browser cache\n' +
+                        '3. Try again\n\n' +
+                        'If the problem persists, check the browser console for details.\n' +
+                        '-->';
+                }
+            }
+        }
+
+        function copyCode() {
+            const code = document.getElementById('widgetCode').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                alert('✅ Code copied to clipboard!');
+            }).catch(() => {
+                const textarea = document.createElement('textarea');
+                textarea.value = code;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('✅ Code copied to clipboard!');
+            });
+        }
+
+        // Initialize - wrap in try-catch to prevent page breakage
+        async function initializeDashboard() {
+            try {
+                // Only reset graphics if there's an issue (don't auto-reset every time)
+                // Check if we need to reset by looking for very large localStorage items
+                try {
+                    const campfireData = localStorage.getItem('campfireGraphicData');
+                    if (campfireData && campfireData.length > 10000000) { // 10MB limit
+                        console.log('Large graphic detected, clearing to prevent issues...');
+                        localStorage.removeItem('campfireGraphicData');
+                    }
+                } catch (e) {
+                    console.warn('Could not check campfire data:', e);
+                }
+                
+                // Load widget code (non-blocking)
+                try {
+                    loadWidgetCode();
+                } catch (e) {
+                    console.warn('Could not load widget code:', e);
+                }
+                
+                // Initialize sprite direction to default (left) if not set
+                try {
+                    const saved = localStorage.getItem('campfireWidgetSettings');
+                    if (!saved) {
+                        setSpriteDirection('left', false);
+                    }
+                } catch (e) {
+                    console.warn('Could not set sprite direction:', e);
+                }
+                
+                // Load RPG sprites from folder if not already loaded
+                try {
+                    await loadRpgSpritesFromFolder();
+                } catch (e) {
+                    console.error('❌ Error loading RPG sprites from folder:', e);
+                }
+                
+                // Load circle sprites from folder if not already loaded
+                try {
+                    await loadCircleSpritesFromFolder();
+                } catch (e) {
+                    console.error('❌ Error loading circle sprites from folder:', e);
+                }
+                
+                // Load pixel morph sprites from folder if not already loaded
+                try {
+                    await loadMorphSpritesFromFolder();
+                } catch (e) {
+                    console.error('❌ Error loading pixel morph sprites from folder:', e);
+                }
+                
+                // Load settings
+                try {
+                    loadSettings();
+                } catch (e) {
+                    console.error('Error loading settings:', e);
+                }
+                
+                // Load Twitch config if in Electron
+                try {
+                    if (window.electronAPI) {
+                        loadTwitchConfig();
+                        loadAppVersion();
+                        setupUpdateChecker();
+                    } else {
+                        // Set version for localhost/web version
+                        const versionEl = document.getElementById('versionNumber');
+                        if (versionEl) {
+                            versionEl.textContent = 'Localhost/Web';
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Could not load Twitch config:', e);
+                }
+                
+                // Update preview when settings change
+                try {
+                    const circleAngleEl = document.getElementById('circleAngle');
+                    const campfireUrlEl = document.getElementById('campfireUrl');
+                    if (circleAngleEl) {
+                        circleAngleEl.addEventListener('input', updateFullPreview);
+                    }
+                    if (campfireUrlEl) {
+                        campfireUrlEl.addEventListener('input', updateFullPreview);
+                    }
+                } catch (e) {
+                    console.warn('Could not attach event listeners:', e);
+                }
+                
+                console.log('✅ Dashboard initialized');
+            } catch (error) {
+                console.error('Critical error during initialization:', error);
+                // Don't show alert - just log it so page can still load
+            }
+        }
+
+        // Wait for DOM to be ready before initializing
+        try {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', async () => {
+                    await initializeDashboard();
+                    updateViewerDashboardLink();
+                });
+            } else {
+                // DOM already loaded, initialize immediately
+                initializeDashboard();
+                updateViewerDashboardLink();
+            }
+        } catch (e) {
+            console.error('Failed to set up initialization:', e);
+            // Try to initialize anyway after a short delay
+            setTimeout(initializeDashboard, 100);
+        }
+
+        // Twitch OAuth Functions
+        async function loadTwitchConfig() {
+            if (!window.electronAPI) {
+                console.log('Not running in Electron - Twitch config unavailable');
+                return;
+            }
+            
+            try {
+                const config = await window.electronAPI.getTwitchConfig();
+                if (config) {
+                    document.getElementById('twitchBotUsername').value = config.botUsername || '';
+                    document.getElementById('twitchOAuthToken').value = config.oauthToken || '';
+                    document.getElementById('twitchChannelName').value = config.channelName || '';
+                    updateTwitchStatus(config);
+                }
+            } catch (e) {
+                console.error('Error loading Twitch config:', e);
+            }
+        }
+
+        async function generateTwitchToken() {
+            if (!window.electronAPI) {
+                alert('This feature is only available in the desktop app. Please use the desktop application.');
+                return;
+            }
+            
+            const button = document.getElementById('generateTwitchToken');
+            button.disabled = true;
+            button.textContent = '⏳ Opening Twitch...';
+            
+            try {
+                const result = await window.electronAPI.generateTwitchToken();
+                if (result && result.token) {
+                    document.getElementById('twitchOAuthToken').value = result.token;
+                    button.textContent = '✅ Token Generated!';
+                    button.style.background = '#4caf50';
+                    setTimeout(() => {
+                        button.textContent = '🔑 Generate Twitch Token';
+                        button.style.background = '';
+                        button.disabled = false;
+                    }, 3000);
+                }
+            } catch (e) {
+                console.error('Error generating token:', e);
+                alert('Error generating token: ' + e.message);
+                button.textContent = '🔑 Generate Twitch Token';
+                button.disabled = false;
+            }
+        }
+
+        function toggleTokenVisibility() {
+            const tokenInput = document.getElementById('twitchOAuthToken');
+            const button = event.target;
+            if (tokenInput.type === 'password') {
+                tokenInput.type = 'text';
+                button.textContent = '🙈 Hide';
+            } else {
+                tokenInput.type = 'password';
+                button.textContent = '👁️ Show';
+            }
+        }
+
+        function updateTwitchConfig() {
+            // Auto-save is handled by saveTwitchConfig
+        }
+
+        async function saveTwitchConfig() {
+            if (!window.electronAPI) {
+                alert('This feature is only available in the desktop app.');
+                return;
+            }
+            
+            const config = {
+                botUsername: document.getElementById('twitchBotUsername').value.trim(),
+                oauthToken: document.getElementById('twitchOAuthToken').value.replace(/^oauth:/, '').trim(),
+                channelName: document.getElementById('twitchChannelName').value.trim()
+            };
+            
+            if (!config.botUsername || !config.oauthToken || !config.channelName) {
+                alert('Please fill in all fields: Username, OAuth Token, and Channel Name');
+                return;
+            }
+            
+            try {
+                const result = await window.electronAPI.saveTwitchConfig(config);
+                if (result.success) {
+                    alert('✅ Twitch configuration saved! Please restart the server for changes to take effect.');
+                    updateTwitchStatus(config);
+                } else {
+                    alert('Error saving config: ' + (result.error || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error('Error saving Twitch config:', e);
+                alert('Error saving configuration: ' + e.message);
+            }
+        }
+
+        function updateTwitchStatus(config) {
+            const statusIcon = document.getElementById('twitchStatusIcon');
+            const statusText = document.getElementById('twitchStatusText');
+            const configDisplay = document.getElementById('twitchConfigDisplay');
+            const usernameDisplay = document.getElementById('twitchUsernameDisplay');
+            const channelDisplay = document.getElementById('twitchChannelDisplay');
+            
+            if (config && config.botUsername && config.oauthToken && config.channelName) {
+                statusIcon.textContent = '🟢';
+                statusText.textContent = 'Connected';
+                configDisplay.style.display = 'block';
+                usernameDisplay.textContent = config.botUsername;
+                channelDisplay.textContent = config.channelName;
+            } else {
+                statusIcon.textContent = '⚪';
+                statusText.textContent = 'Not Connected';
+                configDisplay.style.display = 'none';
+            }
+        }
+
+        async function testTwitchConnection() {
+            alert('Connection test: Check the server console for connection status. If you see "✅ Connected to Twitch IRC", the connection is working!');
+        }
+
+        async function loadAppVersion() {
+            if (!window.electronAPI) {
+                const versionEl = document.getElementById('versionNumber');
+                if (versionEl) {
+                    versionEl.textContent = 'Localhost/Web';
+                }
+                return;
+            }
+            
+            try {
+                const result = await window.electronAPI.getAppVersion();
+                if (result && result.version) {
+                    const versionEl = document.getElementById('versionNumber');
+                    if (versionEl) {
+                        // Format version with 'v' prefix (e.g., "0.0.3" -> "v0.0.3")
+                        const version = result.version.startsWith('v') ? result.version : `v${result.version}`;
+                        versionEl.textContent = version;
+                    }
+                } else {
+                    const versionEl = document.getElementById('versionNumber');
+                    if (versionEl) {
+                        versionEl.textContent = 'Unknown';
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading app version:', e);
+                const versionEl = document.getElementById('versionNumber');
+                if (versionEl) {
+                    versionEl.textContent = 'Error loading version';
+                }
+            }
+        }
+
+        // Prevent duplicate listeners
+        let updateCheckerSetup = false;
+        
+        function setupUpdateChecker() {
+            if (!window.electronAPI) return;
+            if (updateCheckerSetup) {
+                console.log('Update checker already setup, skipping duplicate registration');
+                return;
+            }
+            updateCheckerSetup = true;
+            
+            // Listen for update status
+            window.electronAPI.onUpdateStatus((data) => {
+                if (data.status === 'checking') {
+                    // Show checking status
+                    console.log('Checking for updates...');
+                    showNotification('🔍 Checking for updates...');
+                } else if (data.status === 'available') {
+                    // Get version from DOM (already has 'v' prefix) or from data (needs 'v' prefix)
+                    const domVersion = document.getElementById('versionNumber')?.textContent || '';
+                    const dataVersion = data.version || '';
+                    // Use DOM version if available (already formatted), otherwise format data version
+                    const currentVersion = domVersion || (dataVersion ? `v${dataVersion}` : 'current');
+                    const newVersion = dataVersion ? `v${dataVersion}` : 'new version';
+                    if (confirm(`Update available: ${newVersion}\n\nYou have ${currentVersion}\n\nWould you like to download the update?`)) {
+                        downloadUpdate();
+                    }
+                } else if (data.status === 'not-available') {
+                    // Show fade-in/fade-out notification instead of alert
+                    // Get version from DOM (already has 'v' prefix) or from data (needs 'v' prefix)
+                    const domVersion = document.getElementById('versionNumber')?.textContent || '';
+                    const dataVersion = data.version || '';
+                    // Use DOM version if available (already formatted), otherwise format data version
+                    const currentVersion = domVersion || (dataVersion ? `v${dataVersion}` : 'current');
+                    showNotification(`✅ You're up to date! (${currentVersion})`);
+                } else if (data.status === 'downloaded') {
+                    if (confirm(`Update v${data.version} downloaded and ready to install!\n\nInstall now? The app will restart.`)) {
+                        installUpdate();
+                    }
+                } else if (data.status === 'error') {
+                    // Check if it's a 404 (release not found) vs other errors
+                    const errorMsg = data.error || 'Unknown error';
+                    if (errorMsg.includes('404') || errorMsg.includes('not found')) {
+                        // 404 could mean:
+                        // 1. Repository doesn't exist or is private
+                        // 2. No releases published yet
+                        // 3. Repository name/owner is incorrect
+                        showNotification('ℹ️ Unable to check for updates. Please verify:\n• Repository exists and is public\n• At least one release is published\n• Repository name is correct');
+                    } else {
+                        showNotification(`❌ Update error: ${errorMsg}`);
+                    }
+                }
+            });
+            
+            // Listen for download progress
+            window.electronAPI.onUpdateProgress((progress) => {
+                console.log(`Download progress: ${progress.percent.toFixed(1)}%`);
+            });
+        }
+
+        async function checkForUpdates() {
+            if (!window.electronAPI) {
+                showNotification('This feature is only available in the desktop app.');
+                return;
+            }
+            
+            try {
+                const result = await window.electronAPI.checkForUpdates();
+                // All update status messages (including errors) are handled by onUpdateStatus listener
+                // Only log here, don't show duplicate notifications
+                if (result && result.success) {
+                    console.log('Update check initiated');
+                } else {
+                    // The onUpdateStatus listener will handle showing the error
+                    console.log('Update check returned:', result);
+                }
+            } catch (e) {
+                // Only handle exceptions that occur before update check is initiated
+                // (e.g., IPC call failed, not update-related errors)
+                console.error('Error initiating update check:', e);
+                showNotification(`❌ Failed to check for updates: ${e.message || 'Unknown error'}`);
+            }
+        }
+
+        async function downloadUpdate() {
+            if (!window.electronAPI) return;
+            
+            try {
+                const result = await window.electronAPI.downloadUpdate();
+                if (!result || !result.success) {
+                    alert('Error downloading update: ' + (result?.error || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error('Error downloading update:', e);
+                alert('Error downloading update: ' + e.message);
+            }
+        }
+
+        async function installUpdate() {
+            if (!window.electronAPI) return;
+            
+            try {
+                const result = await window.electronAPI.installUpdate();
+                if (!result || !result.success) {
+                    alert('Error installing update: ' + (result?.error || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error('Error installing update:', e);
+                alert('Error installing update: ' + e.message);
+            }
+        }
+
+        // ============================================
+        // SETTINGS MODAL - Sprite Path Management
+        // ============================================
+        
+        let currentSpritePathInfo = null;
+        
+        async function openSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.classList.add('active');
+            await loadSpritePathInfo();
+        }
+        
+        function closeSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.classList.remove('active');
+        }
+        
+        async function loadSpritePathInfo() {
+            if (!window.electronAPI) {
+                document.getElementById('spritePathDisplay').textContent = 'Not available (Web version)';
+                document.getElementById('spritePathInfo').textContent = 'Sprite path settings are only available in the desktop app.';
+                return;
+            }
+            
+            try {
+                const pathInfo = await window.electronAPI.getSpritePath();
+                currentSpritePathInfo = pathInfo;
+                
+                const display = document.getElementById('spritePathDisplay');
+                const info = document.getElementById('spritePathInfo');
+                const resetBtn = document.getElementById('resetSpritePathBtn');
+                
+                display.textContent = pathInfo.effectivePath || 'Not found';
+                
+                if (pathInfo.isCustom) {
+                    info.innerHTML = `✅ Using custom path<br>Default: ${pathInfo.defaultPath}`;
+                    resetBtn.style.display = 'block';
+                } else {
+                    info.innerHTML = `✅ Using default path`;
+                    resetBtn.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error loading sprite path info:', error);
+                document.getElementById('spritePathDisplay').textContent = 'Error loading path';
+                document.getElementById('spritePathInfo').textContent = error.message || 'Unknown error';
+            }
+        }
+        
+        async function browseSpritePath() {
+            if (!window.electronAPI) {
+                showNotification('❌ Sprite path settings are only available in the desktop app.');
+                return;
+            }
+            
+            try {
+                const result = await window.electronAPI.setSpritePath();
+                
+                if (result.canceled) {
+                    return; // User canceled
+                }
+                
+                if (result.success) {
+                    showNotification(`✅ Sprite path updated!\n\n${result.path}\n\nPlease restart the server for changes to take effect.`);
+                    await loadSpritePathInfo();
+                    
+                    // Notify user they may need to restart
+                    if (confirm('Sprite path updated! The server needs to be restarted for changes to take effect.\n\nWould you like to restart the server now?')) {
+                        // Stop and start server
+                        if (window.electronAPI) {
+                            await window.electronAPI.stopServer();
+                            setTimeout(async () => {
+                                await window.electronAPI.startServer();
+                                showNotification('✅ Server restarted with new sprite path!');
+                            }, 1000);
+                        }
+                    }
+                } else {
+                    showNotification(`❌ ${result.error || 'Failed to set sprite path'}`);
+                }
+            } catch (error) {
+                console.error('Error setting sprite path:', error);
+                showNotification(`❌ Error: ${error.message || 'Unknown error'}`);
+            }
+        }
+        
+        async function resetSpritePath() {
+            if (!window.electronAPI) {
+                showNotification('❌ Sprite path settings are only available in the desktop app.');
+                return;
+            }
+            
+            if (!confirm('Reset sprite path to default?\n\nThis will use the automatically detected path.')) {
+                return;
+            }
+            
+            try {
+                const result = await window.electronAPI.resetSpritePath();
+                
+                if (result.success) {
+                    showNotification(`✅ Sprite path reset to default!\n\n${result.path}\n\nPlease restart the server for changes to take effect.`);
+                    await loadSpritePathInfo();
+                    
+                    // Notify user they may need to restart
+                    if (confirm('Sprite path reset! The server needs to be restarted for changes to take effect.\n\nWould you like to restart the server now?')) {
+                        // Stop and start server
+                        if (window.electronAPI) {
+                            await window.electronAPI.stopServer();
+                            setTimeout(async () => {
+                                await window.electronAPI.startServer();
+                                showNotification('✅ Server restarted with default sprite path!');
+                            }, 1000);
+                        }
+                    }
+                } else {
+                    showNotification(`❌ ${result.error || 'Failed to reset sprite path'}`);
+                }
+            } catch (error) {
+                console.error('Error resetting sprite path:', error);
+                showNotification(`❌ Error: ${error.message || 'Unknown error'}`);
+            }
+        }
+        
+        // Listen for sprite path changes from Electron
+        if (window.electronAPI) {
+            window.electronAPI.onSpritePathChanged((data) => {
+                console.log('Sprite path changed:', data);
+                if (document.getElementById('settingsModal').classList.contains('active')) {
+                    loadSpritePathInfo();
+                }
+            });
+        }
+        
+        async function shutdownWidget() {
+            if (!confirm('🛑 Shutdown widget and all servers? This will stop the widget, close all connections, and shut down the server.')) {
+                return;
+            }
+            
+            try {
+                // Send shutdown message to widget
+                const widgetIframe = document.getElementById('widgetPreview');
+                if (widgetIframe && widgetIframe.contentWindow) {
+                    widgetIframe.contentWindow.postMessage({ type: 'shutdown' }, '*');
+                }
+                
+                // If in Electron, also shutdown the app
+                if (window.electronAPI) {
+                    try {
+                        await window.electronAPI.shutdownApp();
+                    } catch (e) {
+                        console.warn('Could not shutdown Electron app:', e);
+                    }
+                }
+                
+                // Stop local server if running (for localhost version)
+                try {
+                    const response = await fetch('http://localhost:3000/api/shutdown', {
+                        method: 'POST'
+                    });
+                    if (response.ok) {
+                        console.log('✅ Server shutdown requested');
+                    }
+                } catch (e) {
+                    console.warn('Could not shutdown server:', e);
+                }
+                
+                // Clear widget preview
+                if (widgetIframe) {
+                    widgetIframe.src = 'about:blank';
+                }
+                
+                alert('✅ Widget and servers shutdown complete');
+            } catch (error) {
+                console.error('Error shutting down:', error);
+                alert('⚠️ Some components may not have shutdown properly. Check console for details.');
+            }
+        }
+
+        // Member management functions
+        let memberManagementInterval = null;
+        let memberMuteStates = {}; // Track muted users
+        let memberStillStates = {}; // Track users who can't move
+
+        function refreshMembersList() {
+            const membersList = document.getElementById('membersList');
+            if (!membersList) return;
+
+            try {
+                const savedUsers = localStorage.getItem('campfireUsers');
+                const users = savedUsers ? JSON.parse(savedUsers) : [];
+                
+                if (users.length === 0) {
+                    membersList.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;"><p>No members at the campfire yet</p></div>';
+                    return;
+                }
+
+                membersList.innerHTML = users.map(user => {
+                    const isMuted = memberMuteStates[user.userId || user.username] || false;
+                    const isStill = memberStillStates[user.userId || user.username] || false;
+                    
+                    return `
+                        <div style="background: #1f1f1f; border: 1px solid #3a3a3a; border-radius: 8px; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: #fff; margin-bottom: 5px;">${user.username}</div>
+                                <div style="font-size: 12px; color: #888;">
+                                    ${user.userId ? `ID: ${user.userId}` : ''}
+                                    ${isMuted ? '🔇 Muted' : ''}
+                                    ${isStill ? '🔒 Still' : ''}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="toggleMute('${user.userId || user.username}', '${user.username}')" 
+                                        style="padding: 6px 12px; background: ${isMuted ? '#ff4444' : '#444'}; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                    ${isMuted ? '🔇 Unmute' : '🔊 Mute'}
+                                </button>
+                                <button onclick="toggleStill('${user.userId || user.username}', '${user.username}')" 
+                                        style="padding: 6px 12px; background: ${isStill ? '#ff8844' : '#444'}; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                    ${isStill ? '🔓 Unlock' : '🔒 Still'}
+                                </button>
+                                <button onclick="kickMember('${user.userId || user.username}', '${user.username}')" 
+                                        style="padding: 6px 12px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                    🚪 Kick
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error('Error loading members:', e);
+                membersList.innerHTML = '<div style="text-align: center; padding: 40px; color: #ff4444;"><p>Error loading members</p></div>';
+            }
+        }
+
+        function toggleMute(userId, username) {
+            const key = userId || username;
+            memberMuteStates[key] = !memberMuteStates[key];
+            
+            // Send mute state to widget
+            const iframe = document.getElementById('fullWidgetPreview');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                    type: 'memberMute',
+                    userId: userId,
+                    username: username,
+                    muted: memberMuteStates[key]
+                }, '*');
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('memberMuteStates', JSON.stringify(memberMuteStates));
+            
+            refreshMembersList();
+        }
+
+        function toggleStill(userId, username) {
+            const key = userId || username;
+            memberStillStates[key] = !memberStillStates[key];
+            
+            // Send still state to widget
+            const iframe = document.getElementById('fullWidgetPreview');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                    type: 'memberStill',
+                    userId: userId,
+                    username: username,
+                    still: memberStillStates[key]
+                }, '*');
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('memberStillStates', JSON.stringify(memberStillStates));
+            
+            refreshMembersList();
+        }
+
+        function kickMember(userId, username) {
+            if (!confirm(`Are you sure you want to kick ${username} from the campfire?`)) {
+                return;
+            }
+
+            // Remove from widget
+            const iframe = document.getElementById('fullWidgetPreview');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                    type: 'kickMember',
+                    userId: userId,
+                    username: username
+                }, '*');
+            }
+
+            // Remove from localStorage
+            try {
+                const savedUsers = localStorage.getItem('campfireUsers');
+                const users = savedUsers ? JSON.parse(savedUsers) : [];
+                const filtered = users.filter(u => (u.userId && u.userId !== userId) && (u.username !== username));
+                localStorage.setItem('campfireUsers', JSON.stringify(filtered));
+            } catch (e) {
+                console.error('Error removing member:', e);
+            }
+
+            // Remove from mute/still states
+            const key = userId || username;
+            delete memberMuteStates[key];
+            delete memberStillStates[key];
+            localStorage.setItem('memberMuteStates', JSON.stringify(memberMuteStates));
+            localStorage.setItem('memberStillStates', JSON.stringify(memberStillStates));
+
+            refreshMembersList();
+        }
+
+        // Load mute/still states on init
+        function loadMemberStates() {
+            try {
+                const savedMutes = localStorage.getItem('memberMuteStates');
+                if (savedMutes) memberMuteStates = JSON.parse(savedMutes);
+                
+                const savedStills = localStorage.getItem('memberStillStates');
+                if (savedStills) memberStillStates = JSON.parse(savedStills);
+            } catch (e) {
+                console.error('Error loading member states:', e);
+            }
+        }
+
+        // Update switchTab to refresh members list
+        const originalSwitchTab = switchTab;
+        switchTab = function(tabName, element) {
+            originalSwitchTab(tabName, element);
+            if (tabName === 'members') {
+                refreshMembersList();
+                // Refresh every 2 seconds when on members tab
+                if (memberManagementInterval) clearInterval(memberManagementInterval);
+                memberManagementInterval = setInterval(refreshMembersList, 2000);
+            } else {
+                if (memberManagementInterval) {
+                    clearInterval(memberManagementInterval);
+                    memberManagementInterval = null;
+                }
+            }
+        };
+
+        // Initialize member states on load
+        loadMemberStates();
+
+        // Show fade-in/fade-out notification
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('show');
+            
+            // Fade out after 1 second
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 1000);
+        }
+
+        // Show confirmation popup
+        let confirmationCallback = null;
+        function showConfirmation(title, message, callback) {
+            confirmationCallback = callback;
+            document.getElementById('confirmationTitle').textContent = title;
+            document.getElementById('confirmationMessage').textContent = message;
+            document.getElementById('confirmationPopup').classList.add('show');
+        }
+
+        // Close confirmation popup
+        function closeConfirmation(confirmed) {
+            document.getElementById('confirmationPopup').classList.remove('show');
+            if (confirmationCallback) {
+                if (confirmed) {
+                    confirmationCallback();
+                }
+                confirmationCallback = null;
+            }
+        }
+    </script>
+
+    <!-- Notification popup -->
+    <div id="notification" class="notification"></div>
+
+    <!-- Confirmation popup -->
+    <div id="confirmationPopup" class="confirmation-popup">
+        <h3 id="confirmationTitle">Confirm Action</h3>
+        <p id="confirmationMessage"></p>
+        <div class="confirmation-buttons">
+            <button class="cancel-btn" onclick="closeConfirmation(false)">Cancel</button>
+            <button class="confirm-btn" onclick="closeConfirmation(true)">Confirm</button>
+        </div>
+    </div>
+</body>
+</html>

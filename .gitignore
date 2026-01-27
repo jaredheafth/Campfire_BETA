@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+desktop-app/node_modules/
+desktop-app/server/node_modules/
+
+# Build outputs
+desktop-app/dist/
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp
+server.pid
+
+# Backup files
+*.bak
+*.bak2
+*.backup
+*.backup-*
+*.old
+
+# Assets (if large)
+# Uncomment if you don't want to commit large assets
+# desktop-app/assets/
+
+# Twitch config (contains sensitive tokens)
+desktop-app/server/twitch-config.json
+server/twitch-config.json
+twitch-config.json
+
+# User data (created at runtime)
+user-preferences.json
+bot-messages.json
+widget-settings.json
+
+# Development files (optional - uncomment to exclude)
+# *-dev*.html
+# dashboard-dev2.html
+# widget-dev2.html
+
+# Session summaries (optional - uncomment to exclude)
+# SESSION_SUMMARY_*.md

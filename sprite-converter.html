@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprite Sheet to GIF Converter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            margin-bottom: 30px;
+            color: #ff6b35;
+        }
+        
+        .upload-area {
+            border: 2px dashed #444;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            background: #222;
+            margin-bottom: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .upload-area:hover {
+            border-color: #ff6b35;
+            background: #2a2a2a;
+        }
+        
+        .upload-area.dragover {
+            border-color: #ff6b35;
+            background: #333;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        label {
+            font-size: 14px;
+            color: #aaa;
+        }
+        
+        input[type="number"] {
+            padding: 10px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 16px;
+        }
+        
+        button {
+            padding: 12px 24px;
+            background: #ff6b35;
+            border: none;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #ff8c5a;
+        }
+        
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        
+        .preview-area {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .preview-card {
+            background: #222;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .preview-card h3 {
+            margin-bottom: 15px;
+            color: #ff6b35;
+        }
+        
+        .preview-image {
+            width: 100%;
+            max-width: 300px;
+            height: auto;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        /* Ensure GIFs animate - prevent browser optimizations that stop animation */
+        img[src*="blob:"] {
+            image-rendering: auto;
+            -webkit-animation: none !important;
+            animation: none !important;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .status.info {
+            background: #2a4a7a;
+            color: #aaccff;
+        }
+        
+        .status.success {
+            background: #2a7a4a;
+            color: #aaffcc;
+        }
+        
+        .status.error {
+            background: #7a2a2a;
+            color: #ffaacc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Sprite Sheet to GIF Converter</h1>
+        
+        <div id="status" class="status info" style="display: none;"></div>
+        
+        <div class="upload-area" id="uploadArea">
+            <p style="font-size: 18px; margin-bottom: 10px;">📁 Drop sprite sheet PNG here or click to browse</p>
+            <p style="color: #888; font-size: 14px;">Supports horizontal sprite sheets with multiple frames</p>
+            <input type="file" id="fileInput" accept="image/png,image/jpeg" multiple>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="frameWidth">Frame Width (px)</label>
+                <input type="number" id="frameWidth" value="100" min="10" max="500">
+            </div>
+            <div class="control-group">
+                <label for="frameHeight">Frame Height (px)</label>
+                <input type="number" id="frameHeight" value="100" min="10" max="500">
+            </div>
+            <div class="control-group">
+                <label for="frameDelay">Delay (ms)</label>
+                <input type="number" id="frameDelay" value="150" min="50" max="500" step="50">
+            </div>
+            <div class="control-group">
+                <button id="convertBtn" onclick="convertAll()">Convert All to GIF</button>
+            </div>
+            <div class="control-group">
+                <button onclick="downloadAllGifs()" style="background: #4a9;">Download All GIFs</button>
+            </div>
+        </div>
+        
+        <div class="preview-area" id="previewArea"></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/omggif@1.0.10/omggif.js"></script>
+    <script>
+        // Use omggif library which works better without workers
+        // Fallback to GIF.js if omggif doesn't load
+        (function() {
+            function loadGifJs(src, isRetry = false) {
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = true;
+                script.onload = () => {
+                    if (typeof GIF !== 'undefined') {
+                        console.log('✅ GIF.js loaded successfully from', src);
+                        window.GIFLoaded = true;
+                    } else {
+                        console.warn('Script loaded but GIF not defined');
+                    }
+                };
+                script.onerror = () => {
+                    console.error('❌ Failed to load GIF.js from', src);
+                };
+                document.head.appendChild(script);
+            }
+            
+            // Load GIF.js as fallback
+            loadGifJs('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js');
+        })();
+    </script>
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const previewArea = document.getElementById('previewArea');
+        const statusDiv = document.getElementById('status');
+        const convertBtn = document.getElementById('convertBtn');
+        
+        let files = [];
+        
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        
+        function showStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        function handleFiles(fileList) {
+            files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+            if (files.length === 0) {
+                showStatus('Please select image files', 'error');
+                return;
+            }
+            
+            showStatus(`Loaded ${files.length} file(s)`, 'success');
+            previewArea.innerHTML = '';
+            
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    createPreviewCard(file.name, e.target.result, index);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        const convertedGifs = {}; // Store converted GIFs by index
+        
+        function createPreviewCard(filename, imageSrc, index) {
+            const card = document.createElement('div');
+            card.className = 'preview-card';
+            card.id = `card-${index}`;
+            card.innerHTML = `
+                <h3>${filename}</h3>
+                <img src="${imageSrc}" alt="${filename}" class="preview-image" id="preview-${index}">
+                <div id="gif-preview-${index}" style="display: none; margin: 10px 0;">
+                    <p style="color: #4a9; margin-bottom: 8px;">✅ GIF Created!</p>
+                    <img id="gif-image-${index}" class="preview-image" style="max-width: 200px;" loading="eager">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button onclick="convertSingle(${index})" id="convert-btn-${index}">Convert to GIF</button>
+                    <button onclick="downloadGifFromStorage(${index})" id="download-btn-${index}" style="display: none; background: #4a9;">Download GIF</button>
+                </div>
+            `;
+            previewArea.appendChild(card);
+        }
+        
+        async function waitForGifLibrary() {
+            // Wait for GIF library to load (max 10 seconds)
+            const maxWait = 10000;
+            const startTime = Date.now();
+            
+            while (typeof GIF === 'undefined' && (Date.now() - startTime) < maxWait) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            if (typeof GIF === 'undefined') {
+                throw new Error('GIF.js library failed to load. Please refresh the page.');
+            }
+        }
+        
+        async function convertSingle(index) {
+            const file = files[index];
+            const frameWidth = parseInt(document.getElementById('frameWidth').value);
+            const frameHeight = parseInt(document.getElementById('frameHeight').value);
+            const delay = parseInt(document.getElementById('frameDelay').value);
+            
+            const convertBtn = document.getElementById(`convert-btn-${index}`);
+            convertBtn.disabled = true;
+            convertBtn.textContent = 'Converting...';
+            
+            showStatus(`Converting ${file.name}...`, 'info');
+            
+            try {
+                // Wait for GIF library
+                await waitForGifLibrary();
+                // Step 1: Cut sprite sheet into frames
+                const frames = await cutSpriteSheetIntoFrames(file, frameWidth, frameHeight);
+                showStatus(`Cut ${frames.length} frames from ${file.name}`, 'info');
+                
+                // Step 2: Create GIF from frames
+                const gif = await createGifFromFrames(frames, frameWidth, frameHeight, delay);
+                
+                // Store the GIF blob
+                convertedGifs[index] = {
+                    blob: gif,
+                    filename: file.name.replace(/\.(png|jpg|jpeg)$/i, '.gif')
+                };
+                
+                // Show preview
+                const gifPreview = document.getElementById(`gif-preview-${index}`);
+                const gifImage = document.getElementById(`gif-image-${index}`);
+                const downloadBtn = document.getElementById(`download-btn-${index}`);
+                
+                // Create blob URL for the GIF
+                const gifUrl = URL.createObjectURL(gif);
+                
+                // Clear any existing src and revoke old URLs
+                if (gifImage.dataset.gifUrl) {
+                    URL.revokeObjectURL(gifImage.dataset.gifUrl);
+                }
+                gifImage.src = '';
+                gifImage.style.display = 'none';
+                
+                // Store the URL for cleanup later
+                gifImage.dataset.gifUrl = gifUrl;
+                
+                // Use a small delay to ensure browser recognizes it as a new animated GIF
+                setTimeout(() => {
+                    // Set the src - browser should recognize animated GIFs automatically
+                    gifImage.src = gifUrl;
+                    gifImage.style.display = 'block';
+                    gifPreview.style.display = 'block';
+                    
+                    // Force a reflow to ensure the image loads
+                    void gifImage.offsetHeight;
+                    
+                    console.log('GIF preview displayed, URL:', gifUrl);
+                    console.log('GIF blob size:', gif.size, 'bytes, type:', gif.type);
+                    
+                    // Verify the GIF is actually animated by checking if it has multiple frames
+                    // (This is just for debugging - the browser should handle it)
+                }, 100);
+                downloadBtn.style.display = 'inline-block';
+                convertBtn.textContent = 'Converted ✓';
+                convertBtn.disabled = true;
+                
+                showStatus(`✅ Converted ${file.name} (${frames.length} frames) - Click Download to save`, 'success');
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+                convertBtn.disabled = false;
+                convertBtn.textContent = 'Convert to GIF';
+            }
+        }
+        
+        function downloadGifFromStorage(index) {
+            if (convertedGifs[index]) {
+                downloadGif(convertedGifs[index].blob, convertedGifs[index].filename);
+                showStatus(`Downloaded ${convertedGifs[index].filename}`, 'success');
+            }
+        }
+        
+        async function convertAll() {
+            if (files.length === 0) {
+                showStatus('Please select files first', 'error');
+                return;
+            }
+            
+            convertBtn.disabled = true;
+            convertBtn.textContent = 'Converting...';
+            
+            // Wait for GIF library
+            try {
+                await waitForGifLibrary();
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                convertBtn.disabled = false;
+                convertBtn.textContent = 'Convert All to GIF';
+                return;
+            }
+            
+            const frameWidth = parseInt(document.getElementById('frameWidth').value);
+            const frameHeight = parseInt(document.getElementById('frameHeight').value);
+            const delay = parseInt(document.getElementById('frameDelay').value);
+            
+            for (let i = 0; i < files.length; i++) {
+                showStatus(`Converting ${i + 1}/${files.length}: ${files[i].name}...`, 'info');
+                try {
+                    // Step 1: Cut sprite sheet into frames
+                    const frames = await cutSpriteSheetIntoFrames(files[i], frameWidth, frameHeight);
+                    
+                    // Step 2: Create GIF from frames
+                    const gif = await createGifFromFrames(frames, frameWidth, frameHeight, delay);
+                    
+                    // Store the GIF
+                    convertedGifs[i] = {
+                        blob: gif,
+                        filename: files[i].name.replace(/\.(png|jpg|jpeg)$/i, '.gif')
+                    };
+                    
+                    // Show preview and download button
+                    const gifPreview = document.getElementById(`gif-preview-${i}`);
+                    const gifImage = document.getElementById(`gif-image-${i}`);
+                    const downloadBtn = document.getElementById(`download-btn-${i}`);
+                    const btn = document.getElementById(`convert-btn-${i}`);
+                    
+                    if (gifPreview && gifImage && downloadBtn) {
+                        // Create blob URL for the GIF
+                        const gifUrl = URL.createObjectURL(gif);
+                        
+                        // Clear any existing src and revoke old URLs
+                        if (gifImage.dataset.gifUrl) {
+                            URL.revokeObjectURL(gifImage.dataset.gifUrl);
+                        }
+                        gifImage.src = '';
+                        gifImage.style.display = 'none';
+                        
+                        // Store the URL for cleanup later
+                        gifImage.dataset.gifUrl = gifUrl;
+                        
+                        // Use a small delay to ensure browser recognizes it as a new animated GIF
+                        setTimeout(() => {
+                            gifImage.src = gifUrl;
+                            gifImage.style.display = 'block';
+                            gifPreview.style.display = 'block';
+                            
+                            // Force a reflow
+                            void gifImage.offsetHeight;
+                            
+                            console.log('GIF preview displayed, URL:', gifUrl);
+                            console.log('GIF blob size:', gif.size, 'bytes, type:', gif.type);
+                        }, 100);
+                        downloadBtn.style.display = 'inline-block';
+                        if (btn) {
+                            btn.textContent = 'Converted ✓';
+                            btn.disabled = true;
+                        }
+                    }
+                } catch (error) {
+                    showStatus(`Error converting ${files[i].name}: ${error.message}`, 'error');
+                }
+            }
+            
+            convertBtn.disabled = false;
+            convertBtn.textContent = 'Convert All to GIF';
+            showStatus(`✅ Converted ${files.length} file(s) - Click Download buttons to save GIFs`, 'success');
+        }
+        
+        // Step 1: Cut sprite sheet into individual frames
+        async function cutSpriteSheetIntoFrames(file, frameWidth, frameHeight) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const frames = [];
+                    const canvas = document.createElement('canvas');
+                    canvas.width = frameWidth;
+                    canvas.height = frameHeight;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Calculate how many frames fit horizontally and vertically
+                    const framesPerRow = Math.floor(img.width / frameWidth);
+                    const framesPerCol = Math.floor(img.height / frameHeight);
+                    const totalFrames = framesPerRow * framesPerCol;
+                    
+                    console.log(`Sprite sheet: ${img.width}x${img.height}, Frame: ${frameWidth}x${frameHeight}`);
+                    console.log(`Frames per row: ${framesPerRow}, Frames per col: ${framesPerCol}, Total: ${totalFrames}`);
+                    
+                    // Extract each frame - create a NEW canvas for each frame to avoid state issues
+                    for (let row = 0; row < framesPerCol; row++) {
+                        for (let col = 0; col < framesPerRow; col++) {
+                            const x = col * frameWidth;
+                            const y = row * frameHeight;
+                            
+                            console.log(`Extracting frame ${frames.length + 1}: row=${row}, col=${col}, x=${x}, y=${y}`);
+                            
+                            // Create a NEW canvas for each frame to ensure clean extraction
+                            const frameCanvas = document.createElement('canvas');
+                            frameCanvas.width = frameWidth;
+                            frameCanvas.height = frameHeight;
+                            const frameCtx = frameCanvas.getContext('2d');
+                            
+                            // Draw the frame from sprite sheet to the new canvas
+                            frameCtx.drawImage(
+                                img,
+                                x, y, frameWidth, frameHeight,  // Source rectangle (from sprite sheet)
+                                0, 0, frameWidth, frameHeight   // Destination rectangle (to canvas)
+                            );
+                            
+                            // Convert canvas to image data URL
+                            const frameDataUrl = frameCanvas.toDataURL('image/png');
+                            frames.push(frameDataUrl);
+                            
+                            // Debug: log pixel data from different positions to verify frames are different
+                            if (frames.length <= 3) {
+                                // Check multiple positions, not just top-left (which might be transparent)
+                                const centerX = Math.floor(frameWidth / 2);
+                                const centerY = Math.floor(frameHeight / 2);
+                                const imageData = frameCtx.getImageData(centerX - 5, centerY - 5, 10, 10);
+                                const pixelData = Array.from(imageData.data.slice(0, 40)); // First 10 pixels (40 bytes)
+                                console.log(`Frame ${frames.length} center pixels (R,G,B,A x10):`, pixelData.slice(0, 40));
+                                
+                                // Also check a specific position that should differ between frames
+                                const checkX = Math.min(50, frameWidth - 1);
+                                const checkY = Math.min(50, frameHeight - 1);
+                                const singlePixel = frameCtx.getImageData(checkX, checkY, 1, 1);
+                                console.log(`Frame ${frames.length} pixel at (${checkX},${checkY}):`, Array.from(singlePixel.data));
+                            }
+                        }
+                    }
+                    
+                    console.log(`✅ Extracted ${frames.length} frames total`);
+                    
+                    resolve(frames);
+                };
+                
+                img.onerror = () => reject(new Error('Failed to load image'));
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        // Step 2: Create GIF from individual frames
+        async function createGifFromFrames(frames, frameWidth, frameHeight, delay) {
+            return new Promise((resolve, reject) => {
+                if (frames.length === 0) {
+                    reject(new Error('No frames to create GIF from'));
+                    return;
+                }
+                
+                // Check if GIF library is loaded
+                if (typeof GIF === 'undefined') {
+                    reject(new Error('GIF.js library not loaded. Please refresh the page.'));
+                    return;
+                }
+                
+                console.log(`Creating GIF from ${frames.length} frames, size: ${frameWidth}x${frameHeight}, delay: ${delay}ms`);
+                
+                try {
+                    // Disable workers for local file:// access (CORS restriction)
+                    // Set workers to 0 to use single-threaded mode
+                    // Check if we're running from file:// or http://
+                    // Always use workers when running from http:// (server)
+                    const useWorkers = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+                    const workerCount = useWorkers ? 2 : 0;
+                    
+                    console.log(`Protocol: ${window.location.protocol}, Using workers: ${useWorkers}, Worker count: ${workerCount}`);
+                    
+                    // Configure GIF with workers
+                    // GIF.js needs workerScript path when using workers
+                    const gifOptions = {
+                        workers: workerCount,
+                        quality: 10,
+                        width: frameWidth,
+                        height: frameHeight,
+                        repeat: 0 // 0 = infinite loop, -1 = no repeat
+                    };
+                    
+                    console.log(`GIF options: width=${frameWidth}, height=${frameHeight}, repeat=${gifOptions.repeat}, delay=${delay}ms`);
+                    
+                    // Set worker script path if using workers (REQUIRED for workers to work)
+                    if (useWorkers && workerCount > 0) {
+                        // Use local worker script to avoid CORS issues
+                        // When running from server, use absolute URL to same origin
+                        let workerScriptUrl;
+                        if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+                            // Running from server - use local worker script (served from same origin)
+                            workerScriptUrl = window.location.origin + '/gif.worker.js';
+                            console.log(`✅ Using local worker script: ${workerScriptUrl}`);
+                        } else {
+                            // Running from file:// - workers won't work due to CORS, disable them
+                            console.warn('⚠️  Running from file:// - workers disabled due to CORS restrictions');
+                            gifOptions.workers = 0;
+                            workerCount = 0;
+                            useWorkers = false;
+                        }
+                        
+                        if (useWorkers && workerScriptUrl) {
+                            // Pass workerScript directly to the constructor - this is the correct way
+                            gifOptions.workerScript = workerScriptUrl;
+                            
+                            // Also set it on the GIF class (some versions need this)
+                            if (typeof GIF !== 'undefined') {
+                                try {
+                                    GIF.workerScript = workerScriptUrl;
+                                } catch (e) {
+                                    // Ignore if can't set on class
+                                }
+                            }
+                            
+                            console.log(`✅ Worker script configured: ${workerScriptUrl}`);
+                        }
+                    }
+                    
+                    const gif = new GIF(gifOptions);
+                    
+                    console.log(`GIF instance created with ${workerCount} workers`);
+                    if (useWorkers) {
+                        console.log('✅ Workers enabled - conversion should be faster!');
+                        
+                        // Add error handler for worker loading
+                        gif.on('error', (err) => {
+                            console.error('❌ GIF worker error:', err);
+                            console.error('Workers failed - conversion may be slower');
+                        });
+                    } else {
+                        console.log('⚠️  Single-threaded mode - conversion will be slower');
+                    }
+                
+                    const canvas = document.createElement('canvas');
+                    canvas.width = frameWidth;
+                    canvas.height = frameHeight;
+                    // Use willReadFrequently for better performance with multiple readback operations
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    
+                    let framesLoaded = 0;
+                    const frameImages = new Array(frames.length);
+                    let hasError = false;
+                    let gifFinished = false;
+                    
+                    // Set timeout to prevent hanging
+                    const timeout = setTimeout(() => {
+                        if (!hasError && !gifFinished) {
+                            hasError = true;
+                            reject(new Error(`Timeout: Process took too long. Loaded ${framesLoaded}/${frames.length} frames.`));
+                        }
+                    }, 60000); // 60 second timeout
+                
+                // Load all frame images
+                frames.forEach((frameDataUrl, index) => {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous'; // Handle CORS if needed
+                    
+                    img.onload = () => {
+                        if (hasError) return;
+                        
+                        try {
+                            frameImages[index] = img;
+                            framesLoaded++;
+                            console.log(`Loaded frame ${framesLoaded}/${frames.length}`);
+                            
+                            // When all frames are loaded, add them to GIF
+                            if (framesLoaded === frames.length) {
+                                clearTimeout(timeout);
+                                console.log('All frames loaded, creating GIF...');
+                                
+                                try {
+                                    // Add frames in order - verify each frame is different
+                                    frameImages.forEach((frameImg, i) => {
+                                        if (!frameImg) {
+                                            console.error(`Frame ${i + 1} is missing!`);
+                                            return;
+                                        }
+                                        
+                                        ctx.clearRect(0, 0, frameWidth, frameHeight);
+                                        ctx.drawImage(frameImg, 0, 0, frameWidth, frameHeight);
+                                        
+                                        // Debug: verify frame content is different
+                                        if (i < 3) {
+                                            const centerX = Math.floor(frameWidth / 2);
+                                            const centerY = Math.floor(frameHeight / 2);
+                                            const imageData = ctx.getImageData(centerX - 5, centerY - 5, 10, 10);
+                                            console.log(`Adding frame ${i + 1} to GIF - center pixels:`, Array.from(imageData.data.slice(0, 40)));
+                                        }
+                                        
+                                        // GIF.js expects delay in centiseconds (1/100th second)
+                                        // 150ms = 0.15 seconds = 15 centiseconds
+                                        // Minimum delay is 2 centiseconds (20ms) for reliable animation
+                                        const delayInCentiseconds = Math.max(2, Math.round(delay / 10));
+                                        
+                                        // Add frame with delay
+                                        gif.addFrame(ctx, { delay: delayInCentiseconds });
+                                        
+                                        const actualDelayMs = delayInCentiseconds * 10;
+                                        const fps = (1000 / actualDelayMs).toFixed(1);
+                                        console.log(`Added frame ${i + 1} to GIF (delay: ${delayInCentiseconds}cs = ${actualDelayMs}ms, ~${fps} fps)`);
+                                    });
+                                    
+                                    // Set up event handlers
+                                    let progressInterval;
+                                    
+                                    gif.on('finished', (blob) => {
+                                        if (gifFinished) return;
+                                        gifFinished = true;
+                                        clearTimeout(timeout);
+                                        if (progressInterval) clearInterval(progressInterval);
+                                        const elapsed = ((Date.now() - renderStartTime) / 1000).toFixed(1);
+                                        console.log(`✅ GIF finished rendering in ${elapsed}s, size: ${blob.size} bytes`);
+                                        
+                                        // Update status
+                                        const statusEl = document.getElementById('status');
+                                        if (statusEl) {
+                                            statusEl.textContent = `✅ GIF created successfully! (${elapsed}s)`;
+                                            statusEl.className = 'status success';
+                                            statusEl.style.display = 'block';
+                                        }
+                                        
+                                        resolve(blob);
+                                    });
+                                    
+                                    // Add error handler
+                                    gif.on('error', (err) => {
+                                        if (gifFinished) return;
+                                        gifFinished = true;
+                                        clearTimeout(timeout);
+                                        if (progressInterval) clearInterval(progressInterval);
+                                        console.error('❌ GIF rendering error:', err);
+                                        reject(new Error(`GIF rendering failed: ${err.message || err}`));
+                                    });
+                                    
+                                    gif.on('progress', (p) => {
+                                        const percent = Math.round(p * 100);
+                                        console.log('GIF progress:', percent + '%');
+                                        
+                                        // Update status
+                                        const statusEl = document.getElementById('status');
+                                        if (statusEl) {
+                                            statusEl.textContent = `Rendering GIF: ${percent}%`;
+                                            statusEl.className = 'status info';
+                                            statusEl.style.display = 'block';
+                                        }
+                                    });
+                                    
+                                    // Progress indicator with elapsed time
+                                    let renderStartTime = Date.now();
+                                    progressInterval = setInterval(() => {
+                                        if (gifFinished) {
+                                            clearInterval(progressInterval);
+                                            return;
+                                        }
+                                        
+                                        const elapsed = ((Date.now() - renderStartTime) / 1000).toFixed(1);
+                                        const statusEl = document.getElementById('status');
+                                        if (statusEl) {
+                                            const modeText = useWorkers ? 'with workers' : 'single-threaded (slower)';
+                                            statusEl.textContent = `Rendering GIF... (${elapsed}s elapsed - ${modeText})`;
+                                            statusEl.className = 'status info';
+                                            statusEl.style.display = 'block';
+                                        }
+                                        console.log(`Still rendering... (${elapsed}s elapsed)`);
+                                    }, 1000); // Update every second
+                                    
+                                    // Start rendering
+                                    const modeText = useWorkers ? 'with workers' : 'single-threaded mode';
+                                    const expectedTime = useWorkers ? '5-10' : '10-30';
+                                    console.log(`Starting GIF render (${modeText} - may take ${expectedTime} seconds for ${frames.length} frames)...`);
+                                    renderStartTime = Date.now();
+                                    
+                                    // Add timeout warning if it takes too long (workers might have failed)
+                                    timeoutWarning = setTimeout(() => {
+                                        if (!gifFinished) {
+                                            console.warn(`⚠️  Rendering taking longer than expected (${((Date.now() - renderStartTime) / 1000).toFixed(1)}s). Workers may have failed silently.`);
+                                        }
+                                    }, 20000); // Warn after 20 seconds
+                                    
+                                    try {
+                                        // Render the GIF
+                                        gif.render();
+                                        console.log('gif.render() called, waiting for finished event...');
+                                        if (!useWorkers) {
+                                            console.log('Note: Single-threaded rendering can take 10-30 seconds. Please wait...');
+                                        }
+                                    } catch (renderError) {
+                                        clearTimeout(timeoutWarning);
+                                        clearTimeout(timeout);
+                                        if (progressInterval) clearInterval(progressInterval);
+                                        hasError = true;
+                                        console.error('GIF render error:', renderError);
+                                        reject(new Error(`GIF render error: ${renderError.message}`));
+                                    }
+                                } catch (err) {
+                                    clearTimeout(timeout);
+                                    hasError = true;
+                                    reject(new Error(`Error creating GIF: ${err.message}`));
+                                }
+                            }
+                        } catch (err) {
+                            if (!hasError) {
+                                clearTimeout(timeout);
+                                hasError = true;
+                                reject(new Error(`Error processing frame ${index + 1}: ${err.message}`));
+                            }
+                        }
+                    };
+                    
+                    img.onerror = (err) => {
+                        if (!hasError) {
+                            clearTimeout(timeout);
+                            hasError = true;
+                            reject(new Error(`Failed to load frame ${index + 1}: ${err.message || 'Unknown error'}`));
+                        }
+                    };
+                    
+                    // Load the image
+                    try {
+                        img.src = frameDataUrl;
+                    } catch (err) {
+                        if (!hasError) {
+                            clearTimeout(timeout);
+                            hasError = true;
+                            reject(new Error(`Error setting frame ${index + 1} source: ${err.message}`));
+                        }
+                    }
+                });
+                } catch (initError) {
+                    reject(new Error(`Failed to initialize GIF: ${initError.message}`));
+                }
+            });
+        }
+        
+        function downloadGif(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        function downloadAllGifs() {
+            const gifCount = Object.keys(convertedGifs).length;
+            if (gifCount === 0) {
+                showStatus('No GIFs converted yet. Convert them first!', 'error');
+                return;
+            }
+            
+            let downloaded = 0;
+            Object.keys(convertedGifs).forEach((index, i) => {
+                setTimeout(() => {
+                    downloadGif(convertedGifs[index].blob, convertedGifs[index].filename);
+                    downloaded++;
+                    if (downloaded === gifCount) {
+                        showStatus(`✅ Downloaded ${gifCount} GIF file(s)`, 'success');
+                    }
+                }, i * 300); // Stagger downloads by 300ms
+            });
+        }
+    </script>
+</body>
+</html>

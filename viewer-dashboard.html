@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campfire Widget - Viewer Customization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1a1a1a;
+            min-height: 100vh;
+            padding: 20px;
+            color: #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: #2a2a2a;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            border: 1px solid #3a3a3a;
+        }
+
+        .header {
+            background: #1f1f1f;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #3a3a3a;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.8;
+            font-size: 13px;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #fff;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .label-hint {
+            font-weight: 400;
+            font-size: 11px;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        .twitch-login {
+            background: #9146ff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .twitch-login:hover {
+            background: #7c3aed;
+        }
+
+        .twitch-login:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .user-info {
+            background: #1f1f1f;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #3a3a3a;
+        }
+
+        .user-info img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin-right: 15px;
+            vertical-align: middle;
+        }
+
+        .user-info span {
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .color-picker-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        input[type="color"] {
+            width: 60px;
+            height: 60px;
+            border: 2px solid #444;
+            border-radius: 8px;
+            cursor: pointer;
+            background: none;
+        }
+
+        .color-presets {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 6px;
+            margin-top: 10px;
+        }
+        
+        .sprite-selection {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .sprite-option {
+            width: 100%;
+            aspect-ratio: 1;
+            border: 2px solid #444;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            overflow: hidden;
+        }
+        
+        .sprite-option:hover {
+            transform: scale(1.05);
+            border-color: #667eea;
+        }
+        
+        .sprite-option.selected {
+            border-color: #667eea;
+            border-width: 3px;
+        }
+
+        .color-preset {
+            width: 100%;
+            aspect-ratio: 1;
+            border: 2px solid #444;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .color-preset:hover {
+            transform: scale(1.1);
+            border-color: #667eea;
+        }
+
+        .color-preset.selected {
+            border-color: #667eea;
+            border-width: 3px;
+        }
+
+        .preview-area {
+            background: #1a1a1a;
+            border-radius: 6px;
+            padding: 20px;
+            margin-top: 15px;
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #444;
+        }
+
+        .preview-shape {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .preview-name {
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        .button:hover {
+            background: #5568d3;
+        }
+
+        .info-box {
+            background: #1f1f1f;
+            border-left: 3px solid #667eea;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 12px;
+        }
+
+        .info-box strong {
+            color: #667eea;
+        }
+
+        .logout {
+            background: #444;
+            color: #e0e0e0;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .logout:hover {
+            background: #555;
+        }
+
+        .controls-info {
+            background: #1f1f1f;
+            border-left: 3px solid #9146ff;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 15px;
+            font-size: 12px;
+        }
+
+        .controls-info strong {
+            color: #9146ff;
+        }
+
+        .controls-info kbd {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #fff;
+        }
+
+        /* Notification popup (fade in/out) */
+        .notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2a2a2a;
+            color: #e0e0e0;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+            border: 1px solid #3a3a3a;
+            z-index: 10000;
+            font-size: 16px;
+            font-weight: 500;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .notification.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Confirmation popup */
+        .confirmation-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2a2a2a;
+            color: #e0e0e0;
+            padding: 25px 30px;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+            border: 1px solid #3a3a3a;
+            z-index: 10001;
+            min-width: 300px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .confirmation-popup.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .confirmation-popup h3 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            color: #fff;
+        }
+
+        .confirmation-popup p {
+            margin: 0 0 20px 0;
+            font-size: 14px;
+            color: #ccc;
+        }
+
+        .confirmation-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .confirmation-buttons button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .confirmation-buttons .confirm-btn {
+            background: #667eea;
+            color: white;
+        }
+
+        .confirmation-buttons .confirm-btn:hover {
+            background: #5568d3;
+        }
+
+        .confirmation-buttons .cancel-btn {
+            background: #444;
+            color: #e0e0e0;
+        }
+
+        .confirmation-buttons .cancel-btn:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔥 Customize Your Campfire Appearance</h1>
+            <p>Choose your color and stand out around the campfire!</p>
+        </div>
+
+        <div class="content">
+            <div class="info-box">
+                <strong>📋 How it works:</strong> Log in with Twitch to customize your appearance. Your color will be applied to your shape or name when you join the campfire!
+            </div>
+
+            <div id="loginSection">
+                <button class="twitch-login" onclick="loginWithTwitch()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/>
+                    </svg>
+                    Login with Twitch
+                </button>
+            </div>
+
+            <div id="customizeSection" style="display: none;">
+                <div class="user-info" id="userInfo">
+                    <!-- User info will be displayed here -->
+                </div>
+
+                <div class="section">
+                    <h2 class="section-title" id="sectionTitle">Choose Your Color</h2>
+                    
+                    <!-- Color picker section (for circle and morph modes) -->
+                    <div id="colorPickerSection" style="display: none;">
+                        <div class="form-group">
+                            <label>
+                                Custom Color
+                                <span class="label-hint" id="colorHint">Select a color for your sprite</span>
+                            </label>
+                            <div class="color-picker-container">
+                                <input type="color" id="colorPicker" value="#667eea" oninput="updateColorPreview()">
+                                <div style="flex: 1;">
+                                    <div class="color-presets" id="colorPresets">
+                                        <!-- Preset colors will be generated here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sprite selection section (for RPG mode) -->
+                    <div id="spritePickerSection" style="display: none;">
+                        <div class="form-group">
+                            <label>
+                                Choose Your Character
+                                <span class="label-hint">Select an RPG character sprite</span>
+                            </label>
+                            <div class="sprite-selection" id="spriteSelection">
+                                <!-- Sprite options will be generated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="preview-area">
+                        <div style="text-align: center;">
+                            <div class="preview-shape" id="previewShape"></div>
+                            <div class="preview-name" id="previewName">YourName</div>
+                        </div>
+                    </div>
+
+                    <button class="button" onclick="saveColor()" style="margin-top: 15px;">💾 Save Color</button>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="button" onclick="joinCampfire()" style="flex: 1; background: #9146ff;">
+                            🔥 Join Campfire
+                        </button>
+                        <button class="button" onclick="leaveCampfire()" style="flex: 1; background: #666;">
+                            🚪 Leave Campfire
+                        </button>
+                    </div>
+                    
+                    <div class="controls-info" style="margin-top: 20px;">
+                        <strong>⌨️ Controls:</strong> Use <kbd>←</kbd> and <kbd>→</kbd> arrow keys to move around the campfire! Make sure this page is focused.
+                    </div>
+                    
+                    <button class="logout" onclick="logout()" style="margin-top: 15px;">Logout</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification popup -->
+    <div id="notification" class="notification"></div>
+
+    <!-- Confirmation popup -->
+    <div id="confirmationPopup" class="confirmation-popup">
+        <h3 id="confirmationTitle">Confirm Action</h3>
+        <p id="confirmationMessage"></p>
+        <div class="confirmation-buttons">
+            <button class="cancel-btn" onclick="closeConfirmation(false)">Cancel</button>
+            <button class="confirm-btn" onclick="closeConfirmation(true)">Confirm</button>
+        </div>
+    </div>
+
+    <script>
+        // Twitch OAuth configuration
+        const TWITCH_CLIENT_ID = 'YOUR_TWITCH_CLIENT_ID'; // Streamer needs to set this
+        const TWITCH_REDIRECT_URI = window.location.origin + window.location.pathname;
+        const TWITCH_SCOPES = 'user:read:email';
+
+        let currentUser = null;
+        let selectedColor = '#667eea';
+        let selectedSprite = null;
+        let currentSpriteMode = 'circle';
+        let rpgSprites = [];
+
+        // Rainbow-ordered preset colors (ROYGBIV + variations across spectrum)
+        const presetColors = [
+            // Red spectrum
+            '#ff0000', '#ff3333', '#ff6666', '#ff9999', '#ffcccc',
+            '#ff1a1a', '#ff4d4d', '#ff8080', '#ffb3b3', '#ffe6e6',
+            // Orange spectrum
+            '#ff6600', '#ff7733', '#ff8866', '#ff9999', '#ffaa99',
+            '#ff5500', '#ff7700', '#ff9900', '#ffbb00', '#ffcc33',
+            // Yellow spectrum
+            '#ffff00', '#ffff33', '#ffff66', '#ffff99', '#ffffcc',
+            '#ffcc00', '#ffdd33', '#ffee66', '#ffef99', '#fff0cc',
+            // Green spectrum
+            '#00ff00', '#33ff33', '#66ff66', '#99ff99', '#ccffcc',
+            '#00cc00', '#33cc33', '#66cc66', '#99cc99', '#cccccc',
+            '#00ff66', '#33ff88', '#66ffaa', '#99ffcc', '#ccffee',
+            // Blue spectrum
+            '#0000ff', '#3333ff', '#6666ff', '#9999ff', '#ccccff',
+            '#0066ff', '#3388ff', '#66aaff', '#99ccff', '#cceeff',
+            '#0099ff', '#33bbff', '#66ddff', '#99ffff', '#ccffff',
+            // Indigo spectrum
+            '#4b0082', '#6633cc', '#8066ff', '#9999ff', '#b3ccff',
+            '#5c00a3', '#6d33b3', '#7e66c3', '#8f99d3', '#a0cce3',
+            // Violet/Purple spectrum
+            '#8b00ff', '#aa33ff', '#cc66ff', '#dd99ff', '#eeccff',
+            '#9900ff', '#bb33ff', '#dd66ff', '#ee99ff', '#ffccff',
+            '#cc00ff', '#dd33ff', '#ee66ff', '#ff99ff', '#ffccff',
+            // Pink/Magenta spectrum
+            '#ff00ff', '#ff33ff', '#ff66ff', '#ff99ff', '#ffccff',
+            '#ff0099', '#ff33aa', '#ff66bb', '#ff99cc', '#ffccdd',
+            '#ff0066', '#ff3388', '#ff66aa', '#ff99cc', '#ffccee'
+        ];
+
+        function init() {
+            // Check if user is already logged in
+            const savedUser = localStorage.getItem('twitchUser');
+            const savedColor = localStorage.getItem('viewerColor');
+            
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    displayUserInfo();
+                    if (savedColor) {
+                        selectedColor = savedColor;
+                        document.getElementById('colorPicker').value = savedColor;
+                        updateColorPreview();
+                    }
+                } catch (e) {
+                    console.error('Error loading user data:', e);
+                }
+            }
+
+            // Load streamer settings and update UI
+            loadStreamerSettings();
+
+            // Generate color presets
+            generateColorPresets();
+
+            // Listen for streamer settings changes
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'campfireWidgetSettings') {
+                    loadStreamerSettings();
+                }
+            });
+            
+            // Also poll for changes (in case same window)
+            setInterval(() => {
+                loadStreamerSettings();
+            }, 1000);
+
+            // Check for OAuth callback
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            if (code) {
+                handleTwitchCallback(code);
+            }
+        }
+        
+        function loadStreamerSettings() {
+            const streamerSettings = localStorage.getItem('campfireWidgetSettings');
+            const rpgSpritesData = localStorage.getItem('rpgSprites');
+            
+            if (streamerSettings) {
+                try {
+                    const settings = JSON.parse(streamerSettings);
+                    currentSpriteMode = settings.spriteMode || 'circle';
+                    
+                    // Load RPG sprites if available
+                    if (rpgSpritesData) {
+                        rpgSprites = JSON.parse(rpgSpritesData);
+                    }
+                    
+                    updateUIForSpriteMode();
+                } catch (e) {
+                    console.error('Error loading streamer settings:', e);
+                }
+            } else {
+                // Default to circle mode
+                currentSpriteMode = 'circle';
+                updateUIForSpriteMode();
+            }
+        }
+        
+        function updateUIForSpriteMode() {
+            const colorSection = document.getElementById('colorPickerSection');
+            const spriteSection = document.getElementById('spritePickerSection');
+            const sectionTitle = document.getElementById('sectionTitle');
+            const colorHint = document.getElementById('colorHint');
+            
+            if (currentSpriteMode === 'rpg-characters') {
+                // Show sprite selection
+                colorSection.style.display = 'none';
+                spriteSection.style.display = 'block';
+                sectionTitle.textContent = 'Choose Your Character';
+                generateSpriteSelection();
+            } else if (currentSpriteMode === 'custom') {
+                // Show color picker for name
+                colorSection.style.display = 'block';
+                spriteSection.style.display = 'none';
+                sectionTitle.textContent = 'Choose Your Color';
+                colorHint.textContent = 'Select a color for your name text';
+            } else {
+                // Show color picker for sprite (circle or morph mode)
+                colorSection.style.display = 'block';
+                spriteSection.style.display = 'none';
+                sectionTitle.textContent = 'Choose Your Color';
+                colorHint.textContent = 'Select a color for your sprite';
+            }
+            
+            updateColorPreview();
+        }
+        
+        function generateSpriteSelection() {
+            const container = document.getElementById('spriteSelection');
+            container.innerHTML = '';
+            
+            if (rpgSprites.length === 0) {
+                container.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No RPG sprites available. The streamer needs to upload RPG characters first.</p>';
+                return;
+            }
+            
+            rpgSprites.forEach((sprite, index) => {
+                const option = document.createElement('div');
+                option.className = 'sprite-option';
+                option.style.backgroundImage = `url(${sprite.data})`;
+                option.onclick = () => selectSprite(sprite, option);
+                container.appendChild(option);
+            });
+        }
+        
+        function selectSprite(sprite, element) {
+            selectedSprite = sprite;
+            
+            // Update selected state
+            document.querySelectorAll('.sprite-option').forEach(s => s.classList.remove('selected'));
+            element.classList.add('selected');
+            
+            updateColorPreview();
+        }
+
+        function generateColorPresets() {
+            const container = document.getElementById('colorPresets');
+            container.innerHTML = '';
+            
+            presetColors.forEach(color => {
+                const preset = document.createElement('div');
+                preset.className = 'color-preset';
+                preset.style.backgroundColor = color;
+                preset.onclick = () => selectPresetColor(color, preset);
+                container.appendChild(preset);
+            });
+        }
+
+        function selectPresetColor(color, element) {
+            selectedColor = color;
+            document.getElementById('colorPicker').value = color;
+            
+            // Update selected state
+            document.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
+            element.classList.add('selected');
+            
+            updateColorPreview();
+        }
+
+        function loginWithTwitch() {
+            // For development: simulate login
+            // In production, use actual Twitch OAuth
+            if (TWITCH_CLIENT_ID === 'YOUR_TWITCH_CLIENT_ID') {
+                // Simulate login for testing
+                currentUser = {
+                    id: 'test_user_' + Date.now(),
+                    login: 'testuser',
+                    display_name: 'TestUser',
+                    profile_image_url: 'https://via.placeholder.com/150',
+                    color: '#9146ff' // Twitch default purple
+                };
+                localStorage.setItem('twitchUser', JSON.stringify(currentUser));
+                displayUserInfo();
+                return;
+            }
+
+            // Real Twitch OAuth flow
+            const authUrl = `https://id.twitch.tv/oauth2/authorize?` +
+                `client_id=${TWITCH_CLIENT_ID}&` +
+                `redirect_uri=${encodeURIComponent(TWITCH_REDIRECT_URI)}&` +
+                `response_type=code&` +
+                `scope=${TWITCH_SCOPES}`;
+            
+            window.location.href = authUrl;
+        }
+
+        async function handleTwitchCallback(code) {
+            // Exchange code for token (requires backend in production)
+            // For now, simulate
+            alert('Twitch OAuth requires a backend server. Using test mode for now.');
+            loginWithTwitch();
+        }
+
+        function displayUserInfo() {
+            if (!currentUser) return;
+
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('customizeSection').style.display = 'block';
+
+            const userInfo = document.getElementById('userInfo');
+            userInfo.innerHTML = `
+                <img src="${currentUser.profile_image_url}" alt="${currentUser.display_name}">
+                <span>${currentUser.display_name}</span>
+            `;
+
+            // Use Twitch username color if available
+            if (currentUser.color) {
+                selectedColor = currentUser.color;
+                document.getElementById('colorPicker').value = selectedColor;
+            }
+
+            // Update preview with username
+            document.getElementById('previewName').textContent = currentUser.display_name;
+            
+            // Load streamer settings and update UI
+            loadStreamerSettings();
+            updateColorPreview();
+        }
+
+        function updateColorPreview() {
+            const shape = document.getElementById('previewShape');
+            const name = document.getElementById('previewName');
+            
+            if (currentSpriteMode === 'rpg-characters') {
+                // Show selected RPG sprite
+                if (selectedSprite && selectedSprite.data) {
+                    shape.style.display = 'block';
+                    shape.style.backgroundImage = `url(${selectedSprite.data})`;
+                    shape.style.backgroundSize = 'contain';
+                    shape.style.backgroundPosition = 'center';
+                    shape.style.backgroundRepeat = 'no-repeat';
+                    shape.style.borderRadius = '0';
+                    shape.style.border = 'none';
+                    shape.style.backgroundGradient = 'none';
+                } else {
+                    shape.style.display = 'block';
+                    shape.style.backgroundImage = 'none';
+                    shape.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                    shape.style.borderRadius = '50%';
+                }
+                name.style.color = '#fff';
+            } else if (currentSpriteMode === 'custom') {
+                // Apply color to name
+                name.style.color = selectedColor;
+                shape.style.display = 'none';
+            } else {
+                // Apply color to shape (circle or morph mode)
+                shape.style.display = 'block';
+                shape.style.backgroundImage = 'none';
+                shape.style.background = `linear-gradient(135deg, ${selectedColor} 0%, ${adjustColor(selectedColor, -20)} 100%)`;
+                shape.style.borderRadius = '50%';
+                name.style.color = '#fff'; // Reset name color
+            }
+        }
+
+        function adjustColor(color, amount) {
+            // Simple color adjustment for gradient
+            const hex = color.replace('#', '');
+            const r = Math.max(0, Math.min(255, parseInt(hex.substr(0, 2), 16) + amount));
+            const g = Math.max(0, Math.min(255, parseInt(hex.substr(2, 2), 16) + amount));
+            const b = Math.max(0, Math.min(255, parseInt(hex.substr(4, 2), 16) + amount));
+            return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+        }
+
+        async function saveColor() {
+            if (!currentUser) {
+                showNotification('Please login first');
+                return;
+            }
+
+            // Save color preference (and sprite if RPG mode)
+            const userColorData = {
+                userId: currentUser.id,
+                username: currentUser.login,
+                displayName: currentUser.display_name,
+                color: selectedColor,
+                selectedSprite: currentSpriteMode === 'rpg-characters' ? selectedSprite : null,
+                timestamp: Date.now()
+            };
+
+            // Store in localStorage (in production, send to backend)
+            localStorage.setItem('viewerColor', selectedColor);
+            localStorage.setItem(`viewerColor_${currentUser.id}`, JSON.stringify(userColorData));
+
+            // Also store in a shared location for widget access
+            let viewerColors = {};
+            try {
+                const saved = localStorage.getItem('allViewerColors');
+                if (saved) viewerColors = JSON.parse(saved);
+            } catch (e) {}
+
+            viewerColors[currentUser.id] = userColorData;
+            localStorage.setItem('allViewerColors', JSON.stringify(userColorData));
+
+            // Store active viewer info for movement controls
+            localStorage.setItem('activeViewer', JSON.stringify({
+                userId: currentUser.id,
+                username: currentUser.login,
+                displayName: currentUser.display_name
+            }));
+
+            // Update color in widget if user is already in campfire
+            const colorUpdate = {
+                userId: currentUser.id,
+                username: currentUser.display_name || currentUser.login,
+                color: selectedColor,
+                action: 'updateColor',
+                timestamp: Date.now()
+            };
+
+            // Send to server (primary method)
+            try {
+                await fetch('http://localhost:3000/api/viewer/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: currentUser.display_name || currentUser.login,
+                        userId: currentUser.id,
+                        color: selectedColor,
+                        selectedSprite: currentSpriteMode === 'rpg-characters' ? selectedSprite : null
+                    })
+                });
+            } catch (e) {
+                console.log('Server not available, using localStorage fallback');
+            }
+
+            // Also send via localStorage for same-origin fallback
+            localStorage.setItem('viewerColorUpdate', JSON.stringify(colorUpdate));
+            window.dispatchEvent(new CustomEvent('viewerColorUpdate', { detail: colorUpdate }));
+            
+            const storageEvent = new StorageEvent('storage', {
+                key: 'viewerColorUpdate',
+                newValue: JSON.stringify(colorUpdate),
+                oldValue: null,
+                storageArea: localStorage
+            });
+            window.dispatchEvent(storageEvent);
+
+            showNotification('✅ Color saved! Your appearance will update in the campfire.');
+        }
+
+        // Show fade-in/fade-out notification
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('show');
+            
+            // Fade out after 1 second
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 1000);
+        }
+
+        // Show confirmation popup
+        let confirmationCallback = null;
+        function showConfirmation(title, message, callback) {
+            confirmationCallback = callback;
+            document.getElementById('confirmationTitle').textContent = title;
+            document.getElementById('confirmationMessage').textContent = message;
+            document.getElementById('confirmationPopup').classList.add('show');
+        }
+
+        // Close confirmation popup
+        function closeConfirmation(confirmed) {
+            document.getElementById('confirmationPopup').classList.remove('show');
+            if (confirmationCallback) {
+                if (confirmed) {
+                    confirmationCallback();
+                }
+                confirmationCallback = null;
+            }
+        }
+
+        // Keyboard controls for movement with acceleration
+        let movementInterval = null;
+        let movementSpeed = 0;
+        let currentDirection = 0;
+        let isKeyPressed = { left: false, right: false };
+
+        function setupKeyboardControls() {
+            document.addEventListener('keydown', (e) => {
+                if (!currentUser) return;
+                
+                // Only work if customize section is visible (user is logged in)
+                const customizeSection = document.getElementById('customizeSection');
+                if (!customizeSection || customizeSection.style.display === 'none') return;
+                
+                if (e.key === 'ArrowLeft' || e.key === 'Left') {
+                    e.preventDefault();
+                    if (!isKeyPressed.left) {
+                        isKeyPressed.left = true;
+                        startMovement(-1);
+                    }
+                } else if (e.key === 'ArrowRight' || e.key === 'Right') {
+                    e.preventDefault();
+                    if (!isKeyPressed.right) {
+                        isKeyPressed.right = true;
+                        startMovement(1);
+                    }
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'Left') {
+                    e.preventDefault();
+                    isKeyPressed.left = false;
+                    if (!isKeyPressed.right) {
+                        stopMovement();
+                    } else {
+                        startMovement(1); // Switch to right
+                    }
+                } else if (e.key === 'ArrowRight' || e.key === 'Right') {
+                    e.preventDefault();
+                    isKeyPressed.right = false;
+                    if (!isKeyPressed.left) {
+                        stopMovement();
+                    } else {
+                        startMovement(-1); // Switch to left
+                    }
+                }
+            });
+        }
+
+        function startMovement(direction) {
+            currentDirection = direction;
+            movementSpeed = 0;
+            
+            if (movementInterval) {
+                clearInterval(movementInterval);
+            }
+
+            // Start with slow movement, accelerate exponentially
+            movementInterval = setInterval(() => {
+                // Exponential acceleration: speed increases over time
+                movementSpeed = Math.min(movementSpeed + 0.5, 15); // Max speed 15 degrees per frame
+                
+                moveViewer(currentUser.display_name || currentUser.login, currentDirection, movementSpeed);
+            }, 50); // Update every 50ms for smooth acceleration
+        }
+
+        async function stopMovement() {
+            if (movementInterval) {
+                clearInterval(movementInterval);
+                movementInterval = null;
+            }
+            movementSpeed = 0;
+            currentDirection = 0;
+            
+            // Notify widget to stop movement animation (for same-window)
+            if (currentUser && window.campfireWidget) {
+                const user = window.campfireWidget.users.find(u => 
+                    u.userId === currentUser.id || 
+                    u.username === (currentUser.display_name || currentUser.login)
+                );
+                if (user) {
+                    window.campfireWidget.stopUserMovement(user.id);
+                }
+            }
+            
+            // Send to server (primary method)
+            if (currentUser) {
+                const stopData = {
+                    userId: currentUser.id,
+                    username: currentUser.display_name || currentUser.login,
+                    action: 'stopMovement',
+                    timestamp: Date.now()
+                };
+
+                try {
+                    await fetch('http://localhost:3000/api/viewer/stop-move', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(stopData)
+                    });
+                } catch (e) {
+                    console.log('Server not available, using localStorage fallback');
+                }
+
+                // Also send via localStorage for same-origin fallback
+                localStorage.setItem('viewerStopMovement', JSON.stringify(stopData));
+                window.dispatchEvent(new CustomEvent('viewerStopMovement', { detail: stopData }));
+                
+                const storageEvent = new StorageEvent('storage', {
+                    key: 'viewerStopMovement',
+                    newValue: JSON.stringify(stopData),
+                    oldValue: null,
+                    storageArea: localStorage
+                });
+                window.dispatchEvent(storageEvent);
+            }
+        }
+
+        async function moveViewer(username, direction, speed = 15) {
+            const movementData = {
+                userId: currentUser.id,
+                username: username,
+                displayName: currentUser.display_name,
+                direction: direction, // -1 for left, 1 for right
+                speed: speed, // Speed in degrees
+                timestamp: Date.now()
+            };
+
+            // Send to server (primary method - works across browsers/computers)
+            try {
+                const response = await fetch('http://localhost:3000/api/viewer/move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(movementData)
+                });
+                if (!response.ok) {
+                    console.warn('Failed to send movement to server, falling back to localStorage');
+                }
+            } catch (e) {
+                // Server not available - fall back to localStorage (for same-origin)
+                console.log('Server not available, using localStorage fallback');
+            }
+
+            // Also send via localStorage for same-origin fallback
+            const oldValue = localStorage.getItem('viewerMovement');
+            localStorage.setItem('viewerMovement', JSON.stringify(movementData));
+            
+            // Trigger custom event for same-window communication
+            window.dispatchEvent(new CustomEvent('viewerMovement', { detail: movementData }));
+            
+            // Also trigger storage event for cross-window communication
+            const storageEvent = new StorageEvent('storage', {
+                key: 'viewerMovement',
+                newValue: JSON.stringify(movementData),
+                oldValue: oldValue,
+                storageArea: localStorage
+            });
+            window.dispatchEvent(storageEvent);
+        }
+
+        async function joinCampfire() {
+            if (!currentUser) {
+                showNotification('Please login first');
+                return;
+            }
+
+            // Get viewer color
+            const viewerColor = selectedColor;
+            let viewerColors = {};
+            try {
+                const saved = localStorage.getItem('allViewerColors');
+                if (saved) viewerColors = JSON.parse(saved);
+            } catch (e) {}
+
+            // Save color data
+            const userColorData = {
+                userId: currentUser.id,
+                username: currentUser.login,
+                displayName: currentUser.display_name,
+                color: viewerColor,
+                timestamp: Date.now()
+            };
+
+            viewerColors[currentUser.id] = userColorData;
+            localStorage.setItem('allViewerColors', JSON.stringify(viewerColors));
+
+            // Add user to campfire widget
+            const joinData = {
+                username: currentUser.display_name || currentUser.login,
+                userId: currentUser.id,
+                color: viewerColor,
+                selectedSprite: currentSpriteMode === 'rpg-characters' ? selectedSprite : null,
+                action: 'join',
+                timestamp: Date.now()
+            };
+
+            // Send to server (primary method - works across browsers/computers)
+            try {
+                const response = await fetch('http://localhost:3000/api/viewer/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(joinData)
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    showNotification('✅ Joined the campfire! Check the widget to see yourself.');
+                } else {
+                    throw new Error('Server error');
+                }
+            } catch (e) {
+                // Server not available - fall back to localStorage (for same-origin)
+                console.log('Server not available, using localStorage fallback');
+                localStorage.setItem('viewerJoin', JSON.stringify(joinData));
+                window.dispatchEvent(new CustomEvent('viewerJoin', { detail: joinData }));
+                
+                const storageEvent = new StorageEvent('storage', {
+                    key: 'viewerJoin',
+                    newValue: JSON.stringify(joinData),
+                    oldValue: null,
+                    storageArea: localStorage
+                });
+                window.dispatchEvent(storageEvent);
+                
+                showNotification('✅ Joined the campfire! Check the widget to see yourself.');
+            }
+        }
+
+        async function leaveCampfire() {
+            if (!currentUser) {
+                showNotification('You are not logged in');
+                return;
+            }
+
+            // Show confirmation popup
+            showConfirmation('Leave Campfire?', 'Are you sure you want to leave the campfire?', async () => {
+                const leaveData = {
+                    username: currentUser.display_name || currentUser.login,
+                    userId: currentUser.id,
+                    action: 'leave',
+                    timestamp: Date.now()
+                };
+
+                // Send to server (primary method)
+                try {
+                    const response = await fetch('http://localhost:3000/api/viewer/leave', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(leaveData)
+                    });
+                    if (response.ok) {
+                        showNotification('✅ Left the campfire');
+                    } else {
+                        throw new Error('Server error');
+                    }
+                } catch (e) {
+                    // Server not available - fall back to localStorage
+                    console.log('Server not available, using localStorage fallback');
+                    localStorage.setItem('viewerLeave', JSON.stringify(leaveData));
+                    window.dispatchEvent(new CustomEvent('viewerLeave', { detail: leaveData }));
+                    
+                    const storageEvent = new StorageEvent('storage', {
+                        key: 'viewerLeave',
+                        newValue: JSON.stringify(leaveData),
+                        oldValue: null,
+                        storageArea: localStorage
+                    });
+                    window.dispatchEvent(storageEvent);
+                    
+                    showNotification('✅ Left the campfire');
+                }
+            });
+        }
+
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                currentUser = null;
+                localStorage.removeItem('twitchUser');
+                document.getElementById('loginSection').style.display = 'block';
+                document.getElementById('customizeSection').style.display = 'none';
+            }
+        }
+
+        // Initialize on load
+        init();
+        setupKeyboardControls();
+    </script>
+</body>
+</html>

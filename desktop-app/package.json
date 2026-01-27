@@ -1,0 +1,99 @@
+{
+  "name": "Campfire-Widget",
+  "version": "0.1.0",
+  "description": "Campfire Widget Desktop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64 --publish=never",
+    "build:mac": "electron-builder --mac --publish=never",
+    "build:all": "electron-builder --win --mac --publish=never",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.campfirewidget.app",
+    "productName": "Campfire Widget",
+    "artifactName": "${name}-${version}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "loading.html",
+      "server/**/*",
+      "src/**/*",
+      "!server/node_modules/**/*",
+      "!server/sprites/*.png",
+      "assets/**/*"
+    ],
+    "asarUnpack": [
+      "server/sprites/**/*",
+      "!server/sprites/*.png"
+    ],
+    "win": {
+      "artifactName": "${name}-Setup-${version}.${ext}",
+      "publisherName": "The Offline Club",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "certificateFile": null,
+      "certificatePassword": null,
+      "signingHashAlgorithms": ["sha256"]
+    },
+    "mac": {
+      "artifactName": "${name}-${version}-${arch}.${ext}",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.entertainment"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "guid": "a8f8e5c3-7b4d-4e9f-9a2b-1c3d4e5f6a7b",
+      "allowElevation": true,
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": false,
+      "warningsAsErrors": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "jaredheafth",
+        "repo": "Campfire_BETA"
+      }
+    ]
+  },
+  "keywords": [
+    "twitch",
+    "widget",
+    "streamlabs",
+    "streaming"
+  ],
+  "author": "The Offline Club",
+  "license": "MIT",
+  "dependencies": {
+    "electron-updater": "^6.7.3",
+    "tmi.js": "^1.8.5"
+  },
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
+  }
+}

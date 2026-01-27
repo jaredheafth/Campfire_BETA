@@ -1,0 +1,3232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campfire Widget - Visual Display</title>
+    <style>
+        /* Custom font for usernames and chat bubbles */
+        @font-face {
+            font-family: 'UsernameFont';
+            src: url('fonts/w95fa.woff2') format('woff2'),
+                 url('fonts/w95fa.woff') format('woff'),
+                 url('fonts/W95FA.otf') format('opentype'),
+                 url('fonts/username-font.woff2') format('woff2'),
+                 url('fonts/username-font.woff') format('woff'),
+                 url('fonts/username-font.ttf') format('truetype'),
+                 url('fonts/username-font.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap; /* Show fallback font immediately, swap when custom font loads */
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: transparent !important; /* Ensure transparent for OBS */
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        
+        html {
+            background: transparent !important; /* Ensure HTML is also transparent */
+        }
+
+        .widget-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .campfire-area {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .campfire-graphic {
+            width: 800px; /* Much larger to allow glow to fade naturally */
+            height: 800px; /* Much larger to allow glow to fade naturally */
+            object-fit: contain;
+            z-index: 10;
+            position: relative;
+            overflow: visible; /* Allow glow to extend beyond container */
+            background: transparent; /* No background */
+            border: none; /* No border */
+            box-shadow: none; /* No box shadow on container */
+            /* Center the container content */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 3D Layering - Front users (bottom of circle) */
+        .user-shape.front-layer {
+            z-index: 15;
+        }
+
+        /* 3D Layering - Back users (top of circle) */
+        .user-shape.back-layer {
+            z-index: 5;
+        }
+
+        .campfire-graphic img,
+        .campfire-graphic video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .circle-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            /* Remove transform from container - we'll apply perspective to individual elements */
+        }
+
+        .user-shape {
+            position: absolute;
+            width: 40px; /* Default, will be overridden by spriteSize setting */
+            height: 40px; /* Default, will be overridden by spriteSize setting */
+            transform-origin: center;
+            transition: all 0.3s ease;
+            z-index: 5;
+            outline: none; /* Remove any outline */
+        }
+        
+        /* Disable transitions during exit animation for smooth animation */
+        .user-shape.leaving {
+            transition: none !important;
+        }
+        
+        .user-shape .shape {
+            transform-origin: center;
+        }
+        
+        .user-shape .shape.flipped {
+            transform: scaleX(-1);
+        }
+
+        .user-shape .shape {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 2px solid transparent; /* Start transparent - only show if fallback circle is needed */
+            /* No box-shadow - removed to eliminate bubble effect around sprites */
+            box-shadow: none;
+            outline: none !important; /* Remove outline that might create unwanted circles */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: white;
+            font-weight: bold;
+            overflow: visible; /* Allow sprites to extend beyond if needed */
+        }
+        
+        /* Ensure sprites (any with background-image) have no shadows, borders, or circular clipping */
+        .user-shape .shape[style*="background-image"] {
+            box-shadow: none !important;
+            filter: drop-shadow(none) !important;
+            border: none !important;
+            border-radius: 0 !important;
+            outline: none !important; /* Remove outline that might create unwanted circles */
+            overflow: visible !important; /* Prevent clipping of sprite edges */
+            background-size: contain !important; /* Ensure full sprite is visible */
+        }
+
+        .user-shape .username {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            /* Removed background box - using text stroke instead */
+            padding: 2px 4px;
+            font-size: 14px; /* Increased from 12px for better readability */
+            font-weight: 600;
+            font-family: 'UsernameFont', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            pointer-events: none;
+            z-index: 100; /* Always above sprites - use high z-index so usernames layer correctly relative to each other */
+            /* Outside stroke effect using text-shadow (no -webkit-text-stroke to avoid covering font) */
+            /* Multiple shadows positioned around text create an outside-only outline */
+            text-shadow: 
+                -1px -1px 0 #000,
+                1px -1px 0 #000,
+                -1px 1px 0 #000,
+                1px 1px 0 #000,
+                0 -1px 0 #000,
+                0 1px 0 #000,
+                -1px 0 0 #000,
+                1px 0 0 #000,
+                0 0 2px #000; /* Additional blur for smoother outline */
+            transition: opacity 0.3s ease, color 0.3s ease;
+        }
+
+        .user-shape .chat-message {
+            position: absolute;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            padding: 6px 10px;
+            font-family: 'UsernameFont', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            pointer-events: none;
+            z-index: 25;
+            max-width: 150px;
+            word-wrap: break-word;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .user-shape .chat-message.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-5px);
+        }
+
+        .user-shape .chat-message.fade-out {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-10px);
+        }
+
+        .user-shape.entering {
+            animation: popIn 0.5s ease-out;
+        }
+
+        .user-shape.leaving {
+            animation: liftFadeOut 0.6s ease-in forwards;
+            /* Override any inline transforms during exit animation */
+            transform-origin: center bottom;
+            /* Ensure animation can override positioning */
+            will-change: transform, opacity;
+        }
+
+        .user-shape.idle {
+            animation: floatIdle 3s ease-in-out infinite;
+        }
+
+        .user-shape.moving {
+            animation: bounceWalk 0.6s ease-in-out infinite;
+        }
+
+        @keyframes popIn {
+            0% {
+                transform: scale(0) rotateY(0deg);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.1) rotateY(180deg);
+            }
+            100% {
+                transform: scale(1) rotateY(360deg);
+                opacity: 1;
+            }
+        }
+
+        @keyframes floatIdle {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-3px); /* More subtle float - reduced from -8px */
+            }
+        }
+
+        @keyframes bounceWalk {
+            0%, 100% {
+                transform: translateY(0px) scaleY(1);
+            }
+            25% {
+                transform: translateY(-5px) scaleY(0.95);
+            }
+            50% {
+                transform: translateY(-10px) scaleY(0.9);
+            }
+            75% {
+                transform: translateY(-5px) scaleY(0.95);
+            }
+        }
+
+        @keyframes liftFadeOut {
+            0% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(var(--lift-distance, -40px));
+                opacity: 0;
+            }
+        }
+
+        /* Debug circle visualization (hidden by default) */
+        .debug-circle {
+            position: absolute;
+            border: none; /* Removed dashed border */
+            border-radius: 50%;
+            pointer-events: none;
+            display: none; /* Hide debug circle */
+        }
+
+        /* Desktop App Menu Bar */
+        .desktop-menu-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background: rgba(26, 26, 26, 0.95) !important;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: none; /* Hidden by default, shown only in desktop app */
+            z-index: 999999 !important; /* Very high z-index to ensure it's on top */
+            flex-direction: row;
+            align-items: center;
+            padding: 0 10px;
+            gap: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px;
+            pointer-events: auto; /* Ensure it can be clicked */
+        }
+
+        .desktop-menu-bar.desktop-app {
+            display: flex !important; /* Force display */
+        }
+
+        .menu-button {
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .menu-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .menu-button:active {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .menu-button.primary {
+            background: rgba(255, 107, 53, 0.3);
+            border-color: rgba(255, 107, 53, 0.5);
+        }
+
+        .menu-button.primary:hover {
+            background: rgba(255, 107, 53, 0.5);
+            border-color: rgba(255, 107, 53, 0.7);
+        }
+
+        .menu-button.danger {
+            background: rgba(255, 59, 48, 0.3);
+            border-color: rgba(255, 59, 48, 0.5);
+        }
+
+        .menu-button.danger:hover {
+            background: rgba(255, 59, 48, 0.5);
+            border-color: rgba(255, 59, 48, 0.7);
+        }
+
+        .menu-spacer {
+            flex: 1;
+        }
+
+        .menu-status {
+            padding: 6px 12px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.6);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff3b30;
+        }
+
+        .status-indicator.connected {
+            background: #34c759;
+        }
+    </style>
+</head>
+<body>
+    <!-- Desktop App Menu Bar (only visible in Electron) -->
+    <div class="desktop-menu-bar" id="desktopMenuBar">
+        <button class="menu-button" id="btnDashboard">Dashboard</button>
+        <button class="menu-button" id="btnSettings">Settings</button>
+        <button class="menu-button" id="btnMembers">Members</button>
+        <div class="menu-spacer"></div>
+        <div class="menu-status">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <span id="statusText">Disconnected</span>
+        </div>
+        <button class="menu-button primary" id="btnLaunch">Launch</button>
+        <button class="menu-button danger" id="btnEnd">End</button>
+    </div>
+    <div class="widget-container">
+        <div class="campfire-area">
+            <div class="circle-container" id="circleContainer">
+                <!-- Debug circle (optional, for visualization) -->
+                <div class="debug-circle" id="debugCircle"></div>
+                
+                <!-- User shapes will be dynamically added here -->
+            </div>
+            
+            <div class="campfire-graphic" id="campfireGraphic">
+                <!-- Campfire GIF/video will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // MENU BAR TEST - RUN FIRST
+        // ============================================
+        console.log('[Menu Bar] SCRIPT STARTED - Testing menu bar immediately');
+        (function() {
+            try {
+                const testBar = document.getElementById('desktopMenuBar');
+                console.log('[Menu Bar] TEST - Element exists:', !!testBar);
+                if (testBar) {
+                    testBar.style.display = 'flex';
+                    testBar.style.background = 'rgba(255, 0, 0, 0.9)';
+                    testBar.style.position = 'fixed';
+                    testBar.style.top = '0';
+                    testBar.style.left = '0';
+                    testBar.style.right = '0';
+                    testBar.style.zIndex = '999999';
+                    console.log('[Menu Bar] TEST - Forced red menu bar to display');
+                } else {
+                    console.error('[Menu Bar] TEST - Menu bar element NOT FOUND in DOM!');
+                }
+            } catch (e) {
+                console.error('[Menu Bar] TEST - Error:', e);
+            }
+        })();
+        
+        class CampfireWidget {
+            constructor() {
+                console.log('CampfireWidget constructor called');
+                this.users = [];
+                this.settings = this.loadSettings();
+                console.log('Settings loaded:', this.settings);
+                this.circleRadius = 120;
+                this.circleAngle = this.settings.circleAngle || 0; // 0 = top-down, 90 = side-view
+                this.maxUsers = this.settings.maxUsers || 20;
+                this.animationFrame = null;
+                
+                console.log('Calling init()...');
+                this.init();
+                console.log('Init completed');
+            }
+
+            loadSettings() {
+                // First, try to load from URL parameters (for Custom Widget)
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlSettings = {};
+                
+                if (urlParams.has('graphic')) urlSettings.campfireGraphicUrl = decodeURIComponent(urlParams.get('graphic'));
+                if (urlParams.has('angle')) urlSettings.circleAngle = parseInt(urlParams.get('angle'));
+                if (urlParams.has('joinMethod')) urlSettings.joinMethod = urlParams.get('joinMethod');
+                if (urlParams.has('command')) urlSettings.command = urlParams.get('command');
+                if (urlParams.has('emoteName')) urlSettings.emoteName = urlParams.get('emoteName');
+                if (urlParams.has('maxUsers')) urlSettings.maxUsers = parseInt(urlParams.get('maxUsers'));
+                if (urlParams.has('shapeStyle')) urlSettings.shapeStyle = urlParams.get('shapeStyle');
+                if (urlParams.has('subOnly')) urlSettings.subscriberOnly = urlParams.get('subOnly') === 'true';
+                if (urlParams.has('subTier2')) urlSettings.subTier2Only = urlParams.get('subTier2') === 'true';
+                if (urlParams.has('subTier3')) urlSettings.subTier3Only = urlParams.get('subTier3') === 'true';
+                if (urlParams.has('vipOnly')) urlSettings.vipOnly = urlParams.get('vipOnly') === 'true';
+                if (urlParams.has('primeOnly')) urlSettings.primeOnly = urlParams.get('primeOnly') === 'true';
+                if (urlParams.has('bits')) urlSettings.bitsRequired = parseInt(urlParams.get('bits'));
+                if (urlParams.has('glowSize')) urlSettings.glowSize = parseInt(urlParams.get('glowSize'));
+                if (urlParams.has('glowIntensity')) urlSettings.glowIntensity = parseInt(urlParams.get('glowIntensity'));
+                if (urlParams.has('shadowIntensity')) urlSettings.shadowIntensity = parseInt(urlParams.get('shadowIntensity'));
+                if (urlParams.has('glowSpread')) urlSettings.glowSpread = parseInt(urlParams.get('glowSpread'));
+                if (urlParams.has('animatedGlow')) urlSettings.animatedGlow = urlParams.get('animatedGlow') === 'true';
+                if (urlParams.has('spriteMode')) urlSettings.spriteMode = urlParams.get('spriteMode');
+                if (urlParams.has('fireSize')) urlSettings.fireSize = parseInt(urlParams.get('fireSize'));
+                if (urlParams.has('spriteSize')) urlSettings.spriteSize = parseInt(urlParams.get('spriteSize'));
+                if (urlParams.has('spriteDefaultDirection')) urlSettings.spriteDefaultDirection = urlParams.get('spriteDefaultDirection');
+                
+                // Load sprite data from localStorage (always check for latest)
+                const defaultSprite = localStorage.getItem('defaultSpriteData');
+                const customSprite = localStorage.getItem('customSpriteData');
+                
+                // If URL params exist, use them (Custom Widget mode)
+                if (Object.keys(urlSettings).length > 0) {
+                    if (defaultSprite) urlSettings.defaultSpriteData = defaultSprite;
+                    if (customSprite) urlSettings.customSpriteData = customSprite;
+                    return { ...this.getDefaultSettings(), ...urlSettings };
+                }
+                
+                // Otherwise, try to load from LocalStorage (set by dashboard)
+                const saved = localStorage.getItem('campfireWidgetSettings');
+                if (saved) {
+                    try {
+                        const settings = { ...this.getDefaultSettings(), ...JSON.parse(saved) };
+                        // Always load latest sprite data from localStorage
+                        if (defaultSprite) settings.defaultSpriteData = defaultSprite;
+                        if (customSprite) settings.customSpriteData = customSprite;
+                        return settings;
+                    } catch (e) {
+                        console.error('Error loading settings:', e);
+                    }
+                }
+                
+                // Also check localStorage for sprites even if no settings saved
+                if (defaultSprite || customSprite) {
+                    const settings = this.getDefaultSettings();
+                    if (defaultSprite) settings.defaultSpriteData = defaultSprite;
+                    if (customSprite) settings.customSpriteData = customSprite;
+                    return settings;
+                }
+                
+                // Return default settings
+                return this.getDefaultSettings();
+            }
+
+            getDefaultSettings() {
+                return {
+                    campfireMethod: 'url',
+                    campfireGraphicUrl: '',
+                    campfireGraphicData: '',
+                    circleAngle: 64,
+                    joinMethod: 'command',
+                    command: '!join',
+                    emoteName: '',
+                    maxUsers: 20,
+                    shapeStyle: 'circle',
+                    subscriberOnly: false,
+                    subTier2Only: false,
+                    subTier3Only: false,
+                    vipOnly: false,
+                    primeOnly: false,
+                    bitsRequired: 0,
+                    glowSize: 500,
+                    glowIntensity: 77,
+                    shadowIntensity: 91,
+                    glowSpread: 64,
+                    animatedGlow: true,
+                    spriteMode: 'circle',
+                    defaultSpriteData: '',
+                    customSpriteData: '',
+                    circleSprites: [],
+                    rpgSprites: [],
+                    morphSprites: [],
+                    fireSize: 48,
+                    spriteSize: 40,
+                    spriteDefaultDirection: 'left' // 'left' or 'right'
+                };
+            }
+            
+            // Get a random sprite from a collection
+            getRandomSprite(collection) {
+                if (!collection || collection.length === 0) return null;
+                return collection[Math.floor(Math.random() * collection.length)];
+            }
+            
+            // Get sprite for user based on mode and user preferences
+            getUserSprite(user) {
+                const spriteMode = this.settings.spriteMode || 'circle';
+                const viewerColor = user.color || this.getViewerColor(user.username, user.userId);
+                
+                // Ensure sprite collections are arrays
+                if (!Array.isArray(this.settings.rpgSprites)) this.settings.rpgSprites = [];
+                if (!Array.isArray(this.settings.circleSprites)) this.settings.circleSprites = [];
+                if (!Array.isArray(this.settings.morphSprites)) this.settings.morphSprites = [];
+                
+                // Debug: Log sprite availability (only once per user)
+                if (!user.assignedSprite && !user.selectedSprite && !user._spriteLogged) {
+                    console.log(`[getUserSprite] ${user.username} - Mode: ${spriteMode}, RPG: ${this.settings.rpgSprites.length}, Circle: ${this.settings.circleSprites.length}, Morph: ${this.settings.morphSprites.length}`);
+                    user._spriteLogged = true;
+                }
+                
+                // Check if user has a selected sprite (for RPG mode)
+                if (user.selectedSprite) {
+                    // Handle both object format {data, name} and direct data string
+                    const spriteData = typeof user.selectedSprite === 'string' 
+                        ? user.selectedSprite 
+                        : (user.selectedSprite.data || user.selectedSprite);
+                    if (spriteData) {
+                        return {
+                            data: spriteData,
+                            colorize: false // RPG sprites aren't colorized
+                        };
+                    }
+                }
+                
+                if (spriteMode === 'rpg-characters') {
+                    // RPG mode: use random sprite (or user's selected one)
+                    // If user already has a sprite assigned, keep it (don't randomize on updates)
+                    if (user.assignedSprite) {
+                        return {
+                            data: user.assignedSprite,
+                            colorize: false
+                        };
+                    }
+                    
+                    const rpgSprites = this.settings.rpgSprites || [];
+                    if (rpgSprites.length === 0) {
+                        console.warn(`[getUserSprite] No RPG sprites available for ${user.username}`);
+                    }
+                    const sprite = this.getRandomSprite(rpgSprites);
+                    if (sprite && sprite.data) {
+                        // Store the assigned sprite so it doesn't change on updates
+                        user.assignedSprite = sprite.data;
+                        return {
+                            data: sprite.data,
+                            colorize: false // RPG sprites aren't colorized
+                        };
+                    } else {
+                        console.warn(`[getUserSprite] No valid RPG sprite found for ${user.username}, falling back to default`);
+                    }
+                } else if (spriteMode === 'circle') {
+                    // Circle mode: use random circle sprite and colorize it
+                    // If user already has a sprite assigned, keep it
+                    if (user.assignedSprite) {
+                        return {
+                            data: user.assignedSprite,
+                            colorize: true,
+                            color: viewerColor
+                        };
+                    }
+                    
+                    const circleSprites = this.settings.circleSprites || [];
+                    const sprite = this.getRandomSprite(circleSprites);
+                    if (sprite && sprite.data) {
+                        user.assignedSprite = sprite.data;
+                        return {
+                            data: sprite.data,
+                            colorize: true,
+                            color: viewerColor
+                        };
+                    }
+                    // Fallback to default sprite GIF if available
+                    if (this.settings.defaultSpriteData) {
+                        user.assignedSprite = this.settings.defaultSpriteData;
+                        return {
+                            data: this.settings.defaultSpriteData,
+                            colorize: true,
+                            color: viewerColor
+                        };
+                    }
+                    // Final fallback: low-res pixelated SVG circle
+                    const svgCircle = 'data:image/svg+xml;base64,' + btoa(`
+                        <svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="20" cy="20" r="18" fill="#000000" stroke="#000000" stroke-width="2"/>
+                        </svg>
+                    `);
+                    user.assignedSprite = svgCircle;
+                    return {
+                        data: svgCircle,
+                        colorize: true,
+                        color: viewerColor
+                    };
+                } else if (spriteMode === 'pixel-morphs') {
+                    // Morph mode: use random morph sprite and colorize it
+                    // If user already has a sprite assigned, keep it
+                    if (user.assignedSprite) {
+                        return {
+                            data: user.assignedSprite,
+                            colorize: true,
+                            color: viewerColor
+                        };
+                    }
+                    
+                    const morphSprites = this.settings.morphSprites || [];
+                    const sprite = this.getRandomSprite(morphSprites);
+                    if (sprite && sprite.data) {
+                        user.assignedSprite = sprite.data;
+                        return {
+                            data: sprite.data,
+                            colorize: true,
+                            color: viewerColor
+                        };
+                    } else {
+                        console.warn(`[getUserSprite] No morph sprites available for ${user.username}`);
+                    }
+                } else if (spriteMode === 'custom') {
+                    // Custom mode: use custom sprite (not colorized)
+                    if (this.settings.customSpriteData) {
+                        return {
+                            data: this.settings.customSpriteData,
+                            colorize: false
+                        };
+                    }
+                }
+                
+                // Fallback: default circle shape
+                console.warn(`[getUserSprite] No sprite found for ${user.username} in mode ${spriteMode}, returning null`);
+                return null;
+            }
+
+            init() {
+                console.log('Init() called');
+                // Always reload sprite data and campfire graphic from localStorage on init
+                const defaultSprite = localStorage.getItem('defaultSpriteData');
+                const customSprite = localStorage.getItem('customSpriteData');
+                const campfireGraphic = localStorage.getItem('campfireGraphicData');
+                if (defaultSprite) this.settings.defaultSpriteData = defaultSprite;
+                if (customSprite) this.settings.customSpriteData = customSprite;
+                if (campfireGraphic) this.settings.campfireGraphicData = campfireGraphic;
+                
+                // Load sprite collections
+                const circleSprites = localStorage.getItem('circleSprites');
+                const rpgSprites = localStorage.getItem('rpgSprites');
+                const morphSprites = localStorage.getItem('morphSprites');
+                
+                if (circleSprites) {
+                    try {
+                        this.settings.circleSprites = JSON.parse(circleSprites);
+                        if (!Array.isArray(this.settings.circleSprites)) {
+                            this.settings.circleSprites = [];
+                        }
+                    } catch (e) {
+                        console.error('Error parsing circleSprites:', e);
+                        this.settings.circleSprites = [];
+                    }
+                } else {
+                    this.settings.circleSprites = [];
+                }
+                
+                if (rpgSprites) {
+                    try {
+                        this.settings.rpgSprites = JSON.parse(rpgSprites);
+                        if (!Array.isArray(this.settings.rpgSprites)) {
+                            this.settings.rpgSprites = [];
+                        }
+                        console.log(`Loaded ${this.settings.rpgSprites.length} RPG sprites from localStorage`);
+                    } catch (e) {
+                        console.error('Error parsing rpgSprites:', e);
+                        this.settings.rpgSprites = [];
+                    }
+                } else {
+                    console.warn('No RPG sprites found in localStorage');
+                    this.settings.rpgSprites = [];
+                }
+                
+                if (morphSprites) {
+                    try {
+                        this.settings.morphSprites = JSON.parse(morphSprites);
+                        if (!Array.isArray(this.settings.morphSprites)) {
+                            this.settings.morphSprites = [];
+                        }
+                    } catch (e) {
+                        console.error('Error parsing morphSprites:', e);
+                        this.settings.morphSprites = [];
+                    }
+                } else {
+                    this.settings.morphSprites = [];
+                }
+                
+                console.log('Sprite mode:', this.settings.spriteMode);
+                console.log('Sprite collections loaded - RPG:', this.settings.rpgSprites.length, 'Circle:', this.settings.circleSprites.length, 'Morph:', this.settings.morphSprites.length);
+                
+                console.log('Setting up campfire graphic...');
+                this.setupCampfireGraphic();
+                console.log('Updating circle transform...');
+                this.updateCircleTransform();
+                
+                // Load persisted users from localStorage
+                this.loadPersistedUsers();
+                
+                // Only show test users if the setting is enabled (for dashboard preview)
+                // Test users are filtered out when the widget is used in actual OBS views
+                if (this.settings.showTestUsers !== false) {
+                    console.log('Setting up mock users...');
+                    this.setupMockUsers();
+                }
+                console.log('Init complete, users:', this.users.length);
+            }
+            
+            savePersistedUsers() {
+                // Save current users to localStorage (excluding test users)
+                const persistedUsers = this.users.filter(u => !u.username.startsWith('TestUser'));
+                try {
+                    localStorage.setItem('campfireUsers', JSON.stringify(persistedUsers));
+                    console.log(`Saved ${persistedUsers.length} users to localStorage`);
+                } catch (e) {
+                    console.error('Error saving users to localStorage:', e);
+                }
+            }
+            
+            loadPersistedUsers() {
+                // Load users from localStorage and restore them
+                try {
+                    const savedUsers = localStorage.getItem('campfireUsers');
+                    if (savedUsers) {
+                        const users = JSON.parse(savedUsers);
+                        console.log(`Loading ${users.length} persisted users from localStorage`);
+                        users.forEach(userData => {
+                            // Restore user and create element
+                            this.users.push(userData);
+                            // Create element for restored user
+                            this.createUserElement(userData);
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error loading persisted users:', e);
+                }
+            }
+
+            setupCampfireGraphic() {
+                console.log('setupCampfireGraphic() called');
+                const container = document.getElementById('campfireGraphic');
+                if (!container) {
+                    console.error('Campfire graphic container not found!');
+                    return;
+                }
+                console.log('Container found:', container);
+                console.log('Container display:', window.getComputedStyle(container).display);
+                console.log('Container visibility:', window.getComputedStyle(container).visibility);
+                console.log('Container opacity:', window.getComputedStyle(container).opacity);
+                
+                // Check for uploaded graphic first, then URL
+                const uploadedData = this.settings.campfireGraphicData || localStorage.getItem('campfireGraphicData');
+                const url = this.settings.campfireGraphicUrl;
+                const graphicSource = uploadedData || url;
+                
+                console.log('Graphic source:', uploadedData ? 'uploaded' : (url ? 'URL' : 'none (using default)'));
+                
+                // Calculate perspective transform for glow
+                // Cap glow angle at 77 degrees to prevent it from getting too thin
+                // User orbit can go to 90, but glow visual stops at 77
+                const glowAngle = Math.min(this.circleAngle, 77);
+                const angleRad = (glowAngle * Math.PI) / 180;
+                const scaleY = Math.cos(angleRad);
+                
+                if (!graphicSource) {
+                    // Get glow settings
+                    const glowSize = this.settings.glowSize || 500;
+                    const glowIntensity = this.settings.glowIntensity || 77;
+                    const shadowIntensity = this.settings.shadowIntensity || 91;
+                    const glowSpread = this.settings.glowSpread || 64;
+                    const animatedGlow = this.settings.animatedGlow !== false; // Default to true
+                    
+                    // Calculate opacity values based on intensity (0-100% maps to 0-0.5 opacity)
+                    const baseOpacity = (glowIntensity / 100) * 0.5;
+                    const shadowOpacity = (shadowIntensity / 100);
+                    
+                    // Calculate gradient stops based on spread
+                    const stop1 = Math.max(0, glowSpread * 0.25);
+                    const stop2 = Math.max(5, glowSpread * 0.4);
+                    const stop3 = Math.max(10, glowSpread * 0.55);
+                    const stop4 = Math.max(15, glowSpread * 0.7);
+                    const stop5 = Math.max(20, glowSpread * 0.85);
+                    
+                    // Build glow gradient with dynamic stops
+                    const glowGradient = `radial-gradient(ellipse at center, 
+                        rgba(255, 107, 53, ${baseOpacity}) 0%, 
+                        rgba(247, 147, 30, ${baseOpacity * 0.7}) ${stop1}%, 
+                        rgba(255, 204, 2, ${baseOpacity * 0.5}) ${stop2}%, 
+                        rgba(255, 204, 2, ${baseOpacity * 0.3}) ${stop3}%, 
+                        rgba(255, 204, 2, ${baseOpacity * 0.15}) ${stop4}%, 
+                        transparent ${glowSpread}%)`;
+                    
+                    // Build shadow filters
+                    const shadowFilter = `drop-shadow(0 0 ${8 * shadowOpacity}px rgba(255, 107, 53, ${0.9 * shadowOpacity})) 
+                        drop-shadow(0 0 ${12 * shadowOpacity}px rgba(255, 107, 53, ${0.6 * shadowOpacity})) 
+                        drop-shadow(0 0 ${18 * shadowOpacity}px rgba(255, 107, 53, ${0.3 * shadowOpacity}))`;
+                    
+                    // Default placeholder with natural transparent glow (no borders, follows angle)
+                    console.log('Creating default campfire glow...');
+                    container.innerHTML = `
+                        <div id="campfireGlow" style="position: absolute; width: ${glowSize}px; height: ${glowSize}px; left: 50%; top: 50%; transform: translate(-50%, -50%) scaleY(${scaleY}); 
+                                    background: ${glowGradient}; 
+                                    pointer-events: none; border: none; outline: none; box-shadow: none; transition: background 0.3s ease;">
+                        </div>
+                        <div id="campfireEmoji" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 11; font-size: ${this.settings.fireSize || 48}px; filter: ${shadowFilter}; pointer-events: none;">🔥</div>
+                    `;
+                    console.log('Campfire graphic HTML set, container.innerHTML length:', container.innerHTML.length);
+                    
+                    // Start animation if enabled
+                    if (animatedGlow) {
+                        this.startGlowAnimation();
+                    }
+                    
+                    return;
+                }
+
+                // Get glow settings (always create glow, even for custom graphics)
+                const glowSize = this.settings.glowSize || 500;
+                const glowIntensity = this.settings.glowIntensity || 77;
+                const shadowIntensity = this.settings.shadowIntensity || 91;
+                const glowSpread = this.settings.glowSpread || 64;
+                const animatedGlow = this.settings.animatedGlow !== false; // Default to true
+                
+                // Calculate opacity values based on intensity (0-100% maps to 0-0.5 opacity)
+                const baseOpacity = (glowIntensity / 100) * 0.5;
+                const shadowOpacity = (shadowIntensity / 100);
+                
+                // Calculate gradient stops based on spread
+                const stop1 = Math.max(0, glowSpread * 0.25);
+                const stop2 = Math.max(5, glowSpread * 0.4);
+                const stop3 = Math.max(10, glowSpread * 0.55);
+                const stop4 = Math.max(15, glowSpread * 0.7);
+                const stop5 = Math.max(20, glowSpread * 0.85);
+                
+                // Build glow gradient with dynamic stops
+                const glowGradient = `radial-gradient(ellipse at center, 
+                    rgba(255, 107, 53, ${baseOpacity}) 0%, 
+                    rgba(247, 147, 30, ${baseOpacity * 0.7}) ${stop1}%, 
+                    rgba(255, 204, 2, ${baseOpacity * 0.5}) ${stop2}%, 
+                    rgba(255, 204, 2, ${baseOpacity * 0.3}) ${stop3}%, 
+                    rgba(255, 204, 2, ${baseOpacity * 0.15}) ${stop4}%, 
+                    transparent ${glowSpread}%)`;
+                
+                // Build shadow filters for custom graphics
+                const shadowFilter = `drop-shadow(0 0 ${8 * shadowOpacity}px rgba(255, 107, 53, ${0.9 * shadowOpacity})) 
+                    drop-shadow(0 0 ${12 * shadowOpacity}px rgba(255, 107, 53, ${0.6 * shadowOpacity})) 
+                    drop-shadow(0 0 ${18 * shadowOpacity}px rgba(255, 107, 53, ${0.3 * shadowOpacity}))`;
+
+                // Use uploaded data if available, otherwise use URL
+                const fireSize = this.settings.fireSize || 48;
+                let graphicHTML = '';
+                
+                // Always create glow element first (behind the graphic)
+                graphicHTML = `<div id="campfireGlow" style="position: absolute; width: ${glowSize}px; height: ${glowSize}px; left: 50%; top: 50%; transform: translate(-50%, -50%) scaleY(${scaleY}); 
+                            background: ${glowGradient}; 
+                            pointer-events: none; border: none; outline: none; box-shadow: none; transition: background 0.3s ease; z-index: 10;">
+                        </div>`;
+                
+                if (uploadedData) {
+                    // Check if it's a video or image based on data URL
+                    if (uploadedData.startsWith('data:video/')) {
+                        graphicHTML += `<video autoplay loop muted playsinline style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 11; filter: ${shadowFilter};"><source src="${uploadedData}"></video>`;
+                    } else {
+                        graphicHTML += `<img src="${uploadedData}" alt="Campfire" style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 11; filter: ${shadowFilter};">`;
+                    }
+                } else if (url) {
+                    // Check if it's a video or image
+                    const extension = url.split('.').pop().toLowerCase();
+                    if (['mp4', 'webm', 'mov'].includes(extension)) {
+                        graphicHTML += `<video autoplay loop muted playsinline style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 11; filter: ${shadowFilter};"><source src="${url}" type="video/${extension}"></video>`;
+                    } else {
+                        graphicHTML += `<img src="${url}" alt="Campfire" style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 11; filter: ${shadowFilter};">`;
+                    }
+                }
+                
+                container.innerHTML = graphicHTML;
+                console.log('Campfire graphic HTML set, length:', graphicHTML.length);
+                console.log('Container innerHTML after set:', container.innerHTML.substring(0, 200));
+                
+                // Verify elements were created
+                const glow = document.getElementById('campfireGlow');
+                const emoji = document.getElementById('campfireEmoji');
+                console.log('Campfire glow element:', glow ? 'found' : 'NOT FOUND');
+                console.log('Campfire emoji element:', emoji ? 'found' : 'NOT FOUND');
+                
+                // Start animation if enabled
+                if (animatedGlow) {
+                    this.startGlowAnimation();
+                }
+            }
+
+            updateCircleTransform() {
+                // Hide debug circle (no longer needed)
+                const debugCircle = document.getElementById('debugCircle');
+                if (debugCircle) {
+                    debugCircle.style.display = 'none';
+                }
+                
+                // Calculate perspective transform for glow
+                // Cap glow angle at 77 degrees to prevent it from getting too thin
+                // User orbit can go to 90, but glow visual stops at 77
+                const glowAngle = Math.min(this.circleAngle, 77);
+                const angleRad = (glowAngle * Math.PI) / 180;
+                const scaleY = Math.cos(angleRad);
+                
+                // Update campfire glow to match angle perspective
+                const glow = document.getElementById('campfireGlow');
+                if (glow) {
+                    glow.style.transform = `translate(-50%, -50%) scaleY(${scaleY})`;
+                }
+                
+                // Reposition all users (perspective is applied in positionUserElement)
+                this.repositionUsers();
+            }
+
+            addUser(username, userData = {}) {
+                // Check if user already exists - if so, just update their data
+                const existingUser = this.users.find(u => u.username === username || (userData.userId && u.userId === userData.userId));
+                if (existingUser) {
+                    // Update existing user
+                    Object.assign(existingUser, userData);
+                    this.updateUserElement(existingUser);
+                    return;
+                }
+
+                // Check max users
+                if (this.users.length >= this.maxUsers) {
+                    // Remove oldest user
+                    const oldest = this.users.shift();
+                    this.removeUserElement(oldest.id);
+                }
+
+                const user = {
+                    id: `user-${Date.now()}-${Math.random()}`,
+                    username: username,
+                    angle: this.calculateNextAngle(),
+                    userId: userData.userId || null,
+                    ...userData
+                };
+
+                this.users.push(user);
+                this.createUserElement(user);
+                // Save to localStorage for persistence
+                this.savePersistedUsers();
+            }
+
+            moveUser(username, direction, speed = 15) {
+                // Try to find user by username or displayName
+                const user = this.users.find(u => {
+                    if (u.username === username || u.displayName === username) return true;
+                    if (u.userId && localStorage.getItem('activeViewer')) {
+                        try {
+                            const activeViewer = JSON.parse(localStorage.getItem('activeViewer'));
+                            return activeViewer && activeViewer.userId === u.userId;
+                        } catch (e) {
+                            return false;
+                        }
+                    }
+                    return false;
+                });
+                
+                if (!user) {
+                    console.log('User not found for movement:', username);
+                    return;
+                }
+                
+                // Check if user is "still" (movement disabled)
+                if (user.still) {
+                    return; // Don't allow movement
+                }
+
+                // Calculate if user is in front or behind fire based on perspective
+                // Users in front (bottom half) need reversed controls for intuitive movement
+                const angleRad = (user.angle * Math.PI) / 180;
+                const baseY = Math.sin(angleRad) * this.circleRadius;
+                const angleRadTransform = (this.circleAngle * Math.PI) / 180;
+                const perspectiveY = baseY * Math.cos(angleRadTransform);
+                
+                // Determine if user is in front of fire (positive Y = bottom half = front)
+                const isInFront = perspectiveY > 0;
+                
+                // Simple approach: flip direction when in front so RIGHT always moves right visually
+                // If in front: flip direction (so RIGHT visually moves right)
+                const effectiveDirection = isInFront ? -direction : direction;
+
+                // Move user around circle using effective direction
+                const angleStep = speed;
+                user.angle += effectiveDirection * angleStep;
+                
+                // Normalize angle to 0-360
+                if (user.angle < 0) user.angle += 360;
+                if (user.angle >= 360) user.angle -= 360;
+
+                // Flip sprite horizontally based on visual movement direction
+                // Calculate visual direction: what direction is the sprite actually moving on screen?
+                // When in front: effectiveDirection is flipped, so we need to check the actual screen movement
+                // We can determine this by checking if angle is increasing or decreasing
+                // For sprite flip: right movement = flip, left movement = normal
+                const angleChange = effectiveDirection * angleStep;
+                // If angle is increasing (positive change), sprite moves clockwise (right when behind, left when in front)
+                // If angle is decreasing (negative change), sprite moves counter-clockwise (left when behind, right when in front)
+                // For visual: when in front, counter-clockwise = right visually, clockwise = left visually
+                const visualMovingRight = isInFront ? (angleChange < 0) : (angleChange > 0);
+                this.flipSprite(user.id, visualMovingRight ? 1 : -1);
+
+                // Set moving animation
+                this.setUserMoving(user.id, true);
+                
+                // Reposition user
+                this.positionUserElement(user);
+            }
+            
+            flipSprite(userId, direction) {
+                // Flip sprite horizontally based on movement direction and default sprite direction
+                const element = document.getElementById(userId);
+                if (!element) return;
+                
+                const shape = element.querySelector('.shape');
+                if (!shape) return;
+                
+                // Get sprite default direction (defaults to 'left' if not set)
+                const defaultDirection = this.settings.spriteDefaultDirection || 'left';
+                
+                // Determine if sprite should be flipped
+                // direction: 1 = moving right, -1 = moving left
+                // If default is LEFT:
+                //   - Moving LEFT (-1) = normal (not flipped)
+                //   - Moving RIGHT (1) = flipped
+                // If default is RIGHT:
+                //   - Moving LEFT (-1) = flipped
+                //   - Moving RIGHT (1) = normal (not flipped)
+                
+                let shouldFlip = false;
+                if (defaultDirection === 'left') {
+                    // Sprite faces left by default, so flip when moving right
+                    shouldFlip = (direction === 1);
+                } else {
+                    // Sprite faces right by default, so flip when moving left
+                    shouldFlip = (direction === -1);
+                }
+                
+                // Update flipped class for CSS (for backwards compatibility)
+                if (shouldFlip) {
+                    shape.classList.add('flipped');
+                } else {
+                    shape.classList.remove('flipped');
+                }
+                
+                // Recalculate transform with perspective scaling (if positionUserElement was already called)
+                // Get the current transform to preserve perspective scaling
+                const currentTransform = shape.style.transform;
+                if (currentTransform && currentTransform.includes('scaleY')) {
+                    // Extract the scaleY value from current transform
+                    const scaleYMatch = currentTransform.match(/scaleY\(([^)]+)\)/);
+                    if (scaleYMatch) {
+                        const scaleYValue = scaleYMatch[1];
+                        const flipDirection = shouldFlip ? -1 : 1;
+                        // Reapply transform with updated flip direction
+                        const scaleXMatch = currentTransform.match(/scaleX\(([^)]+)\)/);
+                        if (scaleXMatch) {
+                            // Extract scaleX value (without flip direction)
+                            const scaleXValue = parseFloat(scaleXMatch[1]);
+                            const baseScale = Math.abs(scaleXValue);
+                            shape.style.transform = `scaleX(${flipDirection * baseScale}) scaleY(${scaleYValue})`;
+                        } else {
+                            // No scaleX yet, use scaleY value for both
+                            shape.style.transform = `scaleX(${flipDirection * parseFloat(scaleYValue)}) scaleY(${scaleYValue})`;
+                        }
+                    }
+                } else {
+                    // If no perspective scaling yet, just apply flip (perspective will be added in positionUserElement)
+                    // This is handled by the CSS class, so we don't need to do anything here
+                }
+            }
+
+            stopUserMovement(userId) {
+                // Stop movement animation when key is released
+                this.setUserMoving(userId, false);
+            }
+
+            showChatMessage(username, message) {
+                const user = this.users.find(u => u.username === username);
+                if (!user) return;
+                
+                // Check if user is muted
+                if (user.muted) {
+                    return; // Don't show chat message
+                }
+
+                const element = document.getElementById(user.id);
+                if (!element) return;
+
+                // Remove existing chat message if any
+                const existingMessage = element.querySelector('.chat-message');
+                if (existingMessage) {
+                    existingMessage.remove();
+                }
+
+                // Create new chat message
+                const chatMessage = document.createElement('div');
+                chatMessage.className = 'chat-message';
+                chatMessage.textContent = message;
+                element.appendChild(chatMessage);
+
+                // Trigger animation
+                setTimeout(() => {
+                    chatMessage.classList.add('show');
+                }, 10);
+
+                // Fade out after 3 seconds
+                setTimeout(() => {
+                    chatMessage.classList.remove('show');
+                    chatMessage.classList.add('fade-out');
+                    setTimeout(() => {
+                        chatMessage.remove();
+                    }, 300);
+                }, 3000);
+            }
+
+            calculateNextAngle() {
+                // Distribute users evenly around circle
+                if (this.users.length === 0) return 0;
+                
+                const spacing = 360 / (this.users.length + 1);
+                return spacing * this.users.length;
+            }
+
+            createUserElement(user) {
+                const container = document.getElementById('circleContainer');
+                const element = document.createElement('div');
+                element.className = 'user-shape'; // Don't add 'entering' class yet - wait for sprite to load
+                element.id = user.id;
+                
+                // Apply sprite size from settings
+                const spriteSize = this.settings.spriteSize || 40;
+                element.style.width = `${spriteSize}px`;
+                element.style.height = `${spriteSize}px`;
+                
+                const shape = document.createElement('div');
+                shape.className = 'shape';
+                
+                // Get viewer color preference (check userData first, then localStorage)
+                let viewerColor = user.color || this.getViewerColor(user.username, user.userId);
+                
+                // Get sprite for this user FIRST
+                const spriteInfo = this.getUserSprite(user);
+                
+                // For sprites: Hide element initially until sprite loads
+                // For fallback: Don't hide - show immediately
+                const hasSprite = spriteInfo && spriteInfo.data;
+                if (hasSprite) {
+                    // CRITICAL: Hide element completely - use visibility AND opacity AND ensure no background shows
+                    // Set these BEFORE appending to DOM to prevent any flash
+                    element.style.display = 'none';
+                    element.style.visibility = 'hidden';
+                    element.style.opacity = '0';
+                }
+                
+                // IMMEDIATELY clear all default styles to prevent circle from showing
+                // Do this BEFORE checking if sprite exists, so no circle shows during loading
+                shape.style.background = 'transparent';
+                shape.style.backgroundColor = 'transparent';
+                shape.style.backgroundImage = 'none';
+                shape.style.border = 'none';
+                shape.style.borderRadius = '0';
+                shape.style.boxShadow = 'none';
+                shape.style.outline = 'none';
+                shape.style.borderColor = 'transparent';
+                shape.style.borderWidth = '0';
+                shape.style.borderStyle = 'none';
+                // Force remove any CSS border/outline that might be showing
+                shape.style.setProperty('background', 'transparent', 'important');
+                shape.style.setProperty('border', 'none', 'important');
+                shape.style.setProperty('outline', 'none', 'important');
+                
+                if (spriteInfo && spriteInfo.data) {
+                    // Shape is already cleared above - sprite will be added next
+                    shape.style.background = 'transparent';
+                    shape.style.backgroundColor = 'transparent';
+                    shape.style.backgroundImage = 'none';
+                    shape.style.border = 'none';
+                    shape.style.borderRadius = '0';
+                    shape.style.boxShadow = 'none';
+                    shape.style.outline = 'none';
+                    // Force remove with important
+                    shape.style.setProperty('background', 'transparent', 'important');
+                    shape.style.setProperty('border', 'none', 'important');
+                    shape.style.setProperty('outline', 'none', 'important');
+                    
+                    // Use sprite - create img element for GIF animation control
+                    const spriteImg = document.createElement('img');
+                    spriteImg.style.width = '100%';
+                    spriteImg.style.height = '100%';
+                    spriteImg.style.objectFit = 'contain';
+                    spriteImg.style.objectPosition = 'center';
+                    spriteImg.style.display = 'block';
+                    spriteImg.style.boxShadow = 'none';
+                    spriteImg.style.border = 'none';
+                    spriteImg.style.borderRadius = '0';
+                    spriteImg.style.overflow = 'visible';
+                    
+                    // Check if it's an SVG (fallback circle) - make it pixelated/low-res
+                    if (spriteInfo.data && spriteInfo.data.includes('data:image/svg+xml')) {
+                        spriteImg.style.imageRendering = 'pixelated';
+                        spriteImg.style.imageRendering = '-moz-crisp-edges';
+                        spriteImg.style.imageRendering = 'crisp-edges';
+                    }
+                    
+                    // Apply colorization if needed (for circle and morph modes)
+                    if (spriteInfo.colorize && spriteInfo.color) {
+                        spriteImg.style.filter = `brightness(0) saturate(100%) ${this.colorToFilter(spriteInfo.color)}`;
+                    } else {
+                        spriteImg.style.filter = 'none';
+                    }
+                    
+                    // Set up sprite to start invisible - will be shown only after it loads
+                    spriteImg.style.opacity = '0';
+                    spriteImg.style.transition = 'opacity 0.3s ease';
+                    
+                    // Store reference to element on spriteImg so onload handler can access it
+                    spriteImg._element = element;
+                    spriteImg._shape = shape;
+                    spriteImg._spriteMode = this.settings.spriteMode || 'circle';
+                    
+                    // Function to show element after sprite is ready
+                    let showElementWithSprite = () => {
+                        // Fade in sprite when loaded
+                        spriteImg.style.opacity = '1';
+                        // Double-check background is transparent when sprite loads successfully
+                        shape.style.background = 'transparent';
+                        shape.style.backgroundColor = 'transparent';
+                        shape.style.backgroundImage = 'none';
+                        shape.style.border = 'none';
+                        shape.style.outline = 'none';
+                        // Force remove border/outline with important
+                        shape.style.setProperty('border', 'none', 'important');
+                        shape.style.setProperty('outline', 'none', 'important');
+                        
+                        // Only show element and start entering animation AFTER sprite loads
+                        const elem = spriteImg._element;
+                        if (elem) {
+                            // Show element now that sprite is loaded - restore visibility
+                            elem.style.display = '';
+                            elem.style.visibility = 'visible';
+                            elem.style.opacity = '0'; // Start invisible for smooth fade-in
+                            
+                            // Wait a frame to ensure sprite is rendered, then trigger entering animation
+                            requestAnimationFrame(() => {
+                                requestAnimationFrame(() => {
+                                    // Double RAF ensures sprite is fully rendered before animation
+                                    elem.classList.add('entering');
+                                    elem.style.opacity = '1';
+                                    
+                                    // Remove entering animation after it completes and add idle
+                                    setTimeout(() => {
+                                        if (elem && elem.classList.contains('entering')) {
+                                            elem.classList.remove('entering');
+                                            const spriteMode = spriteImg._spriteMode || 'circle';
+                                            if (spriteMode !== 'rpg-characters') {
+                                                elem.classList.add('idle');
+                                                const randomDelay = Math.random() * 3;
+                                                elem.style.animationDelay = `${randomDelay}s`;
+                                            }
+                                        }
+                                    }, 500);
+                                });
+                            });
+                        }
+                    };
+                    
+                    // Handle successful sprite load
+                    spriteImg.onload = showElementWithSprite;
+                    
+                    // Handle image load errors
+                    spriteImg.onerror = () => {
+                        console.error(`[createUserElement] Failed to load sprite for ${user.username}`);
+                        spriteImg.remove();
+                        shape._spriteImg = null;
+                        // Fall back to default shape ONLY if sprite actually failed to load
+                        // Make sure to clear any sprite-related styles first
+                        shape.style.backgroundImage = 'none';
+                        shape.style.background = `linear-gradient(135deg, ${viewerColor || '#667eea'} 0%, ${this.adjustColor(viewerColor || '#667eea', -20)} 100%)`;
+                        shape.style.border = '2px solid rgba(255, 255, 255, 0.8)';
+                        shape.style.borderRadius = '50%';
+                        shape.style.filter = 'none';
+                        shape.style.outline = 'none'; // Still remove outline
+                        
+                        // Show element with fallback shape - sprite failed, show default circle
+                        const elem = spriteImg._element;
+                        if (elem && elem.style.display === 'none') {
+                            // Only show if still hidden (prevents double-show)
+                            elem.style.display = '';
+                            elem.style.visibility = 'visible';
+                            elem.style.opacity = '1';
+                            elem.classList.add('entering');
+                            setTimeout(() => {
+                                if (elem && elem.classList.contains('entering')) {
+                                    elem.classList.remove('entering');
+                                    const spriteMode = spriteImg._spriteMode || 'circle';
+                                    if (spriteMode !== 'rpg-characters') {
+                                        elem.classList.add('idle');
+                                        const randomDelay = Math.random() * 3;
+                                        elem.style.animationDelay = `${randomDelay}s`;
+                                    }
+                                }
+                            }, 500);
+                        }
+                    };
+                    
+                    // Store reference to img and add to DOM immediately
+                    // This allows the entering animation to play while sprite loads
+                    shape._spriteImg = spriteImg;
+                    shape.appendChild(spriteImg);
+                    
+                    // Start loading sprite immediately (animation will play while loading)
+                    // Randomize GIF start frame with a very short delay (0-200ms) for desynchronization
+                    // This ensures each sprite starts at a different point in the animation
+                    // But keeps delay short so animation is visible
+                    const randomDelay = Math.random() * 200; // 0-200ms random delay (very short)
+                    const randomSeed = Math.floor(Math.random() * 1000000); // Random cache-busting seed
+                    
+                    // Load sprite immediately (or with tiny delay for GIF desync)
+                    const loadSprite = () => {
+                        // Check if it's a data URL - data URLs cannot have query parameters
+                        if (spriteInfo.data.startsWith('data:')) {
+                            // For data URLs, convert to blob URL to allow cache-busting and randomization
+                            // This also helps desynchronize GIF animations
+                            fetch(spriteInfo.data)
+                                .then(response => response.blob())
+                                .then(blob => {
+                                    const blobUrl = URL.createObjectURL(blob);
+                                    spriteImg.src = blobUrl;
+                                    // Store blob URL for cleanup later
+                                    spriteImg._blobUrl = blobUrl;
+                                    // Check if image is already loaded (cached)
+                                    checkImageLoaded();
+                                })
+                                .catch(error => {
+                                    console.error(`[createUserElement] Failed to convert data URL to blob for ${user.username}:`, error);
+                                    // Fallback to using data URL directly
+                                    spriteImg.src = spriteInfo.data;
+                                    checkImageLoaded();
+                                });
+                        } else {
+                            // For regular URLs, add cache-busting parameters
+                            const separator = spriteInfo.data.includes('?') ? '&' : '?';
+                            spriteImg.src = spriteInfo.data + separator + 't=' + randomSeed + '&r=' + Date.now();
+                            // Check if image is already loaded (cached) - must check AFTER setting src
+                            checkImageLoaded();
+                        }
+                    };
+                    
+                    // Check if sprite is already loaded (cached images)
+                    const checkImageLoaded = () => {
+                        // Use setTimeout to allow browser to set complete/naturalWidth
+                        setTimeout(() => {
+                            if (spriteImg.complete && spriteImg.naturalWidth > 0 && spriteImg.naturalHeight > 0) {
+                                // Image is already loaded (cached), show immediately
+                                showElementWithSprite();
+                            }
+                        }, 10); // Small delay to ensure browser has set the properties
+                    };
+                    
+                    // Fallback timeout - if sprite doesn't load within 3 seconds, show with fallback or error
+                    const loadTimeout = setTimeout(() => {
+                        const elem = spriteImg._element;
+                        if (elem && elem.style.display === 'none') {
+                            // Sprite didn't load in time - show error or fallback
+                            console.warn(`[createUserElement] Sprite load timeout for ${user.username}, showing element anyway`);
+                            // Try to show element even if sprite failed
+                            if (spriteImg.complete) {
+                                // Image exists but might have errors - try showing anyway
+                                showElementWithSprite();
+                            } else {
+                                // Sprite never loaded - trigger error handler
+                                spriteImg.onerror();
+                            }
+                        }
+                    }, 3000); // 3 second timeout
+                    
+                    // Clear timeout when sprite loads successfully
+                    const originalShowElement = showElementWithSprite;
+                    showElementWithSprite = () => {
+                        clearTimeout(loadTimeout);
+                        originalShowElement();
+                    };
+                    
+                    if (randomDelay < 50) {
+                        // Load immediately if delay is very short
+                        loadSprite();
+                    } else {
+                        // Otherwise use the delay
+                        setTimeout(loadSprite, randomDelay);
+                    }
+                    
+                    // Clear background-image if it exists (already cleared above, but ensure it stays clear)
+                    shape.style.backgroundImage = 'none';
+                    shape.style.backgroundSize = 'none';
+                    shape.style.backgroundPosition = 'none';
+                    shape.style.backgroundRepeat = 'none';
+                    shape.style.boxShadow = 'none';
+                    shape.style.overflow = 'visible';
+                    shape.style.outline = 'none'; // Ensure no outline
+                    // Force remove with important to override any CSS
+                    shape.style.setProperty('outline', 'none', 'important');
+                    shape.style.setProperty('border', 'none', 'important');
+                    shape.style.setProperty('border-color', 'transparent', 'important');
+                }
+                
+                // Fallback: no sprite or invalid sprite data
+                // ONLY apply fallback styles if there's NO sprite
+                if (!hasSprite) {
+                    // Show default colored circle (only if no sprite was found)
+                    const shapeStyle = this.settings.shapeStyle || 'circle';
+                    if (shapeStyle === 'square') {
+                        shape.style.borderRadius = '4px';
+                    } else {
+                        shape.style.borderRadius = '50%';
+                    }
+                    // Apply color to default shape (only if no sprite was found)
+                    if (viewerColor) {
+                        shape.style.backgroundImage = 'none';
+                        shape.style.background = `linear-gradient(135deg, ${viewerColor} 0%, ${this.adjustColor(viewerColor, -20)} 100%)`;
+                        shape.style.setProperty('border', '2px solid rgba(255, 255, 255, 0.8)', 'important');
+                        // Only show border if we're actually using the fallback circle
+                        shape.style.outline = 'none'; // Still remove outline
+                    }
+                    shape.style.filter = 'none';
+                }
+                
+                const usernameLabel = document.createElement('div');
+                usernameLabel.className = 'username';
+                usernameLabel.textContent = user.username;
+                
+                // Adjust username position and color based on sprite mode
+                const spriteMode = this.settings.spriteMode || 'circle';
+                if (spriteMode === 'rpg-characters') {
+                    usernameLabel.style.top = '35px'; // Much lower position for RPG sprites (below sprite)
+                    // RPG mode: use Twitch color with black stroke
+                    const twitchColor = this.getTwitchColor(user.username, user.userId);
+                    usernameLabel.style.color = twitchColor;
+                } else if (spriteMode === 'pixel-morphs') {
+                    usernameLabel.style.top = '-25px'; // Default position for morph sprites
+                    // MORPH mode: use Twitch color with black stroke
+                    const twitchColor = this.getTwitchColor(user.username, user.userId);
+                    usernameLabel.style.color = twitchColor;
+                } else {
+                    // CIRCLE mode: names stay WHITE with black outline (regardless of sprite color)
+                    usernameLabel.style.top = '-25px'; // Default position for circle sprites
+                    usernameLabel.style.color = '#ffffff';
+                }
+                
+                // Check if username overlaps with sprite and make transparent if needed
+                this.checkUsernameOverlap(usernameLabel, user);
+                
+                element.appendChild(shape);
+                element.appendChild(usernameLabel);
+                
+                // Hide element initially - will be shown after sprite loads (if sprite exists)
+                // For fallback shapes (no sprite), show immediately
+                // hasSprite is already declared earlier in this function
+                if (hasSprite) {
+                    // Completely hide element until sprite loads - use display: none BEFORE appending
+                    // This prevents any flash of empty square
+                    element.style.display = 'none';
+                    // Also ensure shape has no background that could show through
+                    shape.style.background = 'transparent';
+                    shape.style.backgroundColor = 'transparent';
+                    shape.style.border = 'none';
+                } else {
+                    // No sprite - show element immediately with entering animation
+                    element.style.opacity = '1';
+                    element.classList.add('entering');
+                    // Remove entering animation class after animation and add idle (gentle float)
+                    setTimeout(() => {
+                        element.classList.remove('entering');
+                        const spriteMode = this.settings.spriteMode || 'circle';
+                        if (spriteMode !== 'rpg-characters') {
+                            element.classList.add('idle'); // This applies the gentle float animation
+                            // Add random animation delay so sprites don't float in sync
+                            const randomDelay = Math.random() * 3; // 0-3 seconds random delay
+                            element.style.animationDelay = `${randomDelay}s`;
+                        }
+                    }, 500);
+                }
+                
+                // Append element to DOM
+                container.appendChild(element);
+                this.positionUserElement(user);
+                
+                // For sprites: Element is hidden, will be shown in spriteImg.onload
+                // For fallback (no sprite): Show immediately with entering animation
+                if (!hasSprite) {
+                    // No sprite - show element immediately with entering animation
+                    element.style.display = '';
+                    element.style.visibility = 'visible';
+                    element.style.opacity = '1';
+                    element.classList.add('entering');
+                    // Remove entering animation class after animation and add idle (gentle float)
+                    setTimeout(() => {
+                        element.classList.remove('entering');
+                        const spriteMode = this.settings.spriteMode || 'circle';
+                        if (spriteMode !== 'rpg-characters') {
+                            element.classList.add('idle'); // This applies the gentle float animation
+                            // Add random animation delay so sprites don't float in sync
+                            const randomDelay = Math.random() * 3; // 0-3 seconds random delay
+                            element.style.animationDelay = `${randomDelay}s`;
+                        }
+                    }, 500);
+                }
+                // If hasSprite: Element stays hidden until spriteImg.onload shows it
+            }
+
+            updateUserElement(user) {
+                // Update existing user element with new data
+                const element = document.getElementById(user.id);
+                if (!element) return;
+
+                // Get updated color (check user.color first, then localStorage)
+                let viewerColor = user.color || this.getViewerColor(user.username, user.userId);
+                const shape = element.querySelector('.shape');
+                const usernameLabel = element.querySelector('.username');
+
+                if (shape) {
+                    // Get sprite for this user
+                    const spriteInfo = this.getUserSprite(user);
+                    
+                    if (spriteInfo && spriteInfo.data) {
+                        // CRITICAL: Hide element completely BEFORE removing old sprite and loading new one
+                        // This prevents empty squares from being visible during sprite swap
+                        element.style.display = 'none';
+                        element.style.visibility = 'hidden';
+                        element.style.opacity = '0';
+                        
+                        // Remove default background and border from shape when using sprites
+                        // IMPORTANT: Clear ALL background properties to prevent circle from showing
+                        shape.style.background = 'transparent';
+                        shape.style.backgroundColor = 'transparent';
+                        shape.style.backgroundImage = 'none';
+                        shape.style.border = 'none';
+                        shape.style.borderRadius = '0';
+                        shape.style.boxShadow = 'none';
+                        shape.style.outline = 'none';
+                        // Force remove with important
+                        shape.style.setProperty('background', 'transparent', 'important');
+                        shape.style.setProperty('border', 'none', 'important');
+                        shape.style.setProperty('outline', 'none', 'important');
+                        
+                        // Always remove existing img to ensure clean state
+                        const existingImg = shape.querySelector('img');
+                        if (existingImg) {
+                            // Clean up blob URL if it exists
+                            if (existingImg._blobUrl) {
+                                URL.revokeObjectURL(existingImg._blobUrl);
+                            }
+                            existingImg.remove();
+                            shape._spriteImg = null;
+                        }
+                        
+                        // Create new img element
+                        const spriteImg = document.createElement('img');
+                        spriteImg.style.width = '100%';
+                        spriteImg.style.height = '100%';
+                        spriteImg.style.objectFit = 'contain';
+                        spriteImg.style.objectPosition = 'center';
+                        spriteImg.style.display = 'block';
+                        spriteImg.style.boxShadow = 'none';
+                        spriteImg.style.border = 'none';
+                        spriteImg.style.borderRadius = '0';
+                        spriteImg.style.overflow = 'visible';
+                        
+                        // Check if it's an SVG (fallback circle) - make it pixelated/low-res
+                        if (spriteInfo.data && spriteInfo.data.includes('data:image/svg+xml')) {
+                            spriteImg.style.imageRendering = 'pixelated';
+                            spriteImg.style.imageRendering = '-moz-crisp-edges';
+                            spriteImg.style.imageRendering = 'crisp-edges';
+                        }
+                        
+                        // Apply colorization if needed (for circle and morph modes)
+                        if (spriteInfo.colorize && spriteInfo.color) {
+                            spriteImg.style.filter = `brightness(0) saturate(100%) ${this.colorToFilter(spriteInfo.color)}`;
+                        } else {
+                            spriteImg.style.filter = 'none';
+                        }
+                        
+                        // Set up sprite to start invisible - will be shown only after it loads
+                        spriteImg.style.opacity = '0';
+                        spriteImg.style.transition = 'opacity 0.3s ease';
+                        
+                        // Store reference to element on spriteImg so onload handler can access it
+                        spriteImg._element = element;
+                        spriteImg._shape = shape;
+                        spriteImg._spriteMode = this.settings.spriteMode || 'circle';
+                        
+                        // Function to show element after sprite is ready
+                        let showElementWithSprite = () => {
+                            // Fade in sprite when loaded
+                            spriteImg.style.opacity = '1';
+                            // Double-check background is transparent when sprite loads successfully
+                            shape.style.background = 'transparent';
+                            shape.style.backgroundColor = 'transparent';
+                            shape.style.backgroundImage = 'none';
+                            shape.style.border = 'none';
+                            shape.style.outline = 'none';
+                            // Force remove border/outline with important
+                            shape.style.setProperty('border', 'none', 'important');
+                            shape.style.setProperty('outline', 'none', 'important');
+                            
+                            // Show element now that sprite is loaded - restore visibility with animation
+                            if (element) {
+                                // Show element now that sprite is loaded
+                                element.style.display = '';
+                                element.style.visibility = 'visible';
+                                element.style.opacity = '0'; // Start invisible for smooth fade-in
+                                
+                                // Wait a frame to ensure sprite is rendered, then trigger entering animation
+                                requestAnimationFrame(() => {
+                                    requestAnimationFrame(() => {
+                                        // Double RAF ensures sprite is fully rendered before animation
+                                        element.classList.add('entering');
+                                        element.style.opacity = '1';
+                                        
+                                        // Remove entering animation after it completes and add idle
+                                        setTimeout(() => {
+                                            if (element && element.classList.contains('entering')) {
+                                                element.classList.remove('entering');
+                                                const spriteMode = spriteImg._spriteMode || 'circle';
+                                                if (spriteMode !== 'rpg-characters') {
+                                                    element.classList.add('idle');
+                                                    const randomDelay = Math.random() * 3;
+                                                    element.style.animationDelay = `${randomDelay}s`;
+                                                }
+                                            }
+                                        }, 500);
+                                    });
+                                });
+                            }
+                        };
+                        
+                        // Handle image load errors
+                        spriteImg.onerror = () => {
+                            console.error(`[updateUserElement] Failed to load sprite for ${user.username}`);
+                            spriteImg.remove();
+                            shape._spriteImg = null;
+                            // Fall back to default shape ONLY if sprite actually failed to load
+                            // Make sure to clear any sprite-related styles first
+                            shape.style.backgroundImage = 'none';
+                            shape.style.background = `linear-gradient(135deg, ${viewerColor || '#667eea'} 0%, ${this.adjustColor(viewerColor || '#667eea', -20)} 100%)`;
+                            shape.style.border = '2px solid rgba(255, 255, 255, 0.8)';
+                            shape.style.borderRadius = '50%';
+                            shape.style.filter = 'none';
+                            
+                            // Show element with fallback shape - sprite failed, show default circle
+                            if (element && element.style.display === 'none') {
+                                // Only show if still hidden (prevents double-show)
+                                element.style.display = '';
+                                element.style.visibility = 'visible';
+                                element.style.opacity = '0'; // Start invisible for smooth fade-in
+                                element.classList.add('entering');
+                                
+                                requestAnimationFrame(() => {
+                                    requestAnimationFrame(() => {
+                                        element.style.opacity = '1';
+                                        setTimeout(() => {
+                                            if (element && element.classList.contains('entering')) {
+                                                element.classList.remove('entering');
+                                                const spriteMode = spriteImg._spriteMode || 'circle';
+                                                if (spriteMode !== 'rpg-characters') {
+                                                    element.classList.add('idle');
+                                                    const randomDelay = Math.random() * 3;
+                                                    element.style.animationDelay = `${randomDelay}s`;
+                                                }
+                                            }
+                                        }, 500);
+                                    });
+                                });
+                            }
+                        };
+                        
+                        // Handle successful sprite load - show element with animation
+                        spriteImg.onload = showElementWithSprite;
+                        
+                        // Check if image is already loaded (cached images)
+                        const checkImageLoaded = () => {
+                            // Use setTimeout to allow browser to set complete/naturalWidth
+                            setTimeout(() => {
+                                if (spriteImg.complete && spriteImg.naturalWidth > 0 && spriteImg.naturalHeight > 0) {
+                                    // Image is already loaded (cached), show immediately
+                                    showElementWithSprite();
+                                }
+                            }, 10); // Small delay to ensure browser has set the properties
+                        };
+                        
+                        shape._spriteImg = spriteImg;
+                        shape.appendChild(spriteImg);
+                        
+                        // Randomize GIF start frame even on updates
+                        // Use a shorter delay for updates (0-3 seconds) but still randomize
+                        const randomDelay = Math.random() * 3000; // 0-3 seconds random delay
+                        const randomSeed = Math.floor(Math.random() * 1000000); // Random cache-busting seed
+                        
+                        // Load sprite immediately (or with delay for GIF desync)
+                        const loadSprite = () => {
+                            // Check if it's a data URL - data URLs cannot have query parameters
+                            if (spriteInfo.data.startsWith('data:')) {
+                                // For data URLs, convert to blob URL to allow cache-busting and randomization
+                                // This also helps desynchronize GIF animations
+                                fetch(spriteInfo.data)
+                                    .then(response => response.blob())
+                                    .then(blob => {
+                                        const blobUrl = URL.createObjectURL(blob);
+                                        spriteImg.src = blobUrl;
+                                        // Store blob URL for cleanup later
+                                        spriteImg._blobUrl = blobUrl;
+                                        // Check if image is already loaded (cached)
+                                        checkImageLoaded();
+                                    })
+                                    .catch(error => {
+                                        console.error(`[updateUserElement] Failed to convert data URL to blob for ${user.username}:`, error);
+                                        // Fallback to using data URL directly
+                                        spriteImg.src = spriteInfo.data;
+                                        checkImageLoaded();
+                                    });
+                            } else {
+                                // For regular URLs, add cache-busting parameters
+                                const separator = spriteInfo.data.includes('?') ? '&' : '?';
+                                spriteImg.src = spriteInfo.data + separator + 't=' + randomSeed + '&r=' + Date.now();
+                                // Check if image is already loaded (cached) - must check AFTER setting src
+                                checkImageLoaded();
+                            }
+                        };
+                        
+                        // Fallback timeout - if sprite doesn't load within 3 seconds, show with fallback or error
+                        const loadTimeout = setTimeout(() => {
+                            if (element && element.style.display === 'none') {
+                                // Sprite didn't load in time - show error or fallback
+                                console.warn(`[updateUserElement] Sprite load timeout for ${user.username}, showing element anyway`);
+                                // Try to show element even if sprite failed
+                                if (spriteImg.complete) {
+                                    // Image exists but might have errors - try showing anyway
+                                    showElementWithSprite();
+                                } else {
+                                    // Sprite never loaded - trigger error handler
+                                    spriteImg.onerror();
+                                }
+                            }
+                        }, 3000); // 3 second timeout
+                        
+                        // Clear timeout when sprite loads successfully
+                        const originalShowElement = showElementWithSprite;
+                        showElementWithSprite = () => {
+                            clearTimeout(loadTimeout);
+                            originalShowElement();
+                        };
+                        
+                        if (randomDelay < 50) {
+                            // Load immediately if delay is very short
+                            loadSprite();
+                        } else {
+                            // Otherwise use the delay
+                            setTimeout(loadSprite, randomDelay);
+                        }
+                        
+                        // Clear background-image if it exists (from old code)
+                        shape.style.backgroundImage = 'none';
+                        shape.style.backgroundSize = 'none';
+                        shape.style.backgroundPosition = 'none';
+                        shape.style.backgroundRepeat = 'none';
+                        shape.style.background = 'transparent';
+                        shape.style.backgroundColor = 'transparent';
+                        shape.style.boxShadow = 'none';
+                        shape.style.border = 'none';
+                        shape.style.borderRadius = '0';
+                        shape.style.overflow = 'visible';
+                    } else {
+                        // Fallback: no sprite or invalid sprite data
+                        // Remove any img element if present
+                        const existingImgFallback = shape.querySelector('img');
+                        if (existingImgFallback) {
+                            existingImgFallback.remove();
+                            shape._spriteImg = null;
+                        }
+                        // Show default colored circle
+                        if (viewerColor) {
+                            shape.style.backgroundImage = 'none';
+                            shape.style.background = `linear-gradient(135deg, ${viewerColor} 0%, ${this.adjustColor(viewerColor, -20)} 100%)`;
+                            shape.style.border = '2px solid rgba(255, 255, 255, 0.8)';
+                            shape.style.borderRadius = '50%';
+                            shape.style.filter = 'none';
+                        }
+                    }
+                }
+
+                if (usernameLabel) {
+                    // Adjust username position and color based on sprite mode
+                    const spriteMode = this.settings.spriteMode || 'circle';
+                    if (spriteMode === 'rpg-characters') {
+                        usernameLabel.style.top = '35px'; // Much lower position for RPG sprites (below sprite)
+                        // RPG mode: use Twitch color with black stroke
+                        const twitchColor = this.getTwitchColor(user.username, user.userId);
+                        usernameLabel.style.color = twitchColor;
+                    } else if (spriteMode === 'pixel-morphs') {
+                        usernameLabel.style.top = '-25px'; // Default position for morph sprites
+                        // MORPH mode: use Twitch color with black stroke
+                        const twitchColor = this.getTwitchColor(user.username, user.userId);
+                        usernameLabel.style.color = twitchColor;
+                    } else {
+                        // CIRCLE mode: names stay WHITE with black outline (regardless of sprite color)
+                        usernameLabel.style.top = '-25px'; // Default position for circle sprites
+                        usernameLabel.style.color = '#ffffff';
+                    }
+                    // Username z-index and opacity will be updated in positionUserElement
+                    // Recheck overlap after color update
+                    this.checkUsernameOverlap(usernameLabel, user);
+                }
+
+                // Reposition if angle changed
+                this.positionUserElement(user);
+            }
+
+            getViewerColor(username, userId) {
+                // Try to get viewer color from localStorage
+                let viewerColors = {};
+                try {
+                    const saved = localStorage.getItem('allViewerColors');
+                    if (saved) viewerColors = JSON.parse(saved);
+                } catch (e) {}
+
+                // Check by userId first, then username
+                if (userId && viewerColors[userId]) {
+                    return viewerColors[userId].color;
+                }
+
+                // Check by username
+                for (const key in viewerColors) {
+                    if (viewerColors[key].username === username || viewerColors[key].displayName === username) {
+                        return viewerColors[key].color;
+                    }
+                }
+
+                // Return null to use default (Twitch username color would be applied by chat API)
+                return null;
+            }
+            
+            getTwitchColor(username, userId) {
+                // Get Twitch color for username display (not sprite colorization)
+                // First check if user has a saved color preference
+                let viewerColors = {};
+                try {
+                    const saved = localStorage.getItem('allViewerColors');
+                    if (saved) viewerColors = JSON.parse(saved);
+                } catch (e) {}
+
+                // Check by userId first, then username
+                if (userId && viewerColors[userId]) {
+                    return viewerColors[userId].color;
+                }
+
+                // Check by username
+                for (const key in viewerColors) {
+                    if (viewerColors[key].username === username || viewerColors[key].displayName === username) {
+                        return viewerColors[key].color;
+                    }
+                }
+
+                // Default to Twitch purple if no color found
+                return '#9146ff';
+            }
+
+            colorToFilter(color) {
+                // Convert hex color to CSS filter for coloring black sprites
+                const hex = color.replace('#', '');
+                const r = parseInt(hex.substr(0, 2), 16);
+                const g = parseInt(hex.substr(2, 2), 16);
+                const b = parseInt(hex.substr(4, 2), 16);
+                
+                // Create filter to colorize black sprite
+                return `invert(${r / 255}) sepia(1) saturate(5) hue-rotate(${this.rgbToHue(r, g, b)}deg)`;
+            }
+
+            rgbToHue(r, g, b) {
+                r /= 255;
+                g /= 255;
+                b /= 255;
+                const max = Math.max(r, g, b);
+                const min = Math.min(r, g, b);
+                let h = 0;
+                
+                if (max === min) {
+                    h = 0;
+                } else if (max === r) {
+                    h = ((g - b) / (max - min)) % 6;
+                } else if (max === g) {
+                    h = (b - r) / (max - min) + 2;
+                } else {
+                    h = (r - g) / (max - min) + 4;
+                }
+                
+                h = Math.round(h * 60);
+                if (h < 0) h += 360;
+                return h;
+            }
+
+            adjustColor(color, amount) {
+                // Simple color adjustment for gradient
+                const hex = color.replace('#', '');
+                const r = Math.max(0, Math.min(255, parseInt(hex.substr(0, 2), 16) + amount));
+                const g = Math.max(0, Math.min(255, parseInt(hex.substr(2, 2), 16) + amount));
+                const b = Math.max(0, Math.min(255, parseInt(hex.substr(4, 2), 16) + amount));
+                return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+            }
+
+            positionUserElement(user) {
+                const element = document.getElementById(user.id);
+                if (!element) return;
+                
+                const angleRad = (user.angle * Math.PI) / 180;
+                
+                // Calculate base circle position (always perfect circle)
+                const baseX = Math.cos(angleRad) * this.circleRadius;
+                const baseY = Math.sin(angleRad) * this.circleRadius;
+                
+                // Apply perspective transform ONLY to Y coordinate (not the element itself)
+                // angle 0 = no perspective (top-down view)
+                // angle 90 = full perspective (side view - Y becomes 0)
+                const angleRadTransform = (this.circleAngle * Math.PI) / 180;
+                const perspectiveY = baseY * Math.cos(angleRadTransform);
+                
+                // Center in the campfire area (300x300 container)
+                const centerX = 150; // Half of campfire-area width
+                const centerY = 150; // Half of campfire-area height
+                
+                // Get sprite size for proper centering
+                const spriteSize = this.settings.spriteSize || 40;
+                const spriteOffset = spriteSize / 2; // Half of sprite size for centering
+                
+                // Adjust vertical position based on view angle for better perspective
+                // At 90 degrees (side view), raise sprites up so their feet aren't under the fire
+                // Interpolate: 0px at 0°, -7px at 45°, -15px at 90°
+                let verticalAdjustment = 0;
+                if (this.circleAngle <= 45) {
+                    // Linear from 0° to 45°: 0px to -7px
+                    verticalAdjustment = -(this.circleAngle / 45) * 7;
+                } else {
+                    // Linear from 45° to 90°: -7px to -15px
+                    const progress = (this.circleAngle - 45) / 45; // 0 at 45°, 1 at 90°
+                    verticalAdjustment = -7 - (progress * 8); // Start at -7, add -8 more
+                }
+                
+                // Position element - X stays the same, only Y gets perspective
+                element.style.left = `${centerX + baseX - spriteOffset}px`;
+                element.style.top = `${centerY + perspectiveY - spriteOffset + verticalAdjustment}px`;
+                
+                // Set z-index based on Y position around the circle
+                // Top of circle (baseY = -circleRadius) = furthest back = lowest z-index (5)
+                // Bottom of circle (baseY = +circleRadius) = closest/front = highest z-index (24)
+                // Z-index increases continuously as you go from top to bottom around the circle
+                // This ensures correct layering: sprites closer to bottom are always in front
+                const minZIndex = 5; // Furthest back (top of circle)
+                const maxZIndex = 24; // Closest/front (bottom of circle)
+                const zIndexRange = maxZIndex - minZIndex;
+                
+                // Normalize baseY from -circleRadius (top) to +circleRadius (bottom) to 0-1
+                // Then map to z-index range
+                const normalizedY = (baseY + this.circleRadius) / (2 * this.circleRadius); // 0 to 1
+                const zIndex = minZIndex + Math.floor(normalizedY * zIndexRange);
+                element.style.zIndex = zIndex;
+                
+                // Also set class for campfire layering (sprites behind campfire need lower z-index than fire)
+                // Campfire is at z-index 10-11, so sprites with z-index < 10 are behind it
+                if (zIndex < 10) {
+                    element.classList.remove('front-layer');
+                    element.classList.add('back-layer');
+                } else {
+                    element.classList.remove('back-layer');
+                    element.classList.add('front-layer');
+                }
+                
+                // Apply perspective-based scaling to sprite
+                // When perspective is top-down (scaleY = 1), no scaling difference
+                // When perspective is side-view (scaleY = 0), maximum scaling difference
+                // Top sprites (baseY < 0) are smaller, bottom sprites (baseY > 0) are larger
+                const scaleY = Math.cos(angleRadTransform);
+                const perspectiveFactor = 1 - scaleY; // 0 when top-down, 1 when side-view
+                const scaleAmount = 0.17; // 17% size difference at maximum perspective
+                
+                // baseY ranges from -1 (top) to +1 (bottom)
+                // Calculate scale multiplier: 1 + (perspectiveFactor * baseY * scaleAmount)
+                // Top (baseY = -1): 1 - (perspectiveFactor * scaleAmount) = smaller
+                // Bottom (baseY = +1): 1 + (perspectiveFactor * scaleAmount) = larger
+                // Sides (baseY = 0): 1 = normal size
+                const normalizedBaseY = baseY / this.circleRadius; // Normalize to -1 to +1
+                const scaleMultiplier = 1 + (perspectiveFactor * normalizedBaseY * scaleAmount);
+                
+                // Apply scaling to the shape element, combining with flip if needed
+                const shape = element.querySelector('.shape');
+                if (shape) {
+                    // Check if sprite is flipped (for movement direction)
+                    const isFlipped = shape.classList.contains('flipped');
+                    const flipDirection = isFlipped ? -1 : 1;
+                    
+                    // Combine perspective scale with flip: scaleX handles flip, scaleY handles perspective
+                    shape.style.transform = `scaleX(${flipDirection * scaleMultiplier}) scaleY(${scaleMultiplier})`;
+                }
+                
+                // Update username z-index and opacity to match sprite layering
+                const usernameLabel = element.querySelector('.username');
+                if (usernameLabel) {
+                    // Username z-index should match sprite z-index (so they layer together)
+                    usernameLabel.style.zIndex = zIndex.toString();
+                    
+                    // Usernames get darker as they go backward (top of circle)
+                    // Top of circle (baseY = -circleRadius) = darkest (0.5 opacity)
+                    // Bottom of circle (baseY = +circleRadius) = brightest (1.0 opacity)
+                    const opacityRange = 0.5; // 0.5 to 1.0
+                    const minOpacity = 0.5;
+                    const usernameOpacity = minOpacity + (normalizedY * opacityRange);
+                    usernameLabel.style.opacity = usernameOpacity.toString();
+                    
+                    this.checkUsernameOverlap(usernameLabel, user);
+                }
+            }
+            
+            checkUsernameOverlap(usernameLabel, user) {
+                // Check if username is too close to sprite center (overlapping)
+                // Username is positioned at top: -25px, so if user is at top of circle,
+                // username might overlap with sprite
+                const element = document.getElementById(user.id);
+                if (!element) return;
+                
+                // Get the angle - if user is near top (angle 270 or -90 degrees), username overlaps
+                const angle = user.angle;
+                // Check if angle is in the top quadrant (270° ± 45° or -90° ± 45°)
+                const normalizedAngle = ((angle % 360) + 360) % 360;
+                const isTopQuadrant = (normalizedAngle >= 225 && normalizedAngle <= 315);
+                
+                // Also check vertical position - if user is high on screen, username might overlap
+                const rect = element.getBoundingClientRect();
+                const shapeRect = element.querySelector('.shape')?.getBoundingClientRect();
+                
+                if (shapeRect && usernameLabel) {
+                    const usernameRect = usernameLabel.getBoundingClientRect();
+                    // Check if username bottom overlaps with sprite top
+                    const overlap = usernameRect.bottom > shapeRect.top;
+                    
+                    if (isTopQuadrant || overlap) {
+                        // Make username more transparent when overlapping
+                        usernameLabel.style.opacity = '0.7';
+                    } else {
+                        usernameLabel.style.opacity = '1';
+                    }
+                }
+            }
+
+            repositionUsers() {
+                this.users.forEach(user => {
+                    this.positionUserElement(user);
+                });
+            }
+
+            removeUserElement(userId) {
+                const element = document.getElementById(userId);
+                if (element) {
+                    // Clean up blob URLs to prevent memory leaks
+                    const spriteImg = element.querySelector('img');
+                    if (spriteImg && spriteImg._blobUrl) {
+                        URL.revokeObjectURL(spriteImg._blobUrl);
+                    }
+                    
+                    // Remove any existing animation classes
+                    element.classList.remove('entering', 'idle', 'moving');
+                    
+                    // Stop any transitions that might interfere with exit animation
+                    element.style.transition = 'none';
+                    
+                    // Calculate lift distance based on sprite size for better visual effect
+                    // Larger sprites need more lift distance, smaller sprites need less
+                    const spriteSize = this.settings.spriteSize || 40;
+                    // Base lift is 40px, scale it proportionally to sprite size
+                    // For 40px sprite: 40px lift, for 80px sprite: 80px lift, etc.
+                    const liftDistance = Math.max(30, spriteSize); // Minimum 30px, scales with size
+                    
+                    // Set CSS variable for the animation to use
+                    element.style.setProperty('--lift-distance', `-${liftDistance}px`);
+                    
+                    // Clear any inline transforms that might interfere
+                    // The shape inside might have transforms, but the element itself should use the animation
+                    const shape = element.querySelector('.shape');
+                    if (shape) {
+                        // Temporarily clear shape transform so element animation works
+                        shape.style.transform = '';
+                    }
+                    
+                    // Add leaving animation - gentle lift up and fade out
+                    // This works consistently for all sprite types (RPG, morphs, circles)
+                    element.classList.add('leaving');
+                    
+                    // Remove element after animation completes
+                    setTimeout(() => {
+                        if (element && element.parentNode) {
+                            element.remove();
+                        }
+                    }, 600); // Match animation duration
+                }
+            }
+
+            removeUser(username) {
+                const index = this.users.findIndex(u => u.username === username || (u.userId && u.userId === username));
+                if (index !== -1) {
+                    const user = this.users[index];
+                    this.users.splice(index, 1);
+                    this.removeUserElement(user.id);
+                    // Reposition remaining users
+                    this.repositionUsers();
+                    // Save to localStorage for persistence
+                    this.savePersistedUsers();
+                }
+            }
+            
+            removeUserById(userId) {
+                const index = this.users.findIndex(u => u.userId === userId);
+                if (index !== -1) {
+                    const user = this.users[index];
+                    this.users.splice(index, 1);
+                    this.removeUserElement(user.id);
+                    // Reposition remaining users
+                    this.repositionUsers();
+                    // Save to localStorage for persistence
+                    this.savePersistedUsers();
+                }
+            }
+
+            updateSettings(newSettings) {
+                // Prevent infinite loop - if we're already updating, skip
+                if (this._updatingSettings) {
+                    return;
+                }
+                this._updatingSettings = true;
+                
+                try {
+                    // Store old settings for comparison
+                    const oldSettings = { ...this.settings };
+                    
+                    this.settings = { ...this.settings, ...newSettings };
+                    
+                    // Always reload sprite data from localStorage (in case it was updated)
+                    const defaultSprite = localStorage.getItem('defaultSpriteData');
+                    const customSprite = localStorage.getItem('customSpriteData');
+                    if (defaultSprite) this.settings.defaultSpriteData = defaultSprite;
+                    if (customSprite) this.settings.customSpriteData = customSprite;
+                    
+                    // Only save to localStorage if settings actually changed (prevent loop)
+                    const settingsChanged = JSON.stringify(oldSettings) !== JSON.stringify(this.settings);
+                    if (settingsChanged) {
+                        localStorage.setItem('campfireWidgetSettings', JSON.stringify(this.settings));
+                    }
+                    
+                    // Update widget based on new settings
+                    if (newSettings.circleAngle !== undefined && newSettings.circleAngle !== oldSettings.circleAngle) {
+                        this.circleAngle = newSettings.circleAngle;
+                        this.updateCircleTransform();
+                    }
+                    
+                    if (newSettings.fireSize !== undefined && newSettings.fireSize !== oldSettings.fireSize) {
+                        // Update fire size without recreating the entire graphic (prevents flickering)
+                        const fireSize = this.settings.fireSize || 48;
+                        
+                        // Update default emoji fire if it exists
+                        const fireEmoji = document.getElementById('campfireEmoji');
+                        if (fireEmoji) {
+                            // Use requestAnimationFrame to ensure smooth update without flicker
+                            requestAnimationFrame(() => {
+                                fireEmoji.style.fontSize = `${fireSize}px`;
+                            });
+                        }
+                        
+                        // Update custom fire graphics (img or video) if they exist
+                        const container = document.getElementById('campfireGraphic');
+                        if (container) {
+                            const customImg = container.querySelector('img');
+                            const customVideo = container.querySelector('video');
+                            
+                            if (customImg) {
+                                requestAnimationFrame(() => {
+                                    customImg.style.width = `${fireSize}px`;
+                                    customImg.style.height = `${fireSize}px`;
+                                });
+                            }
+                            if (customVideo) {
+                                requestAnimationFrame(() => {
+                                    customVideo.style.width = `${fireSize}px`;
+                                    customVideo.style.height = `${fireSize}px`;
+                                });
+                            }
+                        }
+                    }
+                    
+                    if (newSettings.spriteSize !== undefined && newSettings.spriteSize !== oldSettings.spriteSize) {
+                        // Update all sprite sizes without re-adding users
+                        this.users.forEach(user => {
+                            const element = document.getElementById(user.id);
+                            if (element) {
+                                // Don't re-add entering animation, just update size
+                                const spriteSize = this.settings.spriteSize || 40;
+                                element.style.width = `${spriteSize}px`;
+                                element.style.height = `${spriteSize}px`;
+                            }
+                        });
+                    }
+                    
+                    // Handle animated glow setting change
+                    if (newSettings.animatedGlow !== undefined && newSettings.animatedGlow !== oldSettings.animatedGlow) {
+                        if (this.settings.animatedGlow && !this.animationFrame) {
+                            // Start animation if it was just enabled
+                            this.startGlowAnimation();
+                        } else if (!this.settings.animatedGlow && this.animationFrame) {
+                            // Stop animation if it was just disabled
+                            cancelAnimationFrame(this.animationFrame);
+                            this.animationFrame = null;
+                        }
+                    }
+                    
+                    // Only recreate campfire graphic if relevant settings ACTUALLY changed (compare old vs new)
+                    const campfireGraphicChanged = (newSettings.campfireGraphicUrl !== undefined && newSettings.campfireGraphicUrl !== oldSettings.campfireGraphicUrl) ||
+                        (newSettings.campfireGraphicData !== undefined && newSettings.campfireGraphicData !== oldSettings.campfireGraphicData);
+                    const glowSettingsChanged = (newSettings.glowSize !== undefined && newSettings.glowSize !== oldSettings.glowSize) ||
+                        (newSettings.glowIntensity !== undefined && newSettings.glowIntensity !== oldSettings.glowIntensity) ||
+                        (newSettings.shadowIntensity !== undefined && newSettings.shadowIntensity !== oldSettings.shadowIntensity) ||
+                        (newSettings.glowSpread !== undefined && newSettings.glowSpread !== oldSettings.glowSpread);
+                    
+                    if (campfireGraphicChanged || glowSettingsChanged) {
+                        // Stop existing animation if glow settings changed
+                        if (this.animationFrame) {
+                            cancelAnimationFrame(this.animationFrame);
+                            this.animationFrame = null;
+                        }
+                        this.setupCampfireGraphic();
+                        // Restart animation if it was enabled
+                        if (this.settings.animatedGlow !== false) {
+                            this.startGlowAnimation();
+                        }
+                    }
+                    
+                    // Update sprites if sprite-related settings changed
+                    if (newSettings.defaultSpriteData !== undefined ||
+                        newSettings.customSpriteData !== undefined ||
+                        newSettings.spriteMode !== undefined ||
+                        newSettings.circleSprites !== undefined ||
+                        newSettings.rpgSprites !== undefined ||
+                        newSettings.morphSprites !== undefined) {
+                            
+                            // Track if sprite collections were updated (to know if we need to refresh user sprites)
+                            let spriteCollectionsUpdated = false;
+                            
+                            // Use sprite collections from newSettings if provided, otherwise reload from localStorage
+                            if (newSettings.circleSprites !== undefined) {
+                            // Check if collection actually changed (not just empty array)
+                            const oldCount = (this.settings.circleSprites || []).length;
+                            const newCount = (newSettings.circleSprites || []).length;
+                            if (newCount > oldCount || (oldCount === 0 && newCount > 0)) {
+                                spriteCollectionsUpdated = true;
+                            }
+                            // Use provided sprite collection and save to localStorage
+                            this.settings.circleSprites = Array.isArray(newSettings.circleSprites) ? newSettings.circleSprites : [];
+                            try {
+                                localStorage.setItem('circleSprites', JSON.stringify(this.settings.circleSprites));
+                            } catch (e) {
+                                console.warn('Could not save circleSprites to localStorage:', e);
+                            }
+                        } else {
+                            // Reload from localStorage
+                            const circleSprites = localStorage.getItem('circleSprites');
+                            if (circleSprites) {
+                                try {
+                                    this.settings.circleSprites = JSON.parse(circleSprites);
+                                    if (!Array.isArray(this.settings.circleSprites)) {
+                                        this.settings.circleSprites = [];
+                                    }
+                                } catch (e) {
+                                    console.error('Error parsing circleSprites:', e);
+                                    this.settings.circleSprites = [];
+                                }
+                            } else {
+                                this.settings.circleSprites = [];
+                            }
+                        }
+                        
+                        if (newSettings.rpgSprites !== undefined) {
+                            // Check if collection actually changed (not just empty array)
+                            const oldCount = (this.settings.rpgSprites || []).length;
+                            const newCount = (newSettings.rpgSprites || []).length;
+                            if (newCount > oldCount || (oldCount === 0 && newCount > 0)) {
+                                spriteCollectionsUpdated = true;
+                            }
+                            // Use provided sprite collection and save to localStorage
+                            this.settings.rpgSprites = Array.isArray(newSettings.rpgSprites) ? newSettings.rpgSprites : [];
+                            try {
+                                localStorage.setItem('rpgSprites', JSON.stringify(this.settings.rpgSprites));
+                            } catch (e) {
+                                console.warn('Could not save rpgSprites to localStorage:', e);
+                            }
+                        } else {
+                            // Reload from localStorage
+                            const rpgSprites = localStorage.getItem('rpgSprites');
+                            if (rpgSprites) {
+                                try {
+                                    this.settings.rpgSprites = JSON.parse(rpgSprites);
+                                    if (!Array.isArray(this.settings.rpgSprites)) {
+                                        this.settings.rpgSprites = [];
+                                    }
+                                } catch (e) {
+                                    console.error('Error parsing rpgSprites:', e);
+                                    this.settings.rpgSprites = [];
+                                }
+                            } else {
+                                this.settings.rpgSprites = [];
+                            }
+                        }
+                        
+                        if (newSettings.morphSprites !== undefined) {
+                            // Check if collection actually changed (not just empty array)
+                            const oldCount = (this.settings.morphSprites || []).length;
+                            const newCount = (newSettings.morphSprites || []).length;
+                            if (newCount > oldCount || (oldCount === 0 && newCount > 0)) {
+                                spriteCollectionsUpdated = true;
+                            }
+                            // Use provided sprite collection and save to localStorage
+                            this.settings.morphSprites = Array.isArray(newSettings.morphSprites) ? newSettings.morphSprites : [];
+                            try {
+                                localStorage.setItem('morphSprites', JSON.stringify(this.settings.morphSprites));
+                            } catch (e) {
+                                console.warn('Could not save morphSprites to localStorage:', e);
+                            }
+                        } else {
+                            // Reload from localStorage
+                            const morphSprites = localStorage.getItem('morphSprites');
+                            if (morphSprites) {
+                                try {
+                                    this.settings.morphSprites = JSON.parse(morphSprites);
+                                    if (!Array.isArray(this.settings.morphSprites)) {
+                                        this.settings.morphSprites = [];
+                                    }
+                                } catch (e) {
+                                    console.error('Error parsing morphSprites:', e);
+                                    this.settings.morphSprites = [];
+                                }
+                            } else {
+                                this.settings.morphSprites = [];
+                            }
+                        }
+                        
+                        // Debug: Log sprite collection status (only when collections actually change)
+                        // Removed constant logging to prevent console spam
+                        
+                        // Only update sprites if sprite mode ACTUALLY changed (not just reloaded)
+                        // OR if sprite collections were newly loaded (were empty, now have sprites)
+                        // Don't update sprites if only size settings changed
+                        const spriteModeChanged = newSettings.spriteMode !== undefined && 
+                                                 newSettings.spriteMode !== oldSettings.spriteMode;
+                        const defaultSpriteChanged = newSettings.defaultSpriteData !== undefined && 
+                                                     newSettings.defaultSpriteData !== oldSettings.defaultSpriteData;
+                        const customSpriteChanged = newSettings.customSpriteData !== undefined && 
+                                                   newSettings.customSpriteData !== oldSettings.customSpriteData;
+                        
+                        if (spriteModeChanged || defaultSpriteChanged || customSpriteChanged || spriteCollectionsUpdated) {
+                            // Update all user elements to apply new sprites (without re-adding entering animation)
+                            this.users.forEach(user => {
+                                const element = document.getElementById(user.id);
+                                if (element) {
+                                    // Remove entering class if it exists to prevent re-animation
+                                    element.classList.remove('entering');
+                                    // Only clear assigned sprite if sprite mode actually changed OR collections were updated
+                                    if (spriteModeChanged || spriteCollectionsUpdated) {
+                                        user.assignedSprite = null;
+                                        // Clear existing sprite img element to force reload
+                                        const shape = element.querySelector('.shape');
+                                        if (shape) {
+                                            const existingImg = shape.querySelector('img');
+                                            if (existingImg) {
+                                                existingImg.remove();
+                                                shape._spriteImg = null;
+                                            }
+                                            // Clear any background that might be showing
+                                            shape.style.background = 'transparent';
+                                            shape.style.backgroundImage = 'none';
+                                        }
+                                    }
+                                    this.updateUserElement(user);
+                                }
+                            });
+                        }
+                    }
+                    
+                    // Update sprite sizes and positions if spriteSize or fireSize changed
+                    if (newSettings.spriteSize !== undefined || newSettings.fireSize !== undefined) {
+                        this.users.forEach(user => {
+                            const element = document.getElementById(user.id);
+                            if (element) {
+                                // Update size and position without changing sprite
+                                const shape = element.querySelector('.shape');
+                                if (shape && newSettings.spriteSize !== undefined) {
+                                    const spriteSize = newSettings.spriteSize;
+                                    shape.style.width = `${spriteSize}px`;
+                                    shape.style.height = `${spriteSize}px`;
+                                }
+                                // Reposition to account for new sprite size
+                                this.positionUserElement(user);
+                            }
+                        });
+                    }
+                    
+                    if (newSettings.maxUsers !== undefined) {
+                        this.maxUsers = newSettings.maxUsers;
+                    }
+                    
+                    // Handle test users toggle
+                    if (newSettings.showTestUsers !== undefined) {
+                        if (newSettings.showTestUsers === false) {
+                            // Remove all test users if toggle is turned off
+                            const testUsers = this.users.filter(u => u.username.startsWith('TestUser'));
+                            testUsers.forEach(user => {
+                                this.removeUser(user.username);
+                            });
+                            // Stop random movement and reset flags when test users are removed
+                            if (this.randomMovementInterval) {
+                                clearInterval(this.randomMovementInterval);
+                                this.randomMovementInterval = null;
+                            }
+                            this._randomMovementStarted = false;
+                        } else if (newSettings.showTestUsers === true) {
+                            // Add test users if toggle is turned on and they don't exist
+                            const hasTestUsers = this.users.some(u => u.username.startsWith('TestUser'));
+                            if (!hasTestUsers && !this._settingUpMockUsers) {
+                                this.setupMockUsers();
+                            }
+                        }
+                    }
+                } finally {
+                    // Always clear the updating flag, even if an error occurred
+                    this._updatingSettings = false;
+                }
+            }
+
+            // Mock users for testing (remove in production)
+            setupMockUsers() {
+                // Prevent multiple simultaneous calls
+                if (this._settingUpMockUsers) {
+                    return;
+                }
+                this._settingUpMockUsers = true;
+                
+                // Check if test users already exist - if so, don't add them again
+                const hasTestUsers = this.users.some(u => u.username.startsWith('TestUser'));
+                if (hasTestUsers) {
+                    this._settingUpMockUsers = false;
+                    return;
+                }
+                
+                console.log('setupMockUsers() called');
+                // Add a few test users
+                console.log('Scheduling test users to be added...');
+                setTimeout(() => {
+                    console.log('Adding TestUser1...');
+                    this.addUser('TestUser1');
+                }, 500);
+                setTimeout(() => {
+                    console.log('Adding TestUser2...');
+                    this.addUser('TestUser2');
+                }, 1000);
+                setTimeout(() => {
+                    console.log('Adding TestUser3...');
+                    this.addUser('TestUser3');
+                    // Clear the flag after all users are scheduled
+                    this._settingUpMockUsers = false;
+                }, 1500);
+                
+                // Start random movement for test users (only if not already started)
+                if (!this._randomMovementStarted) {
+                    setTimeout(() => {
+                        console.log('Starting random movement...');
+                        this.startRandomMovement();
+                        this._randomMovementStarted = true;
+                    }, 2000);
+                }
+                
+                // Start glow animation if enabled (only if not already started)
+                if (this.settings.animatedGlow !== false && !this.animationFrame) {
+                    console.log('Starting glow animation...');
+                    this.startGlowAnimation();
+                } else if (this.settings.animatedGlow === false) {
+                    console.log('Glow animation disabled');
+                }
+            }
+
+            startRandomMovement() {
+                // Prevent multiple intervals from being created
+                if (this.randomMovementInterval) {
+                    return; // Already running
+                }
+                
+                // Randomly move non-active users around the campfire - more frequent but still gentle with collision avoidance
+                this.randomMovementInterval = setInterval(() => {
+                    this.users.forEach(user => {
+                        // Only move non-active users (not logged in/controlled)
+                        // Non-active users = users that are NOT the logged-in viewer controlling their sprite
+                        const isActiveUser = this.isActiveUser(user);
+                        if (!isActiveUser) {
+                            // Increased chance to move (25% chance every interval) for more movement
+                            if (Math.random() < 0.25) {
+                                const direction = Math.random() < 0.5 ? -1 : 1;
+                                // Smaller movement step for gentler motion
+                                const angleStep = 5; // Smaller step (was 15)
+                                const newAngle = (user.angle + direction * angleStep + 360) % 360;
+                                
+                                // Check for collisions with other non-active users
+                                const minDistance = 20; // Minimum angle distance between users (in degrees)
+                                let canMove = true;
+                                
+                                this.users.forEach(otherUser => {
+                                    if (otherUser.id !== user.id && !this.isActiveUser(otherUser)) {
+                                        // Calculate shortest angular distance
+                                        const angleDiff = Math.abs(newAngle - otherUser.angle);
+                                        const minAngleDiff = Math.min(angleDiff, 360 - angleDiff);
+                                        
+                                        if (minAngleDiff < minDistance) {
+                                            canMove = false;
+                                        }
+                                    }
+                                });
+                                
+                                if (canMove) {
+                                    user.angle = newAngle;
+                                    
+                                    // Flip sprite based on movement direction
+                                    this.flipSprite(user.id, direction);
+                                    
+                                    // Set moving animation
+                                    this.setUserMoving(user.id, true);
+                                    
+                                    // Reposition user
+                                    this.positionUserElement(user);
+                                    
+                                    // Stop moving animation after movement completes
+                                    setTimeout(() => {
+                                        this.setUserMoving(user.id, false);
+                                    }, 600);
+                                }
+                            }
+                        }
+                    });
+                }, 3000); // Check every 3 seconds (more frequent movement)
+            }
+
+            isActiveUser(user) {
+                // Check if user is the logged-in active viewer
+                try {
+                    const activeViewer = localStorage.getItem('activeViewer');
+                    if (activeViewer) {
+                        const active = JSON.parse(activeViewer);
+                        return user.userId === active.userId || 
+                               user.username === active.displayName || 
+                               user.username === active.username;
+                    }
+                } catch (e) {}
+                return false;
+            }
+
+            setUserMoving(userId, isMoving) {
+                const element = document.getElementById(userId);
+                if (!element) return;
+                
+                const spriteMode = this.settings.spriteMode || 'circle';
+                const isRpgMode = spriteMode === 'rpg-characters';
+                
+                if (isMoving) {
+                    element.classList.remove('idle');
+                    element.classList.add('moving');
+                } else {
+                    element.classList.remove('moving');
+                    // Skip idle animation for RPG characters
+                    if (!isRpgMode) {
+                        element.classList.add('idle');
+                        // Add random animation delay so sprites don't float in sync
+                        const randomDelay = Math.random() * 3; // 0-3 seconds random delay
+                        element.style.animationDelay = `${randomDelay}s`;
+                    }
+                }
+            }
+            
+            shutdown() {
+                console.log('🛑 Shutting down widget...');
+                
+                // Stop all animations
+                if (this.animationFrame) {
+                    cancelAnimationFrame(this.animationFrame);
+                    this.animationFrame = null;
+                }
+                
+                // Stop random movement
+                if (this.randomMovementInterval) {
+                    clearInterval(this.randomMovementInterval);
+                    this.randomMovementInterval = null;
+                }
+                
+                // Clean up all blob URLs
+                this.users.forEach(user => {
+                    const element = document.getElementById(user.id);
+                    if (element) {
+                        const spriteImg = element.querySelector('img');
+                        if (spriteImg && spriteImg._blobUrl) {
+                            URL.revokeObjectURL(spriteImg._blobUrl);
+                        }
+                    }
+                });
+                
+                // Clear all users
+                this.users.forEach(user => {
+                    this.removeUserElement(user.id);
+                });
+                this.users = [];
+                
+                // Clear DOM
+                const circleContainer = document.getElementById('circleContainer');
+                if (circleContainer) {
+                    circleContainer.innerHTML = '';
+                }
+                
+                console.log('✅ Widget shutdown complete');
+            }
+
+            // Glow animation
+            startGlowAnimation() {
+                // Cancel existing animation if any
+                if (this.animationFrame) {
+                    cancelAnimationFrame(this.animationFrame);
+                    this.animationFrame = null;
+                }
+                
+                // Check if animation should be enabled (default to true if not explicitly false)
+                if (this.settings.animatedGlow === false) {
+                    return; // Animation disabled
+                }
+                
+                let animationTime = 0;
+                const baseIntensity = this.settings.glowIntensity || 50;
+                const baseSpread = this.settings.glowSpread || 85;
+                
+                const animate = () => {
+                    const glow = document.getElementById('campfireGlow');
+                    // Check if animation should continue (default to true if not explicitly false)
+                    if (!glow || this.settings.animatedGlow === false) {
+                        this.animationFrame = null;
+                        return;
+                    }
+                    
+                    animationTime += 0.05;
+                    
+                    // Intensity: vary by ±1-20 from base
+                    const intensityVariation = Math.sin(animationTime * 0.8) * 10 + Math.sin(animationTime * 1.3) * 5;
+                    const animatedIntensity = Math.max(0, Math.min(100, baseIntensity + intensityVariation));
+                    
+                    // Spread: vary by ±3-8% from base
+                    const spreadVariation = Math.sin(animationTime * 0.5) * 4 + Math.sin(animationTime * 0.9) * 2;
+                    const animatedSpread = Math.max(20, Math.min(100, baseSpread + spreadVariation));
+                    
+                    // Recalculate gradient
+                    const baseOpacity = (animatedIntensity / 100) * 0.5;
+                    const stop1 = Math.max(0, animatedSpread * 0.25);
+                    const stop2 = Math.max(5, animatedSpread * 0.4);
+                    const stop3 = Math.max(10, animatedSpread * 0.55);
+                    const stop4 = Math.max(15, animatedSpread * 0.7);
+                    const stop5 = Math.max(20, animatedSpread * 0.85);
+                    
+                    const glowGradient = `radial-gradient(ellipse at center, 
+                        rgba(255, 107, 53, ${baseOpacity}) 0%, 
+                        rgba(247, 147, 30, ${baseOpacity * 0.7}) ${stop1}%, 
+                        rgba(255, 204, 2, ${baseOpacity * 0.5}) ${stop2}%, 
+                        rgba(255, 204, 2, ${baseOpacity * 0.3}) ${stop3}%, 
+                        rgba(255, 204, 2, ${baseOpacity * 0.15}) ${stop4}%, 
+                        transparent ${animatedSpread}%)`;
+                    
+                    glow.style.background = glowGradient;
+                    
+                    this.animationFrame = requestAnimationFrame(animate);
+                };
+                
+                this.animationFrame = requestAnimationFrame(animate);
+            }
+        }
+
+        // Initialize widget when DOM is ready
+        let widget;
+        console.log('Widget script loading, readyState:', document.readyState);
+        
+        function initWidget() {
+            try {
+                console.log('Initializing widget...');
+                console.log('Campfire graphic element exists:', !!document.getElementById('campfireGraphic'));
+                console.log('Circle container element exists:', !!document.getElementById('circleContainer'));
+                
+                widget = new CampfireWidget();
+                window.campfireWidget = widget;
+                console.log('Widget initialized successfully!', widget);
+            } catch (error) {
+                console.error('Error initializing widget:', error);
+                console.error('Error stack:', error.stack);
+            }
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initWidget);
+        } else {
+            // DOM already loaded, initialize immediately
+            initWidget();
+        }
+
+        // Listen for settings updates from dashboard (via localStorage events)
+        window.addEventListener('storage', (e) => {
+            if (!widget) return;
+            if (e.key === 'campfireWidgetSettings') {
+                try {
+                    const newSettings = JSON.parse(e.newValue);
+                    widget.updateSettings(newSettings);
+                } catch (err) {
+                    console.error('Error parsing settings:', err);
+                }
+            }
+        });
+        
+        // Also listen for custom events (for same-window updates from dashboard)
+        window.addEventListener('campfireSettingsUpdate', (e) => {
+            if (widget) widget.updateSettings(e.detail);
+        });
+        
+        // Listen for postMessage from dashboard (for real-time preview updates)
+        // Debounce to prevent excessive updates while dragging sliders
+        let updateTimeout = null;
+        window.addEventListener('message', (e) => {
+            if (!e.data || !widget) return;
+            
+            if (e.data.type === 'updateSettings') {
+                // Clear existing timeout
+                if (updateTimeout) {
+                    clearTimeout(updateTimeout);
+                }
+                // Debounce updates by 50ms (only update after user stops dragging)
+                updateTimeout = setTimeout(() => {
+                    widget.updateSettings(e.data.settings);
+                }, 50);
+            } else if (e.data.type === 'kickMember') {
+                // Kick member from campfire
+                if (e.data.userId) {
+                    widget.removeUserById(e.data.userId);
+                } else {
+                    widget.removeUser(e.data.username);
+                }
+            } else if (e.data.type === 'memberMute') {
+                // Mute/unmute member (store state for chat message filtering)
+                const user = widget.users.find(u => 
+                    (e.data.userId && u.userId === e.data.userId) || 
+                    u.username === e.data.username
+                );
+                if (user) {
+                    user.muted = e.data.muted;
+                }
+            } else if (e.data.type === 'memberStill') {
+                // Prevent/allow member movement
+                const user = widget.users.find(u => 
+                    (e.data.userId && u.userId === e.data.userId) || 
+                    u.username === e.data.username
+                );
+                if (user) {
+                    user.still = e.data.still;
+                }
+            } else if (e.data.type === 'shutdown') {
+                // Shutdown widget and all resources
+                stopEventPolling();
+                if (widget) {
+                    widget.shutdown();
+                }
+            }
+        });
+
+        window.addEventListener('viewerMovement', (e) => {
+            if (widget) widget.moveUser(e.detail.username, e.detail.direction, e.detail.speed || 15);
+        });
+
+        window.addEventListener('viewerStopMovement', (e) => {
+            if (!widget) return;
+            const user = widget.users.find(u => 
+                u.userId === e.detail.userId || 
+                u.username === e.detail.username
+            );
+            if (user) {
+                widget.stopUserMovement(user.id);
+            }
+        });
+
+        window.addEventListener('viewerColorUpdate', (e) => {
+            if (!widget) return;
+            // Update color for existing user
+            const user = widget.users.find(u => 
+                u.userId === e.detail.userId || 
+                u.username === e.detail.username
+            );
+            if (user) {
+                user.color = e.detail.color;
+                widget.updateUserElement(user);
+            }
+        });
+
+        window.addEventListener('viewerJoin', (e) => {
+            if (widget) widget.addUser(e.detail.username, {
+                userId: e.detail.userId,
+                color: e.detail.color,
+                selectedSprite: e.detail.selectedSprite || null
+            });
+        });
+
+        window.addEventListener('viewerLeave', (e) => {
+            if (widget) {
+                if (e.detail.userId) {
+                    widget.removeUserById(e.detail.userId);
+                } else {
+                    widget.removeUser(e.detail.username);
+                }
+            }
+        });
+
+        window.addEventListener('chatMessage', (e) => {
+            if (widget && e.detail.message && e.detail.message.length <= 50) {
+                widget.showChatMessage(e.detail.username, e.detail.message);
+            }
+        });
+
+        // Listen for viewer events via storage (for cross-window communication)
+        window.addEventListener('storage', (e) => {
+            if (!widget) return;
+            
+            if (e.key === 'viewerJoin') {
+                try {
+                    const joinData = JSON.parse(e.newValue);
+                    if (joinData.action === 'join') {
+                        widget.addUser(joinData.username, {
+                            userId: joinData.userId,
+                            color: joinData.color,
+                            selectedSprite: joinData.selectedSprite || null
+                        });
+                    }
+                } catch (err) {
+                    console.error('Error parsing join data:', err);
+                }
+            } else if (e.key === 'viewerLeave') {
+                try {
+                    const leaveData = JSON.parse(e.newValue);
+                    if (leaveData.action === 'leave') {
+                        if (leaveData.userId) {
+                            widget.removeUserById(leaveData.userId);
+                        } else {
+                            widget.removeUser(leaveData.username);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error parsing leave data:', err);
+                }
+            } else if (e.key === 'viewerMovement') {
+                // Handle viewer movement
+                try {
+                    const movement = JSON.parse(e.newValue);
+                    widget.moveUser(movement.username || movement.displayName, movement.direction, movement.speed || 15);
+                } catch (err) {
+                    console.error('Error parsing movement:', err);
+                }
+            } else if (e.key === 'viewerColorUpdate') {
+                // Handle color update
+                try {
+                    const colorData = JSON.parse(e.newValue);
+                    const user = widget.users.find(u => 
+                        u.userId === colorData.userId || 
+                        u.username === colorData.username
+                    );
+                    if (user) {
+                        user.color = colorData.color;
+                        widget.updateUserElement(user);
+                    }
+                } catch (err) {
+                    console.error('Error parsing color update:', err);
+                }
+            } else if (e.key === 'chatMessage') {
+                // Handle chat message
+                try {
+                    const chatData = JSON.parse(e.newValue);
+                    if (chatData.message && chatData.message.length <= 50) {
+                        widget.showChatMessage(chatData.username, chatData.message);
+                    }
+                } catch (err) {
+                    console.error('Error parsing chat message:', err);
+                }
+            } else if (e.key === 'viewerStopMovement') {
+                // Handle stop movement
+                try {
+                    const stopData = JSON.parse(e.newValue);
+                    const user = widget.users.find(u => 
+                        u.userId === stopData.userId || 
+                        u.username === stopData.username
+                    );
+                    if (user) {
+                        widget.stopUserMovement(user.id);
+                    }
+                } catch (err) {
+                    console.error('Error parsing stop movement:', err);
+                }
+            }
+        });
+
+        // Listen for chat messages (this would be integrated with chat API)
+        // For now, we'll create a function that can be called by chat integration
+        window.handleChatMessage = function(username, message, userId = null) {
+            if (!widget) return;
+            if (message && message.length <= 50) {
+                // Add user if they don't exist
+                if (!widget.users.find(u => u.username === username)) {
+                    widget.addUser(username, { userId: userId });
+                }
+                
+                // Show chat message
+                widget.showChatMessage(username, message);
+            }
+        };
+
+        // Expose widget globally for external control (chat integration, etc.)
+        // (Already set above during initialization)
+
+        // Poll server for chat events (if server is running)
+        let lastEventId = 0;
+        let eventPollInterval = null;
+
+        function stopEventPolling() {
+            if (eventPollInterval) {
+                clearInterval(eventPollInterval);
+                eventPollInterval = null;
+                console.log('✅ Event polling stopped');
+            }
+        }
+
+        function startEventPolling() {
+            // Only poll if we're on localhost (server is running)
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                eventPollInterval = setInterval(async () => {
+                    try {
+                        const response = await fetch(`http://localhost:3000/api/events?since=${lastEventId}`);
+                        const data = await response.json();
+                        
+                        if (data.events && data.events.length > 0) {
+                            data.events.forEach(event => {
+                                if (event.id > lastEventId) {
+                                    lastEventId = event.id;
+                                }
+                                
+                                if (event.type === 'userJoin' && widget) {
+                                    widget.addUser(event.data.username, {
+                                        userId: event.data.userId,
+                                        color: event.data.color,
+                                        selectedSprite: event.data.selectedSprite,
+                                        isSubscriber: event.data.isSubscriber,
+                                        isMod: event.data.isMod,
+                                        isVip: event.data.isVip,
+                                        isBroadcaster: event.data.isBroadcaster
+                                    });
+                                } else if (event.type === 'userLeave' && widget) {
+                                    if (event.data.userId) {
+                                        widget.removeUserById(event.data.userId);
+                                    } else {
+                                        widget.removeUser(event.data.username);
+                                    }
+                                } else if (event.type === 'chatMessage' && widget) {
+                                    widget.showChatMessage(event.data.username, event.data.message);
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        // Server not running or not available - that's okay
+                        // Only log if we've successfully connected before
+                        if (lastEventId > 0) {
+                            console.log('Server not available (this is normal if server.js is not running)');
+                        }
+                    }
+                }, 500); // Poll every 500ms
+            }
+        }
+
+        // Start polling when widget is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(startEventPolling, 2000); // Wait 2 seconds for widget to initialize
+            });
+        } else {
+            setTimeout(startEventPolling, 2000);
+        }
+
+        // ============================================
+        // DESKTOP APP MENU BAR
+        // ============================================
+        
+        // TEST: Force show menu bar immediately to check if HTML/CSS works
+        console.log('[Menu Bar] Script block reached!');
+        try {
+            const testBar = document.getElementById('desktopMenuBar');
+            console.log('[Menu Bar] TEST - Menu bar element exists:', !!testBar);
+            if (testBar) {
+                testBar.style.display = 'flex';
+                testBar.style.background = 'rgba(255, 0, 0, 0.9)'; // Red background for testing
+                console.log('[Menu Bar] TEST - Forced menu bar to display');
+            }
+        } catch (e) {
+            console.error('[Menu Bar] TEST - Error:', e);
+        }
+        
+        function initDesktopMenuBar() {
+            console.log('[Menu Bar] initDesktopMenuBar() called');
+            
+            // Check if we're in Electron (desktop app)
+            // Also check for Electron-specific properties
+            const hasElectronAPI = typeof window.electronAPI !== 'undefined';
+            const hasProcess = typeof window.process !== 'undefined';
+            const userAgentHasElectron = navigator.userAgent.includes('Electron');
+            const isDesktopApp = hasElectronAPI || hasProcess || userAgentHasElectron;
+            
+            console.log('[Menu Bar] Checking desktop app mode:', isDesktopApp);
+            console.log('[Menu Bar] electronAPI available:', hasElectronAPI, typeof window.electronAPI);
+            console.log('[Menu Bar] window.process available:', hasProcess);
+            console.log('[Menu Bar] User agent has Electron:', userAgentHasElectron);
+            console.log('[Menu Bar] User agent:', navigator.userAgent);
+            
+            // Get menu bar element
+            const menuBar = document.getElementById('desktopMenuBar');
+            console.log('[Menu Bar] Menu bar element found:', !!menuBar);
+            
+            if (!menuBar) {
+                console.error('[Menu Bar] Menu bar element not found!');
+                return;
+            }
+            
+            // Show menu bar if in Electron (even if electronAPI not ready yet)
+            if (isDesktopApp) {
+                menuBar.classList.add('desktop-app');
+                console.log('[Menu Bar] Added desktop-app class to menu bar');
+                console.log('[Menu Bar] Menu bar classes:', menuBar.className);
+                console.log('[Menu Bar] Menu bar computed display:', window.getComputedStyle(menuBar).display);
+            } else {
+                console.log('[Menu Bar] Not in Electron - menu bar hidden');
+                // For debugging, let's still show it temporarily
+                console.warn('[Menu Bar] DEBUG: Forcing menu bar to show anyway');
+                menuBar.classList.add('desktop-app');
+            }
+            
+            if (isDesktopApp && typeof window.electronAPI !== 'undefined') {
+                
+                // Menu button handlers
+                const btnDashboard = document.getElementById('btnDashboard');
+                const btnSettings = document.getElementById('btnSettings');
+                const btnMembers = document.getElementById('btnMembers');
+                const btnLaunch = document.getElementById('btnLaunch');
+                const btnEnd = document.getElementById('btnEnd');
+                const statusIndicator = document.getElementById('statusIndicator');
+                const statusText = document.getElementById('statusText');
+                
+                if (btnDashboard) {
+                    btnDashboard.addEventListener('click', () => {
+                        window.electronAPI.openDashboard();
+                    });
+                }
+                
+                if (btnSettings) {
+                    btnSettings.addEventListener('click', () => {
+                        window.electronAPI.openDashboard('settings');
+                    });
+                }
+                
+                if (btnMembers) {
+                    btnMembers.addEventListener('click', () => {
+                        window.electronAPI.openDashboard('members');
+                    });
+                }
+                
+                if (btnLaunch) {
+                    btnLaunch.addEventListener('click', () => {
+                        // Launch/start the widget (if needed)
+                        // For now, just show a message
+                        console.log('Launch clicked');
+                    });
+                }
+                
+                if (btnEnd) {
+                    btnEnd.addEventListener('click', async () => {
+                        if (confirm('Are you sure you want to shut down the widget and all servers?')) {
+                            await window.electronAPI.shutdownApp();
+                        }
+                    });
+                }
+                
+                // Listen for Twitch connection status
+                if (window.electronAPI) {
+                    window.electronAPI.onTwitchConnected(() => {
+                        if (statusIndicator) statusIndicator.classList.add('connected');
+                        if (statusText) statusText.textContent = 'Twitch Connected';
+                    });
+                    
+                    window.electronAPI.onTwitchDisconnected(() => {
+                        if (statusIndicator) statusIndicator.classList.remove('connected');
+                        if (statusText) statusText.textContent = 'Disconnected';
+                    });
+                    
+                    // Check initial status
+                    window.electronAPI.getTwitchStatus().then(status => {
+                        if (status.connected) {
+                            if (statusIndicator) statusIndicator.classList.add('connected');
+                            if (statusText) statusText.textContent = 'Twitch Connected';
+                        }
+                    }).catch(err => {
+                        console.error('[Menu Bar] Error getting Twitch status:', err);
+                    });
+                }
+            } else if (isDesktopApp) {
+                // electronAPI not ready yet, but we're in Electron - retry
+                console.log('[Menu Bar] electronAPI not ready yet, retrying...');
+                setTimeout(() => {
+                    if (typeof window.electronAPI !== 'undefined') {
+                        initDesktopMenuBar();
+                    } else {
+                        console.warn('[Menu Bar] electronAPI still not available after retry');
+                    }
+                }, 500);
+            }
+        }
+        
+        // Initialize menu bar - try multiple times to ensure it works
+        console.log('[Menu Bar] Script loaded, readyState:', document.readyState);
+        
+        // Run immediately if DOM is ready
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            console.log('[Menu Bar] DOM ready, initializing...');
+            setTimeout(initDesktopMenuBar, 100);
+        } else {
+            // Wait for DOM
+            document.addEventListener('DOMContentLoaded', () => {
+                console.log('[Menu Bar] DOMContentLoaded fired, initializing...');
+                setTimeout(initDesktopMenuBar, 100);
+            });
+        }
+        
+        // Also try on window load as fallback
+        window.addEventListener('load', () => {
+            console.log('[Menu Bar] Window load fired, initializing...');
+            setTimeout(initDesktopMenuBar, 200);
+        });
+        
+        // Last resort - try after a longer delay
+        setTimeout(() => {
+            console.log('[Menu Bar] Fallback timeout, checking menu bar...');
+            const menuBar = document.getElementById('desktopMenuBar');
+            if (menuBar && !menuBar.classList.contains('desktop-app')) {
+                console.log('[Menu Bar] Menu bar exists but not shown, initializing...');
+                initDesktopMenuBar();
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

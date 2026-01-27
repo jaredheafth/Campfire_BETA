@@ -1,0 +1,29 @@
+{
+  "name": "campfire-widget",
+  "version": "1.0.0",
+  "description": "Interactive campfire widget for Twitch streams",
+  "main": "server.js",
+  "scripts": {
+    "sprite-to-gif": "node sprite-to-gif-simple.js"
+  },
+  "keywords": [
+    "twitch",
+    "widget",
+    "streamlabs",
+    "chat",
+    "interactive"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "multer": "^2.0.2",
+    "tmi.js": "^1.8.5"
+  },
+  "devDependencies": {
+    "gifencoder": "^2.0.1",
+    "glob": "^13.0.0",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.33.0"
+  }
+}
