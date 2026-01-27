@@ -43,9 +43,8 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "certificateFile": null,
-      "certificatePassword": null,
-      "signingHashAlgorithms": ["sha256"]
+      "sign": null,
+      "signAndEditExecutable": false
     },
     "mac": {
       "artifactName": "${name}-${version}-${arch}.${ext}",
