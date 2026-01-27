@@ -7,6 +7,12 @@ desktop-app/server/node_modules/
 desktop-app/dist/
 dist/
 
+# Release binaries (use GitHub Releases instead)
+releases/
+
+# Archived documentation
+docs/archive/
+
 # Logs
 *.log
 npm-debug.log*
