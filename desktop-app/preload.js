@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openDashboard: (tab) => ipcRenderer.invoke('open-dashboard', tab),
     openMembersWindow: () => ipcRenderer.invoke('open-members-window'),
     openChatPopout: () => ipcRenderer.invoke('open-chat-popout'),
+    getChatHistory: () => ipcRenderer.invoke('get-chat-history'),
     bringChatPopoutToFront: () => ipcRenderer.invoke('bring-chat-popout-to-front'),
     bringWidgetToFront: () => ipcRenderer.invoke('bring-widget-to-front'),
     openSettingsModal: () => ipcRenderer.invoke('open-settings-modal'),
@@ -38,6 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onTwitchChatMessage: (callback) => ipcRenderer.on('twitchChatMessage', (event, data) => callback(data)),
     onThirdPartyEmotesUpdate: (callback) => ipcRenderer.on('thirdPartyEmotesUpdate', (event, data) => callback(data)),
     getThirdPartyEmotes: () => ipcRenderer.invoke('get-third-party-emotes'),
+    getTwitchEmotes: (type) => ipcRenderer.invoke('get-twitch-emotes', type),
     kickAllUsers: () => ipcRenderer.invoke('kick-all-users'),
     joinAllUsers: (opts) => ipcRenderer.invoke('join-all-users', opts),
     

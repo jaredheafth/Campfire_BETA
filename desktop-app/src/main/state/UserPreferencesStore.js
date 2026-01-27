@@ -393,9 +393,30 @@ class UserPreferencesStore {
   _validatePreferences(prefs) {
     const validated = {};
     
-    // Sprite (string or null)
+    // Sprite (data URL string or null)
+    // Handle both string data URLs and sprite objects {name, data, ...}
     if (prefs.sprite !== undefined) {
-      validated.sprite = prefs.sprite ? String(prefs.sprite) : null;
+      if (typeof prefs.sprite === 'string') {
+        // Validate it's a proper data URL or file path, not "[object Object]"
+        if (prefs.sprite.startsWith('data:') || prefs.sprite.startsWith('/') || prefs.sprite.startsWith('sprites/')) {
+          validated.sprite = prefs.sprite;
+        } else {
+          // Invalid string (likely "[object Object]" from previous corruption)
+          console.warn('[UserPreferencesStore] Invalid sprite string, clearing:', prefs.sprite.substring(0, 50));
+          validated.sprite = null;
+        }
+      } else if (typeof prefs.sprite === 'object' && prefs.sprite !== null) {
+        // Extract data URL from sprite object {name, data, ...}
+        if (prefs.sprite.data && typeof prefs.sprite.data === 'string') {
+          validated.sprite = prefs.sprite.data;
+          console.log('[UserPreferencesStore] Extracted sprite data from object');
+        } else {
+          console.warn('[UserPreferencesStore] Sprite object has no valid data property');
+          validated.sprite = null;
+        }
+      } else {
+        validated.sprite = null;
+      }
     }
     
     // Color (hex string or null)

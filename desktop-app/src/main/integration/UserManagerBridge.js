@@ -347,9 +347,11 @@ class UserManagerBridge {
     });
     
     // Forward user removed event
-    this.userManager.on('user:removed', (userId, userData) => {
-      if (addEvent) addEvent('userLeave', { userId, ...userData });
-      if (broadcastToWidget) broadcastToWidget('userLeave', { userId, ...userData });
+    // Note: UserManager.removeUser() emits (user) not (userId, userData)
+    this.userManager.on('user:removed', (user) => {
+      const oldFormat = this._toOldFormat(user);
+      if (addEvent) addEvent('userLeave', { userId: user.userId, username: user.username, ...oldFormat });
+      if (broadcastToWidget) broadcastToWidget('userLeave', { userId: user.userId, username: user.username, ...oldFormat });
     });
     
     // Forward state changes

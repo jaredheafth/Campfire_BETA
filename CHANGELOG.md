@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.1.1] - 2026-01-27 - Popout Chat & !who Command Update
+
+### Added
+- ✨ **Chat Message Persistence**: Popout chat now retains messages when opened/closed (up to 100 messages)
+- ✨ **Emoji Picker**: New emoji picker in popout chat with categorized emojis (Smileys, Gestures, Hearts, Animals, Food, Activities, Travel, Objects, Symbols)
+- ✨ **Twitch Emote Picker**: Access Global, Channel, and Subscribed emotes directly in popout chat
+- ✨ **!who Command**: New command to list all users around the campfire with their status
+- ✨ **Command Cooldowns**: All commands now support configurable cooldowns (global or per-user)
+- ✨ **APP Commands Tab**: New "🔥 App" subtab in Commands for app-specific commands like !who
+
+### !who Command Features
+- 🔥 Customizable header message (e.g., "🔥 Around the campfire:")
+- 🔥 Customizable user format with placeholders: `{icon}`, `{username}`, `{state}`
+- 🔥 Customizable separator between users (default: ` • `)
+- 🔥 Editable state icons for each status (Active, Sleepy, AFK, Lurking)
+- 🔥 State filters to include/exclude specific user states
+- 🔥 Live preview in dashboard
+- 🔥 Inline output format for Twitch chat compatibility
+- 🔥 Automatic truncation for long lists (shows summary counts)
+
+### Cooldown System
+- ⏱️ Global cooldowns (shared across all users)
+- ⏱️ Per-user cooldowns (individual cooldown per user)
+- ⏱️ Configurable cooldown duration in seconds
+- ⏱️ UI controls in Commands tab for all commands
+
+### Technical
+- 🔧 Added `stateIcons`, `stateFilters`, `userSeparator`, `userLineFormat` properties to !who command
+- 🔧 Added `commandCooldowns` Map for tracking cooldown state
+- 🔧 Added `chatMessageHistory` array for popout chat persistence
+- 🔧 Updated `normalizeBotMessage()` to preserve !who-specific properties
+- 🔧 Added IPC handlers for emote fetching and chat history
+
+---
+
 ## [Unreleased] - User Persistence Refactor
 
 ### Changed

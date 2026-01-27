@@ -777,35 +777,59 @@
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
         }
 
-        /* Drag strip for frameless mode - separate from buttons for reliable clicks */
+        /* Drag strip for frameless mode - small centered handle above buttons */
         .menu-drag-strip {
             display: none;
-            width: 100%;
-            height: 24px;
+            width: 60px;
+            height: 18px;
             -webkit-app-region: drag;
             cursor: grab;
             justify-content: center;
             align-items: center;
             color: rgba(255, 255, 255, 0.35);
-            font-size: 14px;
+            font-size: 12px;
             letter-spacing: 2px;
             user-select: none;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            margin-bottom: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 4px;
+            margin: 0 auto 6px auto;
+            /* Position at top center of menu bar */
+            position: absolute;
+            top: -22px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .menu-drag-strip:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.5);
         }
 
         .menu-drag-strip:active {
             cursor: grabbing;
+            background: rgba(255, 255, 255, 0.2);
         }
 
         body.frameless .menu-drag-strip {
             display: flex;
         }
 
-        /* In frameless mode, use flex-wrap so drag strip is on its own row */
+        /* In frameless mode, keep flexbox layout - no grid needed */
+        /* The drag strip is absolutely positioned above the bar */
         body.frameless .desktop-menu-bar {
-            flex-wrap: wrap;
+            display: flex !important;
+            flex-wrap: nowrap;
+            position: fixed;
+            /* Move down to make room for the drag strip above */
+            top: 32px;
             -webkit-app-region: no-drag;
+        }
+        
+        /* Ensure buttons stay in a single row and don't wrap */
+        body.frameless .desktop-menu-bar .menu-button,
+        body.frameless .desktop-menu-bar .menu-button-square {
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .desktop-menu-bar.desktop-app {
@@ -1857,9 +1881,17 @@
                             }
                         }
                         
-                        if (spriteData && typeof spriteData === 'string') {
+                        // Validate spriteData is a valid data URL or file path
+                        // This catches corrupted "[object Object]" strings from legacy import bugs
+                        if (spriteData && typeof spriteData === 'string' &&
+                            (spriteData.startsWith('data:') || spriteData.startsWith('/') || spriteData.startsWith('sprites/'))) {
                             user.spritesByMode['rpg-characters'] = spriteData;
                             return { data: spriteData, colorize: false };
+                        } else if (spriteData && typeof spriteData === 'string') {
+                            // Invalid sprite data (likely "[object Object]" corruption)
+                            console.warn(`[getUserSprite] Invalid sprite data for ${user.username}, ignoring:`, spriteData.substring(0, 30));
+                            // Clear the corrupted selectedSprite so we fall through to random assignment
+                            user.selectedSprite = null;
                         }
                     }
                     
@@ -1880,6 +1912,12 @@
                                 delete user.spritesByMode['rpg-characters'];
                                 cachedSprite = null;
                             }
+                        }
+                        // Also validate the cached sprite is a valid data URL (not "[object Object]")
+                        if (cachedSprite && !(cachedSprite.startsWith('data:') || cachedSprite.startsWith('/') || cachedSprite.startsWith('sprites/'))) {
+                            console.warn(`[getUserSprite] Cached sprite is invalid for ${user.username}, clearing:`, cachedSprite.substring(0, 30));
+                            delete user.spritesByMode['rpg-characters'];
+                            cachedSprite = null;
                         }
                         if (cachedSprite) {
                             return {

@@ -271,6 +271,7 @@
             background: rgba(18, 18, 18, 0.8);
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 0 0 12px 12px;
+            position: relative;
         }
         
         .chat-input {
@@ -337,7 +338,7 @@
             color: #fff;
         }
         
-        /* Emote picker button */
+        /* Emote/Emoji picker button */
         .emote-button {
             padding: 8px 12px;
             background: rgba(28, 28, 28, 0.95);
@@ -352,6 +353,113 @@
         .emote-button:hover {
             background: rgba(255, 255, 255, 0.2);
             border-color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .emote-button.active {
+            background: rgba(145, 71, 255, 0.3);
+            border-color: rgba(145, 71, 255, 0.5);
+        }
+        
+        /* Emoji/Emote Picker Panel */
+        .picker-panel {
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            width: 320px;
+            max-height: 350px;
+            background: rgba(18, 18, 18, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+        
+        .picker-panel.show {
+            display: flex;
+        }
+        
+        .picker-tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .picker-tab {
+            flex: 1;
+            padding: 10px;
+            background: transparent;
+            border: none;
+            color: #adadb8;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .picker-tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+        
+        .picker-tab.active {
+            background: rgba(145, 71, 255, 0.2);
+            color: #fff;
+            border-bottom: 2px solid rgba(145, 71, 255, 0.7);
+        }
+        
+        .picker-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+        
+        .picker-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
+        }
+        
+        .picker-item {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.15s;
+            font-size: 20px;
+        }
+        
+        .picker-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .picker-item img {
+            max-width: 24px;
+            max-height: 24px;
+        }
+        
+        .picker-category {
+            font-size: 11px;
+            color: #888;
+            padding: 8px 4px 4px;
+            text-transform: uppercase;
+        }
+        
+        .picker-loading {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .picker-empty {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+            font-size: 12px;
         }
         
         /* Font styles */
@@ -479,7 +587,22 @@
                 <option value="bot">Bot Account</option>
             </select>
             <input type="text" class="chat-input" id="chatInput" placeholder="Send a message..." maxlength="500">
+            <button class="emote-button" id="btnEmoji" onclick="togglePicker('emoji')" title="Emoji Picker">😀</button>
+            <button class="emote-button" id="btnEmote" onclick="togglePicker('emote')" title="Twitch Emotes">📺</button>
             <button class="send-button" id="btnSend" onclick="sendMessage()">Send</button>
+            
+            <!-- Emoji/Emote Picker Panel -->
+            <div class="picker-panel" id="pickerPanel">
+                <div class="picker-tabs">
+                    <button class="picker-tab active" id="tabEmoji" onclick="switchPickerTab('emoji')">😀 Emoji</button>
+                    <button class="picker-tab" id="tabGlobal" onclick="switchPickerTab('global')">🌐 Global</button>
+                    <button class="picker-tab" id="tabChannel" onclick="switchPickerTab('channel')">📺 Channel</button>
+                    <button class="picker-tab" id="tabUser" onclick="switchPickerTab('user')">👤 My Emotes</button>
+                </div>
+                <div class="picker-content" id="pickerContent">
+                    <!-- Content loaded dynamically -->
+                </div>
+            </div>
         </div>
     </div>
     
@@ -589,6 +712,206 @@
                 input.placeholder = 'Connect to Twitch to chat...';
             }
         }
+        
+        // ============================================
+        // EMOJI & EMOTE PICKER
+        // ============================================
+        
+        // Common emoji categories
+        const EMOJI_DATA = {
+            'Smileys': ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '🥲', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '🥸', '😎', '🤓', '🧐'],
+            'Gestures': ['👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💪', '🦾', '🦿'],
+            'Hearts': ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '♥️'],
+            'Symbols': ['⭐', '🌟', '✨', '💫', '🔥', '💥', '💢', '💦', '💨', '🕳️', '💣', '💬', '👁️‍🗨️', '🗨️', '🗯️', '💭', '💤', '🎵', '🎶', '🔔', '🔕', '📢', '📣', '💡', '🔌', '🔋', '🪫', '🔍', '🔎', '🔒', '🔓', '🔑', '🗝️', '🔨', '🪓', '⛏️', '⚒️', '🛠️', '🗡️', '⚔️', '🔫', '🪃', '🏹', '🛡️', '🪚', '🔧', '🪛', '🔩', '⚙️', '🗜️', '⚖️', '🦯', '🔗', '⛓️', '🪝', '🧰', '🧲'],
+            'Animals': ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐻‍❄️', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐜', '🪰', '🪲', '🪳', '🦟', '🦗', '🕷️', '🕸️', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🦣', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🦬', '🐃', '🐂', '🐄', '🐎', '🐖', '🐏', '🐑', '🦙', '🐐', '🦌', '🐕', '🐩', '🦮', '🐕‍🦺', '🐈', '🐈‍⬛', '🪶', '🐓', '🦃', '🦤', '🦚', '🦜', '🦢', '🦩', '🕊️', '🐇', '🦝', '🦨', '🦡', '🦫', '🦦', '🦥', '🐁', '🐀', '🐿️', '🦔'],
+            'Food': ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓', '🥩', '🍗', '🍖', '🦴', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪', '🥙', '🧆', '🌮', '🌯', '🫔', '🥗', '🥘', '🫕', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🥟', '🦪', '🍤', '🍙', '🍚', '🍘', '🍥', '🥠', '🥮', '🍢', '🍡', '🍧', '🍨', '🍦', '🥧', '🧁', '🍰', '🎂', '🍮', '🍭', '🍬', '🍫', '🍿', '🍩', '🍪', '🌰', '🥜', '🍯', '🥛', '🍼', '🫖', '☕', '🍵', '🧃', '🥤', '🧋', '🍶', '🍺', '🍻', '🥂', '🍷', '🥃', '🍸', '🍹', '🧉', '🍾', '🧊', '🥄', '🍴', '🍽️', '🥣', '🥡', '🥢', '🧂'],
+            'Activities': ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸️', '🥌', '🎿', '⛷️', '🏂', '🪂', '🏋️', '🤼', '🤸', '🤺', '⛹️', '🤾', '🏌️', '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🏵️', '🎗️', '🎫', '🎟️', '🎪', '🤹', '🎭', '🩰', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🥁', '🪘', '🎷', '🎺', '🪗', '🎸', '🪕', '🎻', '🎲', '♟️', '🎯', '🎳', '🎮', '🎰', '🧩'],
+            'Travel': ['🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚛', '🚜', '🦯', '🦽', '🦼', '🛴', '🚲', '🛵', '🏍️', '🛺', '🚨', '🚔', '🚍', '🚘', '🚖', '🚡', '🚠', '🚟', '🚃', '🚋', '🚞', '🚝', '🚄', '🚅', '🚈', '🚂', '🚆', '🚇', '🚊', '🚉', '✈️', '🛫', '🛬', '🛩️', '💺', '🛰️', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤', '🛥️', '🛳️', '⛴️', '🚢', '⚓', '🪝', '⛽', '🚧', '🚦', '🚥', '🚏', '🗺️', '🗿', '🗽', '🗼', '🏰', '🏯', '🏟️', '🎡', '🎢', '🎠', '⛲', '⛱️', '🏖️', '🏝️', '🏜️', '🌋', '⛰️', '🏔️', '🗻', '🏕️', '⛺', '🛖', '🏠', '🏡', '🏘️', '🏚️', '🏗️', '🏭', '🏢', '🏬', '🏣', '🏤', '🏥', '🏦', '🏨', '🏪', '🏫', '🏩', '💒', '🏛️', '⛪', '🕌', '🕍', '🛕', '🕋', '⛩️', '🛤️', '🛣️', '🗾', '🎑', '🏞️', '🌅', '🌄', '🌠', '🎇', '🎆', '🌇', '🌆', '🏙️', '🌃', '🌌', '🌉', '🌁']
+        };
+        
+        // Emote cache
+        let emoteCache = {
+            global: null,
+            channel: null,
+            user: null
+        };
+        
+        // Current picker state
+        let currentPickerTab = 'emoji';
+        let pickerVisible = false;
+        
+        // Toggle picker panel
+        function togglePicker(type) {
+            const panel = document.getElementById('pickerPanel');
+            const btnEmoji = document.getElementById('btnEmoji');
+            const btnEmote = document.getElementById('btnEmote');
+            
+            // If clicking the same button while open, close it
+            if (pickerVisible && ((type === 'emoji' && currentPickerTab === 'emoji') ||
+                                  (type === 'emote' && currentPickerTab !== 'emoji'))) {
+                panel.classList.remove('show');
+                btnEmoji.classList.remove('active');
+                btnEmote.classList.remove('active');
+                pickerVisible = false;
+                return;
+            }
+            
+            // Open panel and switch to appropriate tab
+            panel.classList.add('show');
+            pickerVisible = true;
+            
+            if (type === 'emoji') {
+                switchPickerTab('emoji');
+                btnEmoji.classList.add('active');
+                btnEmote.classList.remove('active');
+            } else {
+                switchPickerTab('global');
+                btnEmoji.classList.remove('active');
+                btnEmote.classList.add('active');
+            }
+        }
+        
+        // Switch picker tab
+        function switchPickerTab(tab) {
+            currentPickerTab = tab;
+            
+            // Update tab buttons
+            document.querySelectorAll('.picker-tab').forEach(t => t.classList.remove('active'));
+            const tabBtn = document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+            if (tabBtn) tabBtn.classList.add('active');
+            
+            // Update button highlights
+            const btnEmoji = document.getElementById('btnEmoji');
+            const btnEmote = document.getElementById('btnEmote');
+            if (tab === 'emoji') {
+                btnEmoji.classList.add('active');
+                btnEmote.classList.remove('active');
+            } else {
+                btnEmoji.classList.remove('active');
+                btnEmote.classList.add('active');
+            }
+            
+            // Load content
+            const content = document.getElementById('pickerContent');
+            
+            if (tab === 'emoji') {
+                renderEmojiPicker(content);
+            } else {
+                loadEmotes(tab, content);
+            }
+        }
+        
+        // Render emoji picker
+        function renderEmojiPicker(container) {
+            let html = '';
+            for (const [category, emojis] of Object.entries(EMOJI_DATA)) {
+                html += `<div class="picker-category">${category}</div>`;
+                html += '<div class="picker-grid">';
+                for (const emoji of emojis) {
+                    html += `<div class="picker-item" onclick="insertEmoji('${emoji}')" title="${emoji}">${emoji}</div>`;
+                }
+                html += '</div>';
+            }
+            container.innerHTML = html;
+        }
+        
+        // Load Twitch emotes
+        async function loadEmotes(type, container) {
+            // Check cache first
+            if (emoteCache[type]) {
+                renderEmotes(emoteCache[type], container, type);
+                return;
+            }
+            
+            container.innerHTML = '<div class="picker-loading">Loading emotes...</div>';
+            
+            try {
+                if (window.electronAPI && window.electronAPI.getTwitchEmotes) {
+                    const emotes = await window.electronAPI.getTwitchEmotes(type);
+                    if (emotes && emotes.length > 0) {
+                        emoteCache[type] = emotes;
+                        renderEmotes(emotes, container, type);
+                    } else {
+                        container.innerHTML = `<div class="picker-empty">No ${type} emotes available</div>`;
+                    }
+                } else {
+                    container.innerHTML = '<div class="picker-empty">Emote API not available</div>';
+                }
+            } catch (error) {
+                console.error('Error loading emotes:', error);
+                container.innerHTML = `<div class="picker-empty">Failed to load emotes</div>`;
+            }
+        }
+        
+        // Render emotes grid
+        function renderEmotes(emotes, container, type) {
+            if (!emotes || emotes.length === 0) {
+                container.innerHTML = `<div class="picker-empty">No ${type} emotes available</div>`;
+                return;
+            }
+            
+            let html = '<div class="picker-grid">';
+            for (const emote of emotes) {
+                const url = emote.url || `https://static-cdn.jtvnw.net/emoticons/v2/${emote.id}/default/dark/2.0`;
+                const name = emote.name || emote.code || 'emote';
+                html += `<div class="picker-item" onclick="insertEmote('${escapeHtml(name)}')" title="${escapeHtml(name)}">`;
+                html += `<img src="${url}" alt="${escapeHtml(name)}" loading="lazy">`;
+                html += '</div>';
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        // Insert emoji at cursor position
+        function insertEmoji(emoji) {
+            const input = document.getElementById('chatInput');
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            const text = input.value;
+            
+            input.value = text.substring(0, start) + emoji + text.substring(end);
+            input.focus();
+            input.setSelectionRange(start + emoji.length, start + emoji.length);
+        }
+        
+        // Insert emote text at cursor position
+        function insertEmote(emoteName) {
+            const input = document.getElementById('chatInput');
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            const text = input.value;
+            
+            // Add space before if needed
+            const prefix = (start > 0 && text[start - 1] !== ' ') ? ' ' : '';
+            // Add space after
+            const suffix = ' ';
+            const insertText = prefix + emoteName + suffix;
+            
+            input.value = text.substring(0, start) + insertText + text.substring(end);
+            input.focus();
+            input.setSelectionRange(start + insertText.length, start + insertText.length);
+        }
+        
+        // Close picker when clicking outside
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('pickerPanel');
+            const btnEmoji = document.getElementById('btnEmoji');
+            const btnEmote = document.getElementById('btnEmote');
+            
+            if (pickerVisible &&
+                !panel.contains(e.target) &&
+                e.target !== btnEmoji &&
+                e.target !== btnEmote) {
+                panel.classList.remove('show');
+                btnEmoji.classList.remove('active');
+                btnEmote.classList.remove('active');
+                pickerVisible = false;
+            }
+        });
+        
+        // ============================================
+        // END EMOJI & EMOTE PICKER
+        // ============================================
         
         // Build emote HTML (Twitch emotes)
         function buildEmoteHtml(message, emotes) {
@@ -783,8 +1106,29 @@
             }
         }
         
+        // Load chat history from buffer (for persistence when reopening)
+        async function loadChatHistory() {
+            if (!window.electronAPI || !window.electronAPI.getChatHistory) return;
+            
+            try {
+                const history = await window.electronAPI.getChatHistory();
+                if (history && history.length > 0) {
+                    console.log(`[ChatPopout] Loading ${history.length} messages from history`);
+                    // Add each historical message
+                    for (const msg of history) {
+                        addChatMessage(msg);
+                    }
+                }
+            } catch (e) {
+                console.error('[ChatPopout] Error loading chat history:', e);
+            }
+        }
+        
         // Listen for chat messages from main process
         if (window.electronAPI) {
+            // Load chat history first (before listening for new messages)
+            loadChatHistory();
+            
             // Listen for chatMessage channel (same as widget uses)
             window.electronAPI.onChatMessage((data) => {
                 addChatMessage(data);

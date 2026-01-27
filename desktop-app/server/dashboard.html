@@ -1128,6 +1128,9 @@
                                     <button class="command-sub-tab" onclick="switchCommandSubTab('auto-states', this)" style="padding: 8px 12px; background: #333; border: none; border-radius: 4px 4px 0 0; color: #aaa; cursor: pointer; font-size: 12px;" title="Auto state change responses (sleepy, auto-afk, auto-return, auto-leave)">
                                         ⏳ Auto States
                                     </button>
+                                    <button class="command-sub-tab" onclick="switchCommandSubTab('app', this)" style="padding: 8px 12px; background: #333; border: none; border-radius: 4px 4px 0 0; color: #aaa; cursor: pointer; font-size: 12px;" title="App-specific commands (!who and other special features)">
+                                        🔥 App
+                                    </button>
                                     <button class="command-sub-tab" onclick="switchCommandSubTab('custom', this)" style="padding: 8px 12px; background: #333; border: none; border-radius: 4px 4px 0 0; color: #aaa; cursor: pointer; font-size: 12px;" title="Your custom commands">
                                         💬 Custom
                                     </button>
@@ -1194,6 +1197,19 @@
                                         </h3>
                                         <div id="autoStatesList" style="display: grid; gap: 15px;">
                                             <!-- Auto state responses will be populated here -->
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- APP COMMANDS Sub-tab Content -->
+                                <div id="appSubTab" class="command-sub-content" style="display: none;">
+                                    <div style="margin-bottom: 20px;">
+                                        <h3 style="color: #ff6600; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;" title="App-specific commands that provide special functionality">
+                                            <span>🔥 APP COMMANDS</span>
+                                            <span style="font-size: 11px; color: #888; font-weight: normal;">(Special app features)</span>
+                                        </h3>
+                                        <div id="appCommandsList" style="display: grid; gap: 15px;">
+                                            <!-- App commands will be populated here -->
                                         </div>
                                     </div>
                                 </div>
@@ -1750,7 +1766,7 @@
             }
         }
 
-        // Switch between command sub-tabs (State, Movement, Appearance, Animation, Auto States, Custom)
+        // Switch between command sub-tabs (State, Movement, Appearance, Animation, Auto States, App, Custom)
         function switchCommandSubTab(subTabName, clickedButton) {
             try {
                 // Hide all command sub-content
@@ -1790,6 +1806,11 @@
                         const autoStatesTab = document.getElementById('autoStatesSubTab');
                         if (autoStatesTab) autoStatesTab.style.display = 'block';
                         loadAutoStateCommands();
+                        break;
+                    case 'app':
+                        const appTab = document.getElementById('appSubTab');
+                        if (appTab) appTab.style.display = 'block';
+                        loadAppCommands();
                         break;
                     case 'custom':
                         const customTab = document.getElementById('customSubTab');
@@ -6522,48 +6543,54 @@
         const APPEARANCE_COMMAND_IDS = ['changesprite', 'changecolor', 'next', 'back', 'random', 'reset'];
         const ANIMATION_COMMAND_IDS = ['spin', 'dance', 'sparkle'];
         const AUTO_STATE_COMMAND_IDS = ['sleepy', 'auto-afk', 'auto-return', 'auto-leave'];
+        const APP_COMMAND_IDS = ['who'];
 
-        // Default state commands
+        // Default state commands (with cooldown properties)
         const defaultStateCommands = [
-            { id: 'join', name: 'Join Command', commands: ['!join'], command: '!join', message: '{username} joined the campfire!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'STATE' },
-            { id: 'leave', name: 'Leave Command', commands: ['!leave', '!exit'], command: '!leave', message: '{username} left the campfire.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'STATE' },
-            { id: 'afk', name: 'AFK Command', commands: ['!afk'], command: '!afk', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'STATE' },
-            { id: 'lurk', name: 'Lurk Command', commands: ['!lurk'], command: '!lurk', message: '{username} is now lurking 👁️', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'STATE' },
-            { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'STATE' }
+            { id: 'join', name: 'Join Command', commands: ['!join'], command: '!join', message: '{username} joined the campfire!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'leave', name: 'Leave Command', commands: ['!leave', '!exit'], command: '!leave', message: '{username} left the campfire.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'afk', name: 'AFK Command', commands: ['!afk'], command: '!afk', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'lurk', name: 'Lurk Command', commands: ['!lurk'], command: '!lurk', message: '{username} is now lurking 👁️', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' }
         ];
 
-        // Default movement commands
+        // Default APP commands (special app-specific features)
+        const defaultAppCommands = [
+            { id: 'who', name: 'Who Command', commands: ['!who'], command: '!who', message: '🔥 Around the campfire:', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'APP', cooldown: 30, cooldownEnabled: true, cooldownType: 'global', undeletable: true, action: 'handleWhoCommand', userLineFormat: '{icon} {username}', userSeparator: ' • ', stateIcons: { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' }, stateFilters: { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true } }
+        ];
+
+        // Default movement commands (with cooldown properties)
         const defaultMovementCommands = [
-            { id: 'cw', name: 'Clockwise Rotation', commands: ['!cw'], command: '!cw', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'MOVEMENT' },
-            { id: 'ccw', name: 'Counter-clockwise Rotation', commands: ['!ccw'], command: '!ccw', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'MOVEMENT' },
-            { id: 'still', name: 'Stay Still', commands: ['!still'], command: '!still', message: '{username} is now still.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'MOVEMENT' },
-            { id: 'roam', name: 'Roam Around', commands: ['!roam'], command: '!roam', message: '{username} is now roaming.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'MOVEMENT' },
-            { id: 'wander', name: 'Wander Freely', commands: ['!wander'], command: '!wander', message: '{username} is now wandering.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'MOVEMENT' }
+            { id: 'cw', name: 'Clockwise Rotation', commands: ['!cw'], command: '!cw', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'MOVEMENT', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'ccw', name: 'Counter-clockwise Rotation', commands: ['!ccw'], command: '!ccw', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'MOVEMENT', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'still', name: 'Stay Still', commands: ['!still'], command: '!still', message: '{username} is now still.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'MOVEMENT', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'roam', name: 'Roam Around', commands: ['!roam'], command: '!roam', message: '{username} is now roaming.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'MOVEMENT', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'wander', name: 'Wander Freely', commands: ['!wander'], command: '!wander', message: '{username} is now wandering.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'MOVEMENT', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' }
         ];
 
-        // Default appearance commands
+        // Default appearance commands (with cooldown properties)
         const defaultAppearanceCommands = [
-            { id: 'changesprite', name: 'Change Sprite', commands: ['!changesprite', '!sprite'], command: '!changesprite', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'APPEARANCE' },
-            { id: 'changecolor', name: 'Change Color', commands: ['!changecolor', '!color'], command: '!changecolor', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'APPEARANCE' },
-            { id: 'next', name: 'Next Sprite', commands: ['!next'], command: '!next', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'APPEARANCE' },
-            { id: 'back', name: 'Previous Sprite', commands: ['!back'], command: '!back', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'APPEARANCE' },
-            { id: 'random', name: 'Random Appearance', commands: ['!random'], command: '!random', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'APPEARANCE' },
-            { id: 'reset', name: 'Reset Appearance', commands: ['!reset'], command: '!reset', message: '{username} reset their campfire look.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'APPEARANCE' }
+            { id: 'changesprite', name: 'Change Sprite', commands: ['!changesprite', '!sprite'], command: '!changesprite', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'APPEARANCE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'changecolor', name: 'Change Color', commands: ['!changecolor', '!color'], command: '!changecolor', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'APPEARANCE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'next', name: 'Next Sprite', commands: ['!next'], command: '!next', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'APPEARANCE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'back', name: 'Previous Sprite', commands: ['!back'], command: '!back', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'APPEARANCE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'random', name: 'Random Appearance', commands: ['!random'], command: '!random', message: '', enabled: true, silent: true, respondAllChats: false, allowNonCampers: false, isDefault: true, category: 'APPEARANCE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'reset', name: 'Reset Appearance', commands: ['!reset'], command: '!reset', message: '{username} reset their campfire look.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'APPEARANCE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' }
         ];
 
-        // Default animation commands
+        // Default animation commands (with cooldown properties)
         const defaultAnimationCommands = [
-            { id: 'spin', name: 'Spin Command', commands: ['!spin'], command: '!spin', message: '{username} spins!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'ANIMATION' },
-            { id: 'dance', name: 'Dance Command', commands: ['!dance'], command: '!dance', message: '{username} dances!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'ANIMATION' },
-            { id: 'sparkle', name: 'Sparkle Command', commands: ['!sparkle'], command: '!sparkle', message: '{username} sparkles! ✨', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'ANIMATION' }
+            { id: 'spin', name: 'Spin Command', commands: ['!spin'], command: '!spin', message: '{username} spins!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'ANIMATION', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'dance', name: 'Dance Command', commands: ['!dance'], command: '!dance', message: '{username} dances!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'ANIMATION', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
+            { id: 'sparkle', name: 'Sparkle Command', commands: ['!sparkle'], command: '!sparkle', message: '{username} sparkles! ✨', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'ANIMATION', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' }
         ];
 
-        // Default auto state commands
+        // Default auto state commands (no cooldown - these are triggered automatically)
         const defaultAutoStateCommands = [
-            { id: 'sleepy', name: 'Sleepy State', commands: [], command: '', message: '{username} is now sleepy 😴', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
-            { id: 'auto-afk', name: 'Auto AFK', commands: [], command: '', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
-            { id: 'auto-return', name: 'Auto Return', commands: [], command: '', message: '{username} is back! 👋', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
-            { id: 'auto-leave', name: 'Auto Leave', commands: [], command: '', message: '{username} has left due to inactivity', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' }
+            { id: 'sleepy', name: 'Sleepy State', commands: [], command: '', message: '{username} is now sleepy 😴', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' },
+            { id: 'auto-afk', name: 'Auto AFK', commands: [], command: '', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' },
+            { id: 'auto-return', name: 'Auto Return', commands: [], command: '', message: '{username} is back! 👋', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' },
+            { id: 'auto-leave', name: 'Auto Leave', commands: [], command: '', message: '{username} has left due to inactivity', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' }
         ];
 
         // Generic loader function for command categories
@@ -6622,6 +6649,10 @@
             await loadCommandCategory('animationCommandsList', defaultAnimationCommands);
         }
 
+        async function loadAppCommands() {
+            await loadCommandCategory('appCommandsList', defaultAppCommands);
+        }
+
         async function loadCustomCommands() {
             const customContainer = document.getElementById('customBotMessagesList');
             const noCustomMsg = document.getElementById('noCustomMessages');
@@ -6642,6 +6673,7 @@
                 ...APPEARANCE_COMMAND_IDS,
                 ...ANIMATION_COMMAND_IDS,
                 ...AUTO_STATE_COMMAND_IDS,
+                ...APP_COMMAND_IDS,
                 'help' // Also exclude help
             ];
             const customMessages = savedMessages.filter(m => !allDefaultIds.includes(m.id));
@@ -6668,6 +6700,7 @@
             const appearanceTab = document.getElementById('appearanceSubTab');
             const animationTab = document.getElementById('animationSubTab');
             const autoStatesTab = document.getElementById('autoStatesSubTab');
+            const appTab = document.getElementById('appSubTab');
             const customTab = document.getElementById('customSubTab');
             
             if (stateTab && stateTab.style.display !== 'none') {
@@ -6680,6 +6713,8 @@
                 await loadAnimationCommands();
             } else if (autoStatesTab && autoStatesTab.style.display !== 'none') {
                 await loadAutoStateCommands();
+            } else if (appTab && appTab.style.display !== 'none') {
+                await loadAppCommands();
             } else if (customTab && customTab.style.display !== 'none') {
                 await loadCustomCommands();
             } else {
@@ -7171,8 +7206,119 @@
 
             const respValue = document.createElement('div');
             respValue.style.cssText = 'font-size: 13px; color: #ccc; background: #2a2a2a; padding: 6px 10px; border-radius: 4px; word-break: break-word; line-height: 1.5; border: 1px solid #444; min-height: 36px;';
-            respValue.textContent = msg.message;
-            respValue.title = 'Use {username} to include the user\'s name in the response';
+            
+            // Special handling for !who command - show editable fields
+            if (msg.id === 'who') {
+                const userLineFormat = msg.userLineFormat || '{icon} {username}';
+                const userSeparator = msg.userSeparator || ' • ';
+                const stateIcons = msg.stateIcons || { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' };
+                const stateFilters = msg.stateFilters || { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true };
+                
+                // Generate example output based on current format and filters
+                const allExampleUsers = [
+                    { state: 'JOINED', username: 'ExampleUser1' },
+                    { state: 'ACTIVE', username: 'ActiveViewer' },
+                    { state: 'SLEEPY', username: 'SleepyViewer' },
+                    { state: 'AFK', username: 'AFKPerson' },
+                    { state: 'LURK', username: 'LurkingFan' }
+                ];
+                const filteredExampleUsers = allExampleUsers.filter(u => stateFilters[u.state] !== false);
+                const exampleOutput = filteredExampleUsers.map(u => {
+                    const icon = stateIcons[u.state] || '🔥';
+                    return userLineFormat.replace('{icon}', icon).replace('{username}', u.username).replace('{state}', u.state.toLowerCase());
+                }).join(userSeparator);
+                
+                respValue.innerHTML = `
+                    <div style="margin-bottom: 12px;">
+                        <div style="color: #888; font-size: 11px; margin-bottom: 4px;">Header Message:</div>
+                        <input type="text" id="who-header-${msg.id}" value="${escapeHtml(msg.message || '🔥 Around the campfire:')}"
+                            style="width: 100%; padding: 6px 10px; background: #333; border: 1px solid #555; border-radius: 4px; color: #fff; font-size: 13px;"
+                            onchange="updateWhoCommandField('${msg.id}', 'message', this.value)"
+                            title="The header message shown before the user list">
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <div style="color: #888; font-size: 11px; margin-bottom: 4px;">User Format:</div>
+                        <input type="text" id="who-format-${msg.id}" value="${escapeHtml(userLineFormat)}"
+                            style="width: 100%; padding: 6px 10px; background: #333; border: 1px solid #555; border-radius: 4px; color: #fff; font-size: 13px;"
+                            onchange="updateWhoCommandField('${msg.id}', 'userLineFormat', this.value)"
+                            title="Format for each user. Use {icon}, {username}, {state}">
+                        <div style="color: #666; font-size: 10px; margin-top: 4px;">Placeholders: {icon} {username} {state}</div>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <div style="color: #888; font-size: 11px; margin-bottom: 4px;">User Separator:</div>
+                        <input type="text" id="who-separator-${msg.id}" value="${escapeHtml(userSeparator)}"
+                            style="width: 100%; padding: 6px 10px; background: #333; border: 1px solid #555; border-radius: 4px; color: #fff; font-size: 13px;"
+                            onchange="updateWhoCommandField('${msg.id}', 'userSeparator', this.value)"
+                            title="Separator between users (e.g., ' • ' or ' - ' or ', ')">
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <div style="color: #888; font-size: 11px; margin-bottom: 4px;">State Icons (click to edit):</div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 4px; background: #333; padding: 4px 8px; border-radius: 4px;">
+                                <span style="font-size: 11px; color: #888;">Active:</span>
+                                <input type="text" id="who-icon-active-${msg.id}" value="${escapeHtml(stateIcons.ACTIVE || '🔥')}"
+                                    style="width: 40px; padding: 2px 4px; background: #222; border: 1px solid #555; border-radius: 3px; color: #fff; font-size: 14px; text-align: center;"
+                                    onchange="updateWhoStateIcon('${msg.id}', 'ACTIVE', this.value)">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px; background: #333; padding: 4px 8px; border-radius: 4px;">
+                                <span style="font-size: 11px; color: #888;">Sleepy:</span>
+                                <input type="text" id="who-icon-sleepy-${msg.id}" value="${escapeHtml(stateIcons.SLEEPY || '😴')}"
+                                    style="width: 40px; padding: 2px 4px; background: #222; border: 1px solid #555; border-radius: 3px; color: #fff; font-size: 14px; text-align: center;"
+                                    onchange="updateWhoStateIcon('${msg.id}', 'SLEEPY', this.value)">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px; background: #333; padding: 4px 8px; border-radius: 4px;">
+                                <span style="font-size: 11px; color: #888;">AFK:</span>
+                                <input type="text" id="who-icon-afk-${msg.id}" value="${escapeHtml(stateIcons.AFK || '💤')}"
+                                    style="width: 40px; padding: 2px 4px; background: #222; border: 1px solid #555; border-radius: 3px; color: #fff; font-size: 14px; text-align: center;"
+                                    onchange="updateWhoStateIcon('${msg.id}', 'AFK', this.value)">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px; background: #333; padding: 4px 8px; border-radius: 4px;">
+                                <span style="font-size: 11px; color: #888;">Lurk:</span>
+                                <input type="text" id="who-icon-lurk-${msg.id}" value="${escapeHtml(stateIcons.LURK || '👁️')}"
+                                    style="width: 40px; padding: 2px 4px; background: #222; border: 1px solid #555; border-radius: 3px; color: #fff; font-size: 14px; text-align: center;"
+                                    onchange="updateWhoStateIcon('${msg.id}', 'LURK', this.value)">
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <div style="color: #888; font-size: 11px; margin-bottom: 4px;">Include States:</div>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <input type="checkbox" id="who-filter-active-${msg.id}" ${stateFilters.ACTIVE !== false && stateFilters.JOINED !== false ? 'checked' : ''}
+                                    onchange="updateWhoStateFilter('${msg.id}', 'ACTIVE', this.checked); updateWhoStateFilter('${msg.id}', 'JOINED', this.checked);"
+                                    style="cursor: pointer;">
+                                <span style="font-size: 12px; color: #aaa;">Active/Joined</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <input type="checkbox" id="who-filter-sleepy-${msg.id}" ${stateFilters.SLEEPY !== false ? 'checked' : ''}
+                                    onchange="updateWhoStateFilter('${msg.id}', 'SLEEPY', this.checked)"
+                                    style="cursor: pointer;">
+                                <span style="font-size: 12px; color: #aaa;">Sleepy</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <input type="checkbox" id="who-filter-afk-${msg.id}" ${stateFilters.AFK !== false ? 'checked' : ''}
+                                    onchange="updateWhoStateFilter('${msg.id}', 'AFK', this.checked)"
+                                    style="cursor: pointer;">
+                                <span style="font-size: 12px; color: #aaa;">AFK</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <input type="checkbox" id="who-filter-lurk-${msg.id}" ${stateFilters.LURK !== false ? 'checked' : ''}
+                                    onchange="updateWhoStateFilter('${msg.id}', 'LURK', this.checked)"
+                                    style="cursor: pointer;">
+                                <span style="font-size: 12px; color: #aaa;">Lurking</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div style="background: #1a1a1a; padding: 10px; border-radius: 4px; border: 1px solid #333;">
+                        <div style="color: #888; font-size: 11px; margin-bottom: 6px;">Preview:</div>
+                        <div id="who-preview-${msg.id}" style="color: #aaa; font-style: italic; font-size: 12px;">${escapeHtml(msg.message || '🔥 Around the campfire:')} ${escapeHtml(exampleOutput)}</div>
+                    </div>
+                `;
+                respValue.title = 'Customize the header message, user format, icons, and filters';
+            } else {
+                respValue.textContent = msg.message;
+                respValue.title = 'Use {username} to include the user\'s name in the response';
+            }
 
             gridDiv.appendChild(cmdLabel);
             gridDiv.appendChild(cmdValue);
@@ -7209,16 +7355,193 @@
             respondToggle.onclick = () => toggleCommandOption(msg.id, 'respondAllChats', !msg.respondAllChats);
             respondToggle.title = 'When enabled, the bot response is sent to the Pop Out Chat window. When disabled, responses only go to Twitch Chat.';
 
+            // Cooldown toggle
+            const cooldownLabel = document.createElement('div');
+            cooldownLabel.style.cssText = 'font-size: 12px; color: #888; font-weight: 600;';
+            cooldownLabel.textContent = 'Cooldown:';
+            cooldownLabel.title = 'When enabled, this command has a cooldown period before it can be used again';
+
+            const cooldownContainer = document.createElement('div');
+            cooldownContainer.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+
+            const cooldownToggle = document.createElement('div');
+            const cooldownEnabled = msg.cooldownEnabled !== false; // Default to true
+            cooldownToggle.className = `toggle-switch ${cooldownEnabled ? 'active' : ''}`;
+            cooldownToggle.style.cssText = `cursor: pointer; width: 50px; height: 24px; background: ${cooldownEnabled ? '#667eea' : '#444'}; border-radius: 12px; position: relative; transition: background 0.3s; box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);`;
+            cooldownToggle.innerHTML = `<div style="position: absolute; top: 2px; left: ${cooldownEnabled ? '28px' : '2px'}; width: 20px; height: 20px; background: white; border-radius: 50%; transition: left 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>`;
+            cooldownToggle.onclick = () => toggleCommandOption(msg.id, 'cooldownEnabled', !msg.cooldownEnabled);
+            cooldownToggle.title = 'Enable or disable cooldown for this command';
+
+            const cooldownInput = document.createElement('input');
+            cooldownInput.type = 'number';
+            cooldownInput.min = '0';
+            cooldownInput.max = '3600';
+            cooldownInput.value = msg.cooldown || 3;
+            cooldownInput.style.cssText = 'width: 60px; padding: 4px 8px; background: #2a2a2a; border: 1px solid #444; border-radius: 4px; color: #fff; font-size: 12px;';
+            cooldownInput.title = 'Cooldown duration in seconds';
+            cooldownInput.onchange = () => updateCommandCooldown(msg.id, parseInt(cooldownInput.value) || 3);
+
+            const cooldownSuffix = document.createElement('span');
+            cooldownSuffix.style.cssText = 'font-size: 11px; color: #888;';
+            cooldownSuffix.textContent = 'sec';
+
+            cooldownContainer.appendChild(cooldownToggle);
+            cooldownContainer.appendChild(cooldownInput);
+            cooldownContainer.appendChild(cooldownSuffix);
+
+            // Cooldown type selector (per-user vs global) - only show for special commands
+            const cooldownTypeLabel = document.createElement('div');
+            cooldownTypeLabel.style.cssText = 'font-size: 12px; color: #888; font-weight: 600;';
+            cooldownTypeLabel.textContent = 'Type:';
+            cooldownTypeLabel.title = 'Per-user: each user has their own cooldown. Global: one cooldown for everyone.';
+
+            const cooldownTypeSelect = document.createElement('select');
+            cooldownTypeSelect.style.cssText = 'padding: 4px 8px; background: #2a2a2a; border: 1px solid #444; border-radius: 4px; color: #fff; font-size: 11px;';
+            cooldownTypeSelect.innerHTML = `
+                <option value="per-user" ${(msg.cooldownType || 'per-user') === 'per-user' ? 'selected' : ''}>Per User</option>
+                <option value="global" ${msg.cooldownType === 'global' ? 'selected' : ''}>Global</option>
+            `;
+            cooldownTypeSelect.onchange = () => toggleCommandOption(msg.id, 'cooldownType', cooldownTypeSelect.value);
+            cooldownTypeSelect.title = 'Per-user: each user has their own cooldown. Global: one cooldown for everyone.';
+
             optionsGrid.appendChild(silentLabel);
             optionsGrid.appendChild(silentToggle);
             optionsGrid.appendChild(respondLabel);
             optionsGrid.appendChild(respondToggle);
+            optionsGrid.appendChild(cooldownLabel);
+            optionsGrid.appendChild(cooldownContainer);
+            optionsGrid.appendChild(cooldownTypeLabel);
+            optionsGrid.appendChild(cooldownTypeSelect);
 
             div.appendChild(headerDiv);
             div.appendChild(gridDiv);
             div.appendChild(optionsGrid);
 
             return div;
+        }
+
+        // Update command cooldown value
+        async function updateCommandCooldown(commandId, seconds) {
+            try {
+                const messages = await window.electronAPI.getBotMessages();
+                const msgIndex = messages.findIndex(m => m.id === commandId);
+                if (msgIndex !== -1) {
+                    messages[msgIndex].cooldown = seconds;
+                    await window.electronAPI.saveBotMessages(messages);
+                    console.log(`[Dashboard] Updated cooldown for ${commandId} to ${seconds}s`);
+                }
+            } catch (error) {
+                console.error('[Dashboard] Error updating cooldown:', error);
+            }
+        }
+
+        // Update !who command field (header message or user line format)
+        async function updateWhoCommandField(commandId, field, value) {
+            try {
+                const messages = await window.electronAPI.getBotMessages();
+                const msgIndex = messages.findIndex(m => m.id === commandId);
+                if (msgIndex !== -1) {
+                    messages[msgIndex][field] = value;
+                    await window.electronAPI.saveBotMessages(messages);
+                    // Update preview
+                    updateWhoPreview(commandId);
+                    console.log(`[Dashboard] Updated ${field} for ${commandId}`);
+                }
+            } catch (error) {
+                console.error('[Dashboard] Error updating who command field:', error);
+            }
+        }
+
+        // Update !who command preview
+        async function updateWhoPreview(commandId) {
+            const previewEl = document.getElementById(`who-preview-${commandId}`);
+            if (!previewEl) return;
+            
+            const headerInput = document.getElementById(`who-header-${commandId}`);
+            const formatInput = document.getElementById(`who-format-${commandId}`);
+            const separatorInput = document.getElementById(`who-separator-${commandId}`);
+            
+            if (!headerInput || !formatInput) return;
+            
+            const header = headerInput.value || '🔥 Around the campfire:';
+            const format = formatInput.value || '{icon} {username}';
+            const separator = separatorInput ? separatorInput.value : ' • ';
+            
+            // Get current icons from inputs
+            const activeIcon = document.getElementById(`who-icon-active-${commandId}`)?.value || '🔥';
+            const sleepyIcon = document.getElementById(`who-icon-sleepy-${commandId}`)?.value || '😴';
+            const afkIcon = document.getElementById(`who-icon-afk-${commandId}`)?.value || '💤';
+            const lurkIcon = document.getElementById(`who-icon-lurk-${commandId}`)?.value || '👁️';
+            
+            // Get current filters from checkboxes
+            const activeFilter = document.getElementById(`who-filter-active-${commandId}`)?.checked !== false;
+            const sleepyFilter = document.getElementById(`who-filter-sleepy-${commandId}`)?.checked !== false;
+            const afkFilter = document.getElementById(`who-filter-afk-${commandId}`)?.checked !== false;
+            const lurkFilter = document.getElementById(`who-filter-lurk-${commandId}`)?.checked !== false;
+            
+            // Generate sample preview with current settings
+            const allSampleUsers = [
+                { state: 'ACTIVE', icon: activeIcon, username: 'ExampleUser1', filter: activeFilter },
+                { state: 'SLEEPY', icon: sleepyIcon, username: 'SleepyViewer', filter: sleepyFilter },
+                { state: 'AFK', icon: afkIcon, username: 'AFKPerson', filter: afkFilter },
+                { state: 'LURK', icon: lurkIcon, username: 'LurkingFan', filter: lurkFilter }
+            ];
+            
+            const filteredUsers = allSampleUsers.filter(u => u.filter);
+            
+            const userLines = filteredUsers.map(u =>
+                format.replace('{icon}', u.icon).replace('{username}', u.username).replace('{state}', u.state.toLowerCase())
+            );
+            
+            previewEl.textContent = `${header} ${userLines.join(separator)}`;
+        }
+
+        // Update !who state icon
+        async function updateWhoStateIcon(commandId, state, icon) {
+            try {
+                const messages = await window.electronAPI.getBotMessages();
+                const msgIndex = messages.findIndex(m => m.id === commandId);
+                if (msgIndex !== -1) {
+                    // Initialize stateIcons if not present
+                    if (!messages[msgIndex].stateIcons) {
+                        messages[msgIndex].stateIcons = { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' };
+                    }
+                    // Update the specific state icon
+                    messages[msgIndex].stateIcons[state] = icon;
+                    // Also update JOINED if ACTIVE is changed (they share the same icon)
+                    if (state === 'ACTIVE') {
+                        messages[msgIndex].stateIcons['JOINED'] = icon;
+                    }
+                    await window.electronAPI.saveBotMessages(messages);
+                    // Update preview
+                    updateWhoPreview(commandId);
+                    console.log(`[Dashboard] Updated ${state} icon for ${commandId} to ${icon}`);
+                }
+            } catch (error) {
+                console.error('[Dashboard] Error updating who state icon:', error);
+            }
+        }
+
+        // Update !who state filter
+        async function updateWhoStateFilter(commandId, state, enabled) {
+            try {
+                const messages = await window.electronAPI.getBotMessages();
+                const msgIndex = messages.findIndex(m => m.id === commandId);
+                if (msgIndex !== -1) {
+                    // Initialize stateFilters if not present
+                    if (!messages[msgIndex].stateFilters) {
+                        messages[msgIndex].stateFilters = { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true };
+                    }
+                    // Update the specific state filter
+                    messages[msgIndex].stateFilters[state] = enabled;
+                    await window.electronAPI.saveBotMessages(messages);
+                    // Update preview
+                    updateWhoPreview(commandId);
+                    console.log(`[Dashboard] Updated ${state} filter for ${commandId} to ${enabled}`);
+                }
+            } catch (error) {
+                console.error('[Dashboard] Error updating who state filter:', error);
+            }
         }
 
         // Helper function to create member DOM element

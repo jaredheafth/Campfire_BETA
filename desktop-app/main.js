@@ -72,6 +72,77 @@ let botMessageHelper = null;      // Helper for sending bot messages
 let thirdPartyEmotesCache = { channel: null, emotes: {}, updatedAt: 0 };
 let thirdPartyEmotesInFlight = null;
 
+// Chat message buffer for popout chat persistence
+// Stores recent messages so they can be restored when popout is reopened
+const CHAT_BUFFER_MAX_SIZE = 200;
+let chatMessageBuffer = [];
+
+// Command cooldown tracking
+// Maps command ID -> { userId -> lastUsedTimestamp } for per-user cooldowns
+// or { '_global' -> lastUsedTimestamp } for global cooldowns
+const commandCooldowns = new Map();
+
+// Default cooldown values (in seconds)
+const DEFAULT_COOLDOWN_SECONDS = 3;
+const DEFAULT_WHO_COOLDOWN_SECONDS = 30;
+
+/**
+ * Check if a command is on cooldown for a user
+ * @param {string} commandId - The command ID
+ * @param {string} userId - The user ID (or '_global' for global cooldowns)
+ * @param {Object} commandConfig - The command configuration
+ * @returns {Object} { onCooldown: boolean, remainingSeconds: number }
+ */
+function checkCommandCooldown(commandId, userId, commandConfig) {
+    // If cooldown is not enabled or is 0, command is not on cooldown
+    if (!commandConfig.cooldownEnabled || !commandConfig.cooldown || commandConfig.cooldown <= 0) {
+        return { onCooldown: false, remainingSeconds: 0 };
+    }
+    
+    const cooldownMs = commandConfig.cooldown * 1000; // Convert seconds to ms
+    const cooldownKey = commandConfig.cooldownType === 'global' ? '_global' : userId;
+    
+    // Get or create cooldown map for this command
+    if (!commandCooldowns.has(commandId)) {
+        commandCooldowns.set(commandId, new Map());
+    }
+    
+    const commandCooldownMap = commandCooldowns.get(commandId);
+    const lastUsed = commandCooldownMap.get(cooldownKey) || 0;
+    const now = Date.now();
+    const elapsed = now - lastUsed;
+    
+    if (elapsed < cooldownMs) {
+        const remainingMs = cooldownMs - elapsed;
+        return {
+            onCooldown: true,
+            remainingSeconds: Math.ceil(remainingMs / 1000)
+        };
+    }
+    
+    return { onCooldown: false, remainingSeconds: 0 };
+}
+
+/**
+ * Update the cooldown timestamp for a command
+ * @param {string} commandId - The command ID
+ * @param {string} userId - The user ID (or '_global' for global cooldowns)
+ * @param {Object} commandConfig - The command configuration
+ */
+function updateCommandCooldown(commandId, userId, commandConfig) {
+    if (!commandConfig.cooldownEnabled || !commandConfig.cooldown || commandConfig.cooldown <= 0) {
+        return;
+    }
+    
+    const cooldownKey = commandConfig.cooldownType === 'global' ? '_global' : userId;
+    
+    if (!commandCooldowns.has(commandId)) {
+        commandCooldowns.set(commandId, new Map());
+    }
+    
+    commandCooldowns.get(commandId).set(cooldownKey, Date.now());
+}
+
 // Settings storage
 let userDataPath;
 let settingsPath;
@@ -226,8 +297,9 @@ async function shutdownEntireApp({ reason = 'shutdown', forUpdate = false } = {}
 }
 
 function createWidgetWindow() {
-    // Load saved window dimensions
+    // Load saved window dimensions and update the global variable
     const savedDimensions = loadWindowDimensions();
+    windowDimensions = savedDimensions; // Update global so toggle-window-lock uses correct values
     const isWindows = process.platform === 'win32';
     const settings = loadSettings() || {};
     const widgetBackground = String(settings.widgetBackground || 'black').toLowerCase();
@@ -246,6 +318,9 @@ function createWidgetWindow() {
         height: savedDimensions.height,
         minWidth: 600,
         minHeight: 600,
+        // NOTE: We intentionally do NOT use useContentSize: true
+        // Using outer window dimensions (getBounds/setBounds) is more reliable
+        // and avoids drift caused by content-to-window size conversions
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -313,29 +388,40 @@ function createWidgetWindow() {
     });
     
     widgetWindow.on('resize', () => {
+        // Skip saving during lock toggle to prevent dimension drift
+        // The isTogglingLock flag is set by toggle-window-lock handler
+        if (typeof isTogglingLock !== 'undefined' && isTogglingLock) {
+            return;
+        }
+        
         if (widgetWindow && !windowDimensions.locked) {
+            // Use getBounds() for outer window dimensions (more reliable than getSize with useContentSize)
             const bounds = widgetWindow.getBounds();
+            const width = bounds.width;
+            const height = bounds.height;
 
             // Enforce minimum dimensions programmatically
             const minWidth = 600;
             const minHeight = 600;
             let needsResize = false;
+            let newWidth = width;
+            let newHeight = height;
 
-            if (bounds.width < minWidth) {
-                bounds.width = minWidth;
+            if (width < minWidth) {
+                newWidth = minWidth;
                 needsResize = true;
             }
-            if (bounds.height < minHeight) {
-                bounds.height = minHeight;
+            if (height < minHeight) {
+                newHeight = minHeight;
                 needsResize = true;
             }
 
             if (needsResize) {
-                widgetWindow.setBounds(bounds);
+                widgetWindow.setBounds({ ...bounds, width: newWidth, height: newHeight });
             }
 
-            windowDimensions.width = bounds.width;
-            windowDimensions.height = bounds.height;
+            windowDimensions.width = needsResize ? newWidth : width;
+            windowDimensions.height = needsResize ? newHeight : height;
             saveWindowDimensions();
         }
     });
@@ -1840,40 +1926,49 @@ const actionFunctions = {
     handleResetCommand,
     handleSpinCommand,
     handleDanceCommand,
-    handleSparkleCommand
+    handleSparkleCommand,
+    handleWhoCommand
 };
 
 // Bot messages cache for main process
+// Each command now includes cooldown properties:
+// - cooldown: number (seconds, 0 = no cooldown)
+// - cooldownEnabled: boolean (whether cooldown is active)
+// - cooldownType: 'per-user' | 'global' (default: 'per-user')
+// - undeletable: boolean (for core commands that cannot be removed)
 let botMessagesCache = [
     // REGULAR
-    { id: 'help', name: 'Help Command', commands: ['!help'], command: '!help', message: 'Commands: join with "!join" • !leave • !cw [deg] • !ccw [deg] • !color <hex> • !sprite <name> • !next/!back • !spin • !dance • !sparkle • !random • !reset • !still/!wander', enabled: true, category: 'REGULAR', silent: false, respondAllChats: true, action: null },
+    { id: 'help', name: 'Help Command', commands: ['!help'], command: '!help', message: 'Commands: join with "!join" • !leave • !cw [deg] • !ccw [deg] • !color <hex> • !sprite <name> • !next/!back • !spin • !dance • !sparkle • !random • !reset • !still/!wander', enabled: true, category: 'REGULAR', silent: false, respondAllChats: true, action: null, cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
 
     // STATE - Messages will be loaded from saved settings
-    { id: 'join', name: 'Join Command', commands: ['!join'], command: '!join', message: '{username} joined the campfire!', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleJoinCommand' },
-    { id: 'leave', name: 'Leave Command', commands: ['!leave', '!exit'], command: '!leave', message: '{username} left the campfire.', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLeaveCommand' },
-    { id: 'afk', name: 'AFK Command', commands: ['!afk'], command: '!afk', message: '{username} went AFK 💤', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleAfkCommand' },
-    { id: 'lurk', name: 'Lurk Command', commands: ['!lurk'], command: '!lurk', message: '{username} is now lurking 👁️', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLurkCommand' },
-    { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleReturnCommand', allowNonCampers: false },
+    { id: 'join', name: 'Join Command', commands: ['!join'], command: '!join', message: '{username} joined the campfire!', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleJoinCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'leave', name: 'Leave Command', commands: ['!leave', '!exit'], command: '!leave', message: '{username} left the campfire.', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLeaveCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'afk', name: 'AFK Command', commands: ['!afk'], command: '!afk', message: '{username} went AFK 💤', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleAfkCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'lurk', name: 'Lurk Command', commands: ['!lurk'], command: '!lurk', message: '{username} is now lurking 👁️', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLurkCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleReturnCommand', allowNonCampers: false, cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
 
     // MOVEMENT
-    { id: 'cw', name: 'Clockwise Rotation', commands: ['!cw'], command: '!cw', message: '', enabled: true, category: 'MOVEMENT', silent: true, respondAllChats: false, action: 'handleCwCommand' },
-    { id: 'ccw', name: 'Counter-clockwise Rotation', commands: ['!ccw'], command: '!ccw', message: '', enabled: true, category: 'MOVEMENT', silent: true, respondAllChats: false, action: 'handleCcwCommand' },
-    { id: 'still', name: 'Still Command', commands: ['!still'], command: '!still', message: '{username} is now still.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleStillCommand' },
-    { id: 'roam', name: 'Roam Command', commands: ['!roam'], command: '!roam', message: '{username} is now roaming.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleRoamCommand' },
-    { id: 'wander', name: 'Wander Command', commands: ['!wander'], command: '!wander', message: '{username} is now wandering.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleWanderCommand' },
+    { id: 'cw', name: 'Clockwise Rotation', commands: ['!cw'], command: '!cw', message: '', enabled: true, category: 'MOVEMENT', silent: true, respondAllChats: false, action: 'handleCwCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'ccw', name: 'Counter-clockwise Rotation', commands: ['!ccw'], command: '!ccw', message: '', enabled: true, category: 'MOVEMENT', silent: true, respondAllChats: false, action: 'handleCcwCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'still', name: 'Still Command', commands: ['!still'], command: '!still', message: '{username} is now still.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleStillCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'roam', name: 'Roam Command', commands: ['!roam'], command: '!roam', message: '{username} is now roaming.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleRoamCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'wander', name: 'Wander Command', commands: ['!wander'], command: '!wander', message: '{username} is now wandering.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleWanderCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
 
     // APPEARANCE
-    { id: 'changesprite', name: 'Change Sprite', commands: ['!changesprite', '!sprite'], command: '!changesprite', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleSpriteCommandAction' },
-    { id: 'changecolor', name: 'Change Color', commands: ['!changecolor', '!color'], command: '!changecolor', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleColorCommandAction' },
-    { id: 'next', name: 'Next Sprite', commands: ['!next'], command: '!next', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleNextCommand' },
-    { id: 'back', name: 'Previous Sprite', commands: ['!back'], command: '!back', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleBackCommand' },
-    { id: 'random', name: 'Random Appearance', commands: ['!random'], command: '!random', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleRandomCommand' },
-    { id: 'reset', name: 'Reset Command', commands: ['!reset'], command: '!reset', message: '{username} reset their campfire look.', enabled: true, category: 'APPEARANCE', silent: false, respondAllChats: true, action: 'handleResetCommand' },
+    { id: 'changesprite', name: 'Change Sprite', commands: ['!changesprite', '!sprite'], command: '!changesprite', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleSpriteCommandAction', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'changecolor', name: 'Change Color', commands: ['!changecolor', '!color'], command: '!changecolor', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleColorCommandAction', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'next', name: 'Next Sprite', commands: ['!next'], command: '!next', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleNextCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'back', name: 'Previous Sprite', commands: ['!back'], command: '!back', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleBackCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'random', name: 'Random Appearance', commands: ['!random'], command: '!random', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleRandomCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'reset', name: 'Reset Command', commands: ['!reset'], command: '!reset', message: '{username} reset their campfire look.', enabled: true, category: 'APPEARANCE', silent: false, respondAllChats: true, action: 'handleResetCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
 
     // ANIMATION
-    { id: 'spin', name: 'Spin Command', commands: ['!spin'], command: '!spin', message: '{username} spins!', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleSpinCommand' },
-    { id: 'dance', name: 'Dance Command', commands: ['!dance'], command: '!dance', message: '{username} dances!', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleDanceCommand' },
-    { id: 'sparkle', name: 'Sparkle Command', commands: ['!sparkle'], command: '!sparkle', message: '{username} sparkles! ✨', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleSparkleCommand' },
+    { id: 'spin', name: 'Spin Command', commands: ['!spin'], command: '!spin', message: '{username} spins!', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleSpinCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'dance', name: 'Dance Command', commands: ['!dance'], command: '!dance', message: '{username} dances!', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleDanceCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'sparkle', name: 'Sparkle Command', commands: ['!sparkle'], command: '!sparkle', message: '{username} sparkles! ✨', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleSparkleCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+
+    // SPECIAL - !who command (lists users around campfire)
+    { id: 'who', name: 'Who Command', commands: ['!who'], command: '!who', message: '🔥 Around the campfire:', enabled: true, category: 'APP', silent: false, respondAllChats: true, action: 'handleWhoCommand', cooldown: DEFAULT_WHO_COOLDOWN_SECONDS, cooldownEnabled: true, cooldownType: 'global', undeletable: true, userLineFormat: '{icon} {username}', userSeparator: ' • ', stateIcons: { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' }, stateFilters: { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true } },
 
     // Note: Automatic announcements removed - STATE commands now handle user-triggered responses
 ];
@@ -1899,34 +1994,37 @@ function loadBotMessagesFromFile() {
 function getDefaultBotMessages() {
     return [
         // REGULAR
-        { id: 'help', name: 'Help Command', commands: ['!help'], command: '!help', message: 'Commands: join with "!join" • !leave • !cw [deg] • !ccw [deg] • !color <hex> • !sprite <name> • !next/!back • !spin • !dance • !sparkle • !random • !reset • !still/!wander', enabled: true, category: 'REGULAR', silent: false, respondAllChats: true, action: null },
+        { id: 'help', name: 'Help Command', commands: ['!help'], command: '!help', message: 'Commands: join with "!join" • !leave • !cw [deg] • !ccw [deg] • !color <hex> • !sprite <name> • !next/!back • !spin • !dance • !sparkle • !random • !reset • !still/!wander', enabled: true, category: 'REGULAR', silent: false, respondAllChats: true, action: null, cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
 
         // STATE - Messages will be loaded from saved settings
-        { id: 'join', name: 'Join Command', commands: ['!join'], command: '!join', message: '{username} joined the campfire!', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleJoinCommand' },
-        { id: 'leave', name: 'Leave Command', commands: ['!leave', '!exit'], command: '!leave', message: '{username} left the campfire.', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLeaveCommand' },
-        { id: 'afk', name: 'AFK Command', commands: ['!afk'], command: '!afk', message: '{username} went AFK 💤', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleAfkCommand' },
-        { id: 'lurk', name: 'Lurk Command', commands: ['!lurk'], command: '!lurk', message: '{username} is now lurking 👁️', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLurkCommand' },
-        { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleReturnCommand', allowNonCampers: false },
+        { id: 'join', name: 'Join Command', commands: ['!join'], command: '!join', message: '{username} joined the campfire!', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleJoinCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'leave', name: 'Leave Command', commands: ['!leave', '!exit'], command: '!leave', message: '{username} left the campfire.', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLeaveCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'afk', name: 'AFK Command', commands: ['!afk'], command: '!afk', message: '{username} went AFK 💤', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleAfkCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'lurk', name: 'Lurk Command', commands: ['!lurk'], command: '!lurk', message: '{username} is now lurking 👁️', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLurkCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleReturnCommand', allowNonCampers: false, cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
 
         // MOVEMENT
-        { id: 'cw', name: 'Clockwise Rotation', commands: ['!cw'], command: '!cw', message: '', enabled: true, category: 'MOVEMENT', silent: true, respondAllChats: false, action: 'handleCwCommand' },
-        { id: 'ccw', name: 'Counter-clockwise Rotation', commands: ['!ccw'], command: '!ccw', message: '', enabled: true, category: 'MOVEMENT', silent: true, respondAllChats: false, action: 'handleCcwCommand' },
-        { id: 'still', name: 'Still Command', commands: ['!still'], command: '!still', message: '{username} is now still.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleStillCommand' },
-        { id: 'roam', name: 'Roam Command', commands: ['!roam'], command: '!roam', message: '{username} is now roaming.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleRoamCommand' },
-        { id: 'wander', name: 'Wander Command', commands: ['!wander'], command: '!wander', message: '{username} is now wandering.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleWanderCommand' },
+        { id: 'cw', name: 'Clockwise Rotation', commands: ['!cw'], command: '!cw', message: '', enabled: true, category: 'MOVEMENT', silent: true, respondAllChats: false, action: 'handleCwCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'ccw', name: 'Counter-clockwise Rotation', commands: ['!ccw'], command: '!ccw', message: '', enabled: true, category: 'MOVEMENT', silent: true, respondAllChats: false, action: 'handleCcwCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'still', name: 'Still Command', commands: ['!still'], command: '!still', message: '{username} is now still.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleStillCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'roam', name: 'Roam Command', commands: ['!roam'], command: '!roam', message: '{username} is now roaming.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleRoamCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'wander', name: 'Wander Command', commands: ['!wander'], command: '!wander', message: '{username} is now wandering.', enabled: true, category: 'MOVEMENT', silent: false, respondAllChats: true, action: 'handleWanderCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
 
         // APPEARANCE
-        { id: 'changesprite', name: 'Change Sprite', commands: ['!changesprite', '!sprite'], command: '!changesprite', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleSpriteCommandAction' },
-        { id: 'changecolor', name: 'Change Color', commands: ['!changecolor', '!color'], command: '!changecolor', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleColorCommandAction' },
-        { id: 'next', name: 'Next Sprite', commands: ['!next'], command: '!next', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleNextCommand' },
-        { id: 'back', name: 'Previous Sprite', commands: ['!back'], command: '!back', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleBackCommand' },
-        { id: 'random', name: 'Random Appearance', commands: ['!random'], command: '!random', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleRandomCommand' },
-        { id: 'reset', name: 'Reset Command', commands: ['!reset'], command: '!reset', message: '{username} reset their campfire look.', enabled: true, category: 'APPEARANCE', silent: false, respondAllChats: true, action: 'handleResetCommand' },
+        { id: 'changesprite', name: 'Change Sprite', commands: ['!changesprite', '!sprite'], command: '!changesprite', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleSpriteCommandAction', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'changecolor', name: 'Change Color', commands: ['!changecolor', '!color'], command: '!changecolor', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleColorCommandAction', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'next', name: 'Next Sprite', commands: ['!next'], command: '!next', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleNextCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'back', name: 'Previous Sprite', commands: ['!back'], command: '!back', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleBackCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'random', name: 'Random Appearance', commands: ['!random'], command: '!random', message: '', enabled: true, category: 'APPEARANCE', silent: true, respondAllChats: false, action: 'handleRandomCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'reset', name: 'Reset Command', commands: ['!reset'], command: '!reset', message: '{username} reset their campfire look.', enabled: true, category: 'APPEARANCE', silent: false, respondAllChats: true, action: 'handleResetCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
 
         // ANIMATION
-        { id: 'spin', name: 'Spin Command', commands: ['!spin'], command: '!spin', message: '{username} spins!', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleSpinCommand' },
-        { id: 'dance', name: 'Dance Command', commands: ['!dance'], command: '!dance', message: '{username} dances!', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleDanceCommand' },
-        { id: 'sparkle', name: 'Sparkle Command', commands: ['!sparkle'], command: '!sparkle', message: '{username} sparkles! ✨', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleSparkleCommand' },
+        { id: 'spin', name: 'Spin Command', commands: ['!spin'], command: '!spin', message: '{username} spins!', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleSpinCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'dance', name: 'Dance Command', commands: ['!dance'], command: '!dance', message: '{username} dances!', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleDanceCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'sparkle', name: 'Sparkle Command', commands: ['!sparkle'], command: '!sparkle', message: '{username} sparkles! ✨', enabled: true, category: 'ANIMATION', silent: false, respondAllChats: true, action: 'handleSparkleCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+
+        // SPECIAL - !who command (lists users around campfire)
+        { id: 'who', name: 'Who Command', commands: ['!who'], command: '!who', message: '🔥 Around the campfire:', enabled: true, category: 'APP', silent: false, respondAllChats: true, action: 'handleWhoCommand', cooldown: DEFAULT_WHO_COOLDOWN_SECONDS, cooldownEnabled: true, cooldownType: 'global', undeletable: true, userLineFormat: '{icon} {username}', userSeparator: ' • ', stateIcons: { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' }, stateFilters: { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true } },
     ];
 }
 
@@ -1962,7 +2060,7 @@ function saveBotMessagesToFile(messages) {
 
 // Normalize bot message for cache
 function normalizeBotMessage(msg) {
-    return {
+    const normalized = {
         id: msg.id,
         name: msg.name,
         commands: Array.isArray(msg.commands) ? msg.commands.map(cmd => cmd.toLowerCase()) : [msg.command].filter(Boolean).map(cmd => cmd.toLowerCase()),
@@ -1973,8 +2071,23 @@ function normalizeBotMessage(msg) {
         silent: msg.silent !== undefined ? msg.silent : false,
         respondAllChats: msg.respondAllChats !== undefined ? msg.respondAllChats : true,
         allowNonCampers: msg.allowNonCampers !== undefined ? msg.allowNonCampers : false,
-        action: msg.action || null
+        action: msg.action || null,
+        // Cooldown properties
+        cooldown: msg.cooldown !== undefined ? msg.cooldown : DEFAULT_COOLDOWN_SECONDS,
+        cooldownEnabled: msg.cooldownEnabled !== undefined ? msg.cooldownEnabled : false,
+        cooldownType: msg.cooldownType || 'per-user',
+        undeletable: msg.undeletable !== undefined ? msg.undeletable : false
     };
+    
+    // !who command specific properties
+    if (msg.id === 'who') {
+        normalized.userLineFormat = msg.userLineFormat || '{icon} {username}';
+        normalized.userSeparator = msg.userSeparator || ' • ';
+        normalized.stateIcons = msg.stateIcons || { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' };
+        normalized.stateFilters = msg.stateFilters || { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true };
+    }
+    
+    return normalized;
 }
 
 // Broadcast bot messages update to all windows
@@ -2353,12 +2466,21 @@ async function parseChatCommand(username, userId, message, tags) {
     for (const cmd of botMessagesCache) {
         if (!cmd.enabled || !Array.isArray(cmd.commands) || cmd.category === 'ANNOUNCEMENT') continue;
         if (cmd.commands.some(c => command === c || command.startsWith(c + ' '))) {
+            // Check cooldown before executing command
+            const cooldownResult = checkCommandCooldown(cmd.id, userId, cmd);
+            if (cooldownResult.onCooldown) {
+                console.log(`[parseChatCommand] Command ${cmd.id} on cooldown for user ${username} (${cooldownResult.remainingSeconds}s remaining)`);
+                return; // Silently ignore command on cooldown
+            }
+            
             if (cmd.action) {
                 const actionFunc = actionFunctions[cmd.action]; // Use function map instead of eval
                 if (actionFunc) {
                     // Action handlers are responsible for their own messaging
                     // Do NOT send messages here to avoid duplication
                     await actionFunc(username, userId, message, tags);
+                    // Update cooldown after successful execution
+                    updateCommandCooldown(cmd.id, userId, cmd);
                     return; // Action handler handles everything including messaging
                 }
             }
@@ -2403,6 +2525,8 @@ async function parseChatCommand(username, userId, message, tags) {
                         isBotResponse: true
                     });
                 }
+                // Update cooldown after successful execution
+                updateCommandCooldown(cmd.id, userId, cmd);
             }
             return;
         }
@@ -3458,6 +3582,231 @@ async function handleSparkleCommand(username, userId, message, tags) {
     }
 }
 
+/**
+ * Handle the !who command - lists users around the campfire with their statuses
+ * @param {string} username - The username who triggered the command
+ * @param {string} userId - The user ID who triggered the command
+ * @param {string} message - The full message
+ * @param {Object} tags - Twitch IRC tags
+ */
+async function handleWhoCommand(username, userId, message, tags) {
+    // Get the !who command configuration from cache
+    const whoCmd = botMessagesCache.find(cmd => cmd.id === 'who');
+    if (!whoCmd || !whoCmd.enabled) {
+        console.log('[handleWhoCommand] !who command is disabled');
+        return;
+    }
+    
+    // Get all joined users from userManager (preferred) or activeUsers (fallback)
+    let joinedUsers = [];
+    
+    if (userManager) {
+        // Use userManager - the authoritative source
+        const allUsers = userManager.getAllUsers();
+        joinedUsers = allUsers.filter(user => {
+            // Filter to only users who have joined the campfire (not IN_CHAT)
+            const state = user.state || user._state || 'IN_CHAT';
+            return state !== 'IN_CHAT';
+        });
+        console.log(`[handleWhoCommand] Found ${joinedUsers.length} joined users from userManager (total: ${allUsers.length})`);
+    } else {
+        // Fallback to activeUsers
+        joinedUsers = Array.from(activeUsers.values()).filter(user => {
+            // Check various state properties
+            const state = user.state || user.userState || user._state;
+            return state && state !== 'IN_CHAT';
+        });
+        console.log(`[handleWhoCommand] Found ${joinedUsers.length} joined users from activeUsers (fallback)`);
+    }
+    
+    if (joinedUsers.length === 0) {
+        const emptyMsg = '🔥 No one is around the campfire yet. Use !join to join!';
+        
+        // Send to Twitch chat
+        if (!whoCmd.silent) {
+            await sayInChannel(emptyMsg, 'bot', true);
+        }
+        
+        // Send to Popout Chat
+        if (whoCmd.respondAllChats) {
+            sendToPopoutChat({
+                username: '',
+                message: emptyMsg,
+                userId: null,
+                emotes: null,
+                allowBubble: false,
+                isAction: true,
+                displayName: '',
+                color: null,
+                commandCategory: 'INFO'
+            });
+        }
+        
+        // Send to dashboard
+        if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+            dashboardWindow.webContents.send('twitchChatMessage', {
+                username: '',
+                message: emptyMsg,
+                userId: null,
+                isAction: true,
+                commandCategory: 'INFO',
+                isBotResponse: true
+            });
+        }
+        return;
+    }
+    
+    // Build the user list with status icons
+    // Get customizable state icons from command config (or use defaults)
+    const defaultStateIcons = {
+        'JOINED': '🔥',
+        'ACTIVE': '🔥',
+        'SLEEPY': '😴',
+        'AFK': '💤',
+        'LURK': '👁️'
+    };
+    const stateIcons = whoCmd.stateIcons || defaultStateIcons;
+    
+    // Get state filters from command config (which states to include)
+    const defaultStateFilters = { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true };
+    const stateFilters = whoCmd.stateFilters || defaultStateFilters;
+    
+    // Helper to get user state (handles both User class and plain objects)
+    const getUserState = (user) => {
+        // User class has state getter that returns _state
+        if (typeof user.state === 'string') return user.state;
+        if (typeof user._state === 'string') return user._state;
+        if (typeof user.userState === 'string') return user.userState.toUpperCase();
+        return 'ACTIVE';
+    };
+    
+    // Filter users based on state filters
+    const filteredUsers = joinedUsers.filter(user => {
+        const state = getUserState(user);
+        return stateFilters[state] !== false; // Include if not explicitly false
+    });
+    
+    if (filteredUsers.length === 0) {
+        const emptyMsg = '🔥 No one matching the filter is around the campfire.';
+        
+        // Send to Twitch chat
+        if (!whoCmd.silent) {
+            await sayInChannel(emptyMsg, 'bot', true);
+        }
+        
+        // Send to Popout Chat
+        if (whoCmd.respondAllChats) {
+            sendToPopoutChat({
+                username: '',
+                message: emptyMsg,
+                userId: null,
+                emotes: null,
+                allowBubble: false,
+                isAction: true,
+                displayName: '',
+                color: null,
+                commandCategory: 'INFO'
+            });
+        }
+        
+        // Send to dashboard
+        if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+            dashboardWindow.webContents.send('twitchChatMessage', {
+                username: '',
+                message: emptyMsg,
+                userId: null,
+                isAction: true,
+                commandCategory: 'INFO',
+                isBotResponse: true
+            });
+        }
+        return;
+    }
+    
+    // Get the user line format from command config (customizable by streamer)
+    // Supports placeholders: {icon}, {username}, {state}
+    const userLineFormat = whoCmd.userLineFormat || '{icon} {username}';
+    
+    // Get the separator from command config (for inline display)
+    const userSeparator = whoCmd.userSeparator || ' • ';
+    
+    // Format: each user with status icon
+    const userLines = filteredUsers.map(user => {
+        const state = getUserState(user);
+        const icon = stateIcons[state] || stateIcons['ACTIVE'] || '🔥';
+        const displayName = user.displayName || user.username;
+        
+        // Apply the customizable format
+        return userLineFormat
+            .replace('{icon}', icon)
+            .replace('{username}', displayName)
+            .replace('{state}', state.toLowerCase());
+    });
+    
+    // Get the header message from command config (customizable by streamer)
+    const headerMsg = whoCmd.message || '🔥 Around the campfire:';
+    
+    // Build full message - header + users inline with separator
+    // For Twitch chat, we need to be mindful of message length limits (500 chars)
+    const fullMessage = headerMsg + ' ' + userLines.join(userSeparator);
+    
+    // If message is too long for Twitch, truncate and add count
+    const MAX_TWITCH_LENGTH = 450;
+    let twitchMessage = fullMessage;
+    if (twitchMessage.length > MAX_TWITCH_LENGTH) {
+        // Show count instead of full list for Twitch
+        const countByState = {};
+        filteredUsers.forEach(user => {
+            const state = getUserState(user);
+            countByState[state] = (countByState[state] || 0) + 1;
+        });
+        
+        const stateCounts = [];
+        if (countByState['ACTIVE'] || countByState['JOINED']) {
+            stateCounts.push(`${(countByState['ACTIVE'] || 0) + (countByState['JOINED'] || 0)} active`);
+        }
+        if (countByState['SLEEPY']) stateCounts.push(`${countByState['SLEEPY']} sleepy`);
+        if (countByState['AFK']) stateCounts.push(`${countByState['AFK']} AFK`);
+        if (countByState['LURK']) stateCounts.push(`${countByState['LURK']} lurking`);
+        
+        twitchMessage = `🔥 ${filteredUsers.length} campers: ${stateCounts.join(', ')}`;
+    }
+    
+    // Send to Twitch chat
+    if (!whoCmd.silent) {
+        await sayInChannel(twitchMessage, 'bot', true);
+    }
+    
+    // Send to Popout Chat (full message with line breaks)
+    if (whoCmd.respondAllChats) {
+        sendToPopoutChat({
+            username: '',
+            message: fullMessage,
+            userId: null,
+            emotes: null,
+            allowBubble: false,
+            isAction: true,
+            displayName: '',
+            color: null,
+            commandCategory: 'INFO'
+        });
+    }
+    
+    // Send to dashboard (full message)
+    if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+        dashboardWindow.webContents.send('twitchChatMessage', {
+            username: '',
+            message: fullMessage,
+            userId: null,
+            isAction: true,
+            commandCategory: 'INFO',
+            isBotResponse: true
+        });
+    }
+    
+    console.log(`[handleWhoCommand] Listed ${filteredUsers.length} users around the campfire (${joinedUsers.length} total joined)`);
+}
+
 function parseColor(colorInput) {
     // Handle hex colors
     if (colorInput.startsWith('#')) {
@@ -3599,9 +3948,9 @@ function broadcastToWidget(channel, data) {
     }
     // Also send chat messages to the chat popout window (for regular user messages)
     // Bot responses are handled separately via sendToPopoutChat
-    if (channel === 'chatMessage' && chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
+    if (channel === 'chatMessage') {
         // Add isCamper flag for grey non-campers feature
-        const enhancedData = { ...data };
+        const enhancedData = { ...data, timestamp: Date.now() };
         if (data.userId) {
             enhancedData.isCamper = activeUsers.has(String(data.userId));
         } else if (data.username) {
@@ -3613,8 +3962,36 @@ function broadcastToWidget(channel, data) {
         } else {
             enhancedData.isCamper = true; // Bot messages are always "campers"
         }
-        chatPopoutWindow.webContents.send(channel, enhancedData);
+        
+        // Add to chat buffer for persistence
+        addToChatBuffer(enhancedData);
+        
+        // Send to popout if open
+        if (chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
+            chatPopoutWindow.webContents.send(channel, enhancedData);
+        }
     }
+}
+
+/**
+ * Add a message to the chat buffer for persistence
+ * @param {Object} messageData - The message data to buffer
+ */
+function addToChatBuffer(messageData) {
+    chatMessageBuffer.push(messageData);
+    
+    // Trim buffer if it exceeds max size
+    if (chatMessageBuffer.length > CHAT_BUFFER_MAX_SIZE) {
+        chatMessageBuffer.shift();
+    }
+}
+
+/**
+ * Get chat history from the buffer
+ * @returns {Array} Array of buffered chat messages
+ */
+function getChatHistory() {
+    return [...chatMessageBuffer];
 }
 
 /**
@@ -3627,16 +4004,21 @@ function broadcastToWidget(channel, data) {
  * @param {boolean} data.isAction - Whether to display as action/italic
  */
 function sendToPopoutChat(data) {
-    if (!chatPopoutWindow || chatPopoutWindow.isDestroyed()) return;
-    
     // Add command category for special formatting
     const enhancedData = {
         ...data,
+        timestamp: Date.now(),
         isCamper: true, // Bot messages are always treated as "camper" messages
         commandCategory: data.commandCategory || null
     };
     
-    chatPopoutWindow.webContents.send('chatMessage', enhancedData);
+    // Always buffer bot messages for persistence (even if popout is closed)
+    addToChatBuffer(enhancedData);
+    
+    // Send to popout if open
+    if (chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
+        chatPopoutWindow.webContents.send('chatMessage', enhancedData);
+    }
 }
 
 /**
@@ -3711,18 +4093,23 @@ let widgetSyncTimeout = null;
 function buildActiveUsersList() {
     // Use userManager if available, fall back to activeUsers
     const users = userManager ? userManager.getAllUsers() : Array.from(activeUsers.values());
-    return users.map(user => ({
-        username: user.username || '',
-        userId: user.userId || (user.username ? user.username.toLowerCase() : ''),
-        color: user.color || null,
-        selectedSprite: user.selectedSprite || null,
-        twitchColor: user.twitchColor || null,
-        angle: user.angle || 0,
-        joinedAt: user.joinedAt || Date.now(),
-        state: user.state || user.userState || 'joined', // Include state for dashboard sync
-        source: user.source || 'unknown',
-        roles: user.roles || null
-    }));
+    return users.map(user => {
+        // For User objects from UserManager, use the sprite getter
+        // For legacy objects from activeUsers, use selectedSprite
+        const sprite = user.sprite || user.selectedSprite || null;
+        return {
+            username: user.username || '',
+            userId: user.userId || (user.username ? user.username.toLowerCase() : ''),
+            color: user.color || null,
+            selectedSprite: sprite,
+            twitchColor: user.twitchColor || null,
+            angle: user.angle || 0,
+            joinedAt: user.joinedAt || Date.now(),
+            state: user.state || user.userState || 'joined', // Include state for dashboard sync
+            source: user.source || 'unknown',
+            roles: user.roles || null
+        };
+    });
 }
 
 function syncWidgetFullStateFromMain() {
@@ -3871,22 +4258,29 @@ function recreateWidgetWindow({ settings } = {}) {
 
 function loadWindowDimensions() {
     const dimsPath = path.join(userDataPath, 'window-dimensions.json');
+    console.log('[loadWindowDimensions] Loading from:', dimsPath);
     try {
         if (fs.existsSync(dimsPath)) {
-            return JSON.parse(fs.readFileSync(dimsPath, 'utf8'));
+            const data = JSON.parse(fs.readFileSync(dimsPath, 'utf8'));
+            console.log('[loadWindowDimensions] Loaded:', data);
+            return data;
+        } else {
+            console.log('[loadWindowDimensions] File does not exist, using defaults');
         }
     } catch (e) {
-        // Ignore
+        console.error('[loadWindowDimensions] Error loading:', e);
     }
     return { width: 1920, height: 1080, locked: true };
 }
 
 function saveWindowDimensions() {
     const dimsPath = path.join(userDataPath, 'window-dimensions.json');
+    console.log('[saveWindowDimensions] Saving to:', dimsPath, 'Data:', windowDimensions);
     try {
         fs.writeFileSync(dimsPath, JSON.stringify(windowDimensions, null, 2));
+        console.log('[saveWindowDimensions] Saved successfully');
     } catch (e) {
-        console.error('Error saving window dimensions:', e);
+        console.error('[saveWindowDimensions] Error saving:', e);
     }
 }
 
@@ -3909,6 +4303,11 @@ ipcMain.handle('open-members-window', () => {
 ipcMain.handle('open-chat-popout', () => {
     createChatPopoutWindow();
     return { success: true };
+});
+
+// Get chat history for popout persistence
+ipcMain.handle('get-chat-history', () => {
+    return getChatHistory();
 });
 
 ipcMain.handle('bring-chat-popout-to-front', () => {
@@ -3968,14 +4367,10 @@ ipcMain.handle('save-viewer-prefs', async (event, opts) => {
 });
 
 ipcMain.handle('get-window-dimensions', () => {
-    // Get ACTUAL current widget window dimensions if it exists
-    if (widgetWindow && !widgetWindow.isDestroyed()) {
-        const bounds = widgetWindow.getBounds();
-        // Update windowDimensions with actual current dimensions
-        windowDimensions.width = bounds.width;
-        windowDimensions.height = bounds.height;
-    }
-    // Return the current dimensions (either from widget window or saved)
+    // Return the STORED dimensions, not the actual window size
+    // The actual window size may differ due to Electron quirks (focus, frame changes, etc.)
+    // We only update stored dimensions when the user explicitly resizes via the resize handler
+    // or when they apply new dimensions via set-window-dimensions
     return windowDimensions;
 });
 
@@ -3984,31 +4379,53 @@ ipcMain.handle('set-window-dimensions', (event, dimensions) => {
     saveWindowDimensions();
     
     if (widgetWindow && !widgetWindow.isDestroyed()) {
-        widgetWindow.setSize(windowDimensions.width, windowDimensions.height);
+        // Use setBounds to set outer window dimensions (preserves position)
+        const currentBounds = widgetWindow.getBounds();
+        widgetWindow.setBounds({
+            x: currentBounds.x,
+            y: currentBounds.y,
+            width: windowDimensions.width,
+            height: windowDimensions.height
+        });
         widgetWindow.setResizable(!windowDimensions.locked);
     }
     
     return { success: true };
 });
 
-ipcMain.handle('toggle-window-lock', () => {
-    // Store current dimensions before toggling to prevent Electron auto-resize
-    const currentBounds = widgetWindow && !widgetWindow.isDestroyed() ?
-        widgetWindow.getBounds() : null;
+// Flag to prevent resize handler from saving during lock toggle
+let isTogglingLock = false;
 
+ipcMain.handle('toggle-window-lock', () => {
+    // Set flag to prevent resize handler from saving wrong dimensions
+    isTogglingLock = true;
+
+    // Toggle the lock state
     windowDimensions.locked = !windowDimensions.locked;
-    saveWindowDimensions();
 
     if (widgetWindow && !widgetWindow.isDestroyed()) {
+        // Change resizable state
         widgetWindow.setResizable(!windowDimensions.locked);
-        // Restore original dimensions if they changed due to resizable state change
-        if (currentBounds) {
-            const newBounds = widgetWindow.getBounds();
-            if (newBounds.width !== currentBounds.width || newBounds.height !== currentBounds.height) {
-                widgetWindow.setBounds(currentBounds);
-            }
-        }
+        
+        // ALWAYS force the window to the stored dimensions using setBounds
+        // This ensures consistency regardless of any Electron quirks (focus, frame changes, etc.)
+        const currentBounds = widgetWindow.getBounds();
+        console.log(`[toggle-window-lock] Forcing dimensions to stored values: ${windowDimensions.width}x${windowDimensions.height}`);
+        widgetWindow.setBounds({
+            x: currentBounds.x,
+            y: currentBounds.y,
+            width: windowDimensions.width,
+            height: windowDimensions.height
+        });
     }
+
+    // Save the lock state (dimensions are already correct)
+    saveWindowDimensions();
+
+    // Clear flag after a short delay to allow any pending resize events to be ignored
+    setTimeout(() => {
+        isTogglingLock = false;
+    }, 100);
 
     return { locked: windowDimensions.locked };
 });
@@ -4043,6 +4460,184 @@ ipcMain.handle('get-twitch-config', () => {
 ipcMain.handle('get-third-party-emotes', () => {
     return thirdPartyEmotesCache || { channel: null, emotes: {}, updatedAt: Date.now() };
 });
+
+// ============================================
+// TWITCH EMOTE FETCHING FOR POPOUT CHAT
+// ============================================
+
+// Cache for Twitch emotes
+let twitchEmotesCache = {
+    global: null,
+    channel: null,
+    user: null,
+    lastFetch: {}
+};
+
+const EMOTE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Fetch global Twitch emotes
+async function fetchGlobalEmotes() {
+    const now = Date.now();
+    if (twitchEmotesCache.global && (now - (twitchEmotesCache.lastFetch.global || 0)) < EMOTE_CACHE_TTL) {
+        return twitchEmotesCache.global;
+    }
+    
+    try {
+        const token = twitchConfig.accessToken || twitchConfig.oauthToken;
+        const clientId = twitchConfig.clientId;
+        
+        if (!token || !clientId) {
+            console.log('[Emotes] No token or client ID for global emotes');
+            return [];
+        }
+        
+        const response = await fetch('https://api.twitch.tv/helix/chat/emotes/global', {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Client-Id': clientId
+            }
+        });
+        
+        if (!response.ok) {
+            console.error('[Emotes] Failed to fetch global emotes:', response.status);
+            return [];
+        }
+        
+        const data = await response.json();
+        const emotes = (data.data || []).map(e => ({
+            id: e.id,
+            name: e.name,
+            url: e.images.url_2x || e.images.url_1x
+        }));
+        
+        twitchEmotesCache.global = emotes;
+        twitchEmotesCache.lastFetch.global = now;
+        console.log(`[Emotes] Fetched ${emotes.length} global emotes`);
+        return emotes;
+    } catch (error) {
+        console.error('[Emotes] Error fetching global emotes:', error);
+        return [];
+    }
+}
+
+// Fetch channel emotes (subscriber emotes)
+async function fetchChannelEmotes() {
+    const now = Date.now();
+    if (twitchEmotesCache.channel && (now - (twitchEmotesCache.lastFetch.channel || 0)) < EMOTE_CACHE_TTL) {
+        return twitchEmotesCache.channel;
+    }
+    
+    try {
+        const token = twitchConfig.accessToken || twitchConfig.oauthToken;
+        const clientId = twitchConfig.clientId;
+        const broadcasterId = twitchConfig.userId;
+        
+        if (!token || !clientId || !broadcasterId) {
+            console.log('[Emotes] No token, client ID, or broadcaster ID for channel emotes');
+            return [];
+        }
+        
+        const response = await fetch(`https://api.twitch.tv/helix/chat/emotes?broadcaster_id=${broadcasterId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Client-Id': clientId
+            }
+        });
+        
+        if (!response.ok) {
+            console.error('[Emotes] Failed to fetch channel emotes:', response.status);
+            return [];
+        }
+        
+        const data = await response.json();
+        const emotes = (data.data || []).map(e => ({
+            id: e.id,
+            name: e.name,
+            url: e.images.url_2x || e.images.url_1x,
+            tier: e.tier
+        }));
+        
+        twitchEmotesCache.channel = emotes;
+        twitchEmotesCache.lastFetch.channel = now;
+        console.log(`[Emotes] Fetched ${emotes.length} channel emotes`);
+        return emotes;
+    } catch (error) {
+        console.error('[Emotes] Error fetching channel emotes:', error);
+        return [];
+    }
+}
+
+// Fetch user emotes (emotes the authenticated user can use)
+async function fetchUserEmotes() {
+    const now = Date.now();
+    if (twitchEmotesCache.user && (now - (twitchEmotesCache.lastFetch.user || 0)) < EMOTE_CACHE_TTL) {
+        return twitchEmotesCache.user;
+    }
+    
+    try {
+        const token = twitchConfig.accessToken || twitchConfig.oauthToken;
+        const clientId = twitchConfig.clientId;
+        const userId = twitchConfig.userId;
+        
+        if (!token || !clientId || !userId) {
+            console.log('[Emotes] No token, client ID, or user ID for user emotes');
+            return [];
+        }
+        
+        // This endpoint requires user:read:emotes scope
+        const response = await fetch(`https://api.twitch.tv/helix/chat/emotes/user?user_id=${userId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Client-Id': clientId
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                console.log('[Emotes] User emotes require user:read:emotes scope');
+            } else {
+                console.error('[Emotes] Failed to fetch user emotes:', response.status);
+            }
+            return [];
+        }
+        
+        const data = await response.json();
+        const emotes = (data.data || []).map(e => ({
+            id: e.id,
+            name: e.name,
+            url: e.images.url_2x || e.images.url_1x,
+            emote_type: e.emote_type,
+            owner_id: e.owner_id
+        }));
+        
+        twitchEmotesCache.user = emotes;
+        twitchEmotesCache.lastFetch.user = now;
+        console.log(`[Emotes] Fetched ${emotes.length} user emotes`);
+        return emotes;
+    } catch (error) {
+        console.error('[Emotes] Error fetching user emotes:', error);
+        return [];
+    }
+}
+
+// IPC handler for getting Twitch emotes
+ipcMain.handle('get-twitch-emotes', async (event, type) => {
+    switch (type) {
+        case 'global':
+            return await fetchGlobalEmotes();
+        case 'channel':
+            return await fetchChannelEmotes();
+        case 'user':
+            return await fetchUserEmotes();
+        default:
+            console.warn('[Emotes] Unknown emote type:', type);
+            return [];
+    }
+});
+
+// ============================================
+// END TWITCH EMOTE FETCHING
+// ============================================
 
 ipcMain.handle('save-twitch-config', (event, config) => {
     twitchConfig = config;
@@ -4461,21 +5056,22 @@ ipcMain.handle('get-viewer-prefs', (event, userId) => {
 ipcMain.handle('kick-member', (event, userId) => {
     const normalizedId = String(userId);
     
-    // Try UserManager first
+    // Try UserManager first (single source of truth)
     if (userManager && userManager.hasUser(normalizedId)) {
         const user = userManager.getUser(normalizedId);
         userManager.leaveUser(normalizedId);
-        // Also remove from legacy activeUsers
+        // Also remove from legacy activeUsers for backward compatibility
         activeUsers.delete(normalizedId);
-        addEvent('userKick', { username: user.username, userId: normalizedId });
-        broadcastToWidget('userLeave', { username: user.username, userId: normalizedId });
+        // Note: UserManagerBridge already forwards the 'user:removed' event to widget,
+        // so we don't need to manually broadcast here to avoid duplicate events
         return { success: true };
     }
     
-    // Fall back to activeUsers
+    // Fall back to activeUsers (only if UserManager doesn't have the user)
     if (activeUsers.has(normalizedId)) {
         const user = activeUsers.get(normalizedId);
         activeUsers.delete(normalizedId);
+        // Manual broadcast only needed when UserManager wasn't used
         addEvent('userKick', { username: user.username, userId: normalizedId });
         broadcastToWidget('userLeave', { username: user.username, userId: normalizedId });
         return { success: true };
@@ -4547,32 +5143,64 @@ async function bulkKickUsers(users) {
         if (!username || !userId) continue;
         if (isTestUser(userId, username)) continue;
 
-        // Remove from activeUsers by ID or by username match (handles username-derived IDs)
-        let removed = false;
+        // Remove from UserManager first (single source of truth)
+        let removedFromManager = false;
+        if (userManager) {
+            if (userManager.hasUser(userId)) {
+                userManager.leaveUser(userId);
+                removedFromManager = true;
+            } else {
+                // Try by username if userId not found
+                const userByName = userManager.getUserByUsername(username);
+                if (userByName) {
+                    userManager.leaveUser(userByName.userId);
+                    removedFromManager = true;
+                }
+            }
+        }
+
+        // Also remove from legacy activeUsers for backward compatibility during transition
+        let removedFromLegacy = false;
         if (activeUsers.has(userId)) {
             activeUsers.delete(userId);
-            removed = true;
+            removedFromLegacy = true;
         } else {
             for (const [id, u] of activeUsers.entries()) {
                 if (u && u.username && String(u.username).toLowerCase() === username.toLowerCase()) {
                     activeUsers.delete(id);
-                    removed = true;
+                    removedFromLegacy = true;
                     break;
                 }
             }
         }
 
-        addEvent('userKick', { username, userId });
-        broadcastToWidget('userLeave', { username, userId });
-        results.push({ username, userId, success: true, removedFromMain: removed });
+        // Only broadcast if UserManager didn't already handle it (to avoid duplicate events)
+        // UserManagerBridge forwards events from UserManager, so we only need manual broadcast
+        // if UserManager wasn't used or didn't find the user
+        if (!removedFromManager) {
+            addEvent('userKick', { username, userId });
+            broadcastToWidget('userLeave', { username, userId });
+        }
+        
+        results.push({ username, userId, success: true, removedFromMain: removedFromManager || removedFromLegacy });
     }
     return results;
 }
 
 ipcMain.handle('kick-all-users', async () => {
     // Kick everyone currently in the campfire (excluding test users)
-    const widgetUsers = (widgetWindow && !widgetWindow.isDestroyed()) ? await executeGetWidgetDisplayUsersLite() : [];
-    const targets = widgetUsers.length > 0 ? widgetUsers : Array.from(activeUsers.values()).map(u => ({ username: u.username, userId: u.userId }));
+    // Use UserManager as the primary source of truth
+    let targets = [];
+    if (userManager) {
+        targets = userManager.getJoinedUsers()
+            .filter(u => !isTestUser(u.userId, u.username))
+            .map(u => ({ username: u.username, userId: u.userId }));
+    }
+    // Fallback to widget users or legacy activeUsers if UserManager is empty
+    if (targets.length === 0) {
+        const widgetUsers = (widgetWindow && !widgetWindow.isDestroyed()) ? await executeGetWidgetDisplayUsersLite() : [];
+        targets = widgetUsers.length > 0 ? widgetUsers : Array.from(activeUsers.values()).map(u => ({ username: u.username, userId: u.userId }));
+    }
     const results = await bulkKickUsers(targets);
     if (membersWindow && !membersWindow.isDestroyed()) membersWindow.webContents.send('refresh-members');
     if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('refresh-members');
@@ -4625,10 +5253,17 @@ async function bulkJoinUsers({ mode = 'controlled', delayMs = 80 } = {}) {
     const maxUsers = parseInt(settings.maxUsers, 10) || 20;
     const results = [];
 
-    // Get existing angles for collision detection
-    const existingAngles = Array.from(activeUsers.values())
-        .map(u => u.angle)
-        .filter(a => typeof a === 'number');
+    // Get existing angles for collision detection - prefer UserManager as source of truth
+    let existingAngles = [];
+    if (userManager) {
+        existingAngles = userManager.getJoinedUsers()
+            .map(u => u.angle)
+            .filter(a => typeof a === 'number');
+    } else {
+        existingAngles = Array.from(activeUsers.values())
+            .map(u => u.angle)
+            .filter(a => typeof a === 'number');
+    }
 
     // Ensure widget is ready (avoids spiky failures)
     if (widgetWindow && !widgetWindow.isDestroyed()) {
@@ -4644,6 +5279,15 @@ async function bulkJoinUsers({ mode = 'controlled', delayMs = 80 } = {}) {
         if (u && u.userId) inCampfireKeys.add(String(u.userId));
         if (u && u.username) inCampfireKeys.add(String(u.username).toLowerCase());
     });
+    
+    // Also check UserManager for already-joined users
+    if (userManager) {
+        for (const u of userManager.getJoinedUsers()) {
+            if (u && u.userId) inCampfireKeys.add(String(u.userId));
+            if (u && u.username) inCampfireKeys.add(String(u.username).toLowerCase());
+        }
+    }
+    // Legacy fallback
     for (const [, u] of activeUsers.entries()) {
         if (u && u.userId) inCampfireKeys.add(String(u.userId));
         if (u && u.username) inCampfireKeys.add(String(u.username).toLowerCase());
@@ -4653,14 +5297,22 @@ async function bulkJoinUsers({ mode = 'controlled', delayMs = 80 } = {}) {
         .filter(c => c && c.username && !isTestUser(c.userId, c.username))
         .sort((a, b) => (b.lastMessage || 0) - (a.lastMessage || 0));
 
+    // Get current joined count from UserManager (source of truth)
+    const getCurrentJoinedCount = () => {
+        if (userManager) {
+            return userManager.joinedCount;
+        }
+        return activeUsers.size;
+    };
+
     for (const c of chatters) {
         const username = String(c.username || '');
         const userId = normalizeJoinId(c.userId, username);
         if (!username || !userId) continue;
         if (inCampfireKeys.has(userId) || inCampfireKeys.has(username.toLowerCase())) continue;
 
-        // Respect maxUsers
-        if (activeUsers.size >= maxUsers) {
+        // Respect maxUsers - use UserManager count as source of truth
+        if (getCurrentJoinedCount() >= maxUsers) {
             results.push({ username, userId, success: false, skipped: true, reason: 'maxUsers' });
             continue;
         }
@@ -4685,23 +5337,58 @@ async function bulkJoinUsers({ mode = 'controlled', delayMs = 80 } = {}) {
         const prefs = loadViewerPrefs();
         const p = prefs[userId];
         const color = await getViewerColor(username, userId) || (p && p.color) || null;
-        const user = {
+        const angle = findAvailableAngle(existingAngles, 30); // 30 degrees separation (±15)
+        
+        const userData = {
             username,
             userId,
             color,
             selectedSprite: (p && p.selectedSprite) || null,
             twitchColor: c.color || null,
             joinedAt: Date.now(),
-            angle: findAvailableAngle(existingAngles, 30), // 30 degrees separation (±15)
+            angle,
             source: enforceRules ? 'bulk-controlled' : 'bulk-chaos'
         };
-        activeUsers.set(userId, user);
-        addEvent('userJoin', user);
-        broadcastToWidget('userJoin', user);
+
+        // Use UserManager as primary (single source of truth)
+        let addedToManager = false;
+        if (userManager) {
+            try {
+                await userManager.joinUser(userId, {
+                    username,
+                    twitchColor: c.color || null,
+                    angle,
+                    source: userData.source,
+                    roles: c.tags ? {
+                        broadcaster: c.tags.badges && c.tags.badges.broadcaster,
+                        moderator: c.tags.mod,
+                        vip: c.tags.badges && c.tags.badges.vip,
+                        subscriber: c.tags.subscriber
+                    } : null
+                });
+                addedToManager = true;
+                // Mark as in campfire to prevent re-adding
+                inCampfireKeys.add(userId);
+                inCampfireKeys.add(username.toLowerCase());
+            } catch (err) {
+                console.error(`[bulkJoinUsers] Error adding ${username} to UserManager:`, err);
+            }
+        }
+
+        // Also add to legacy activeUsers for backward compatibility during transition
+        activeUsers.set(userId, userData);
+        
+        // Only broadcast manually if UserManager didn't handle it
+        // (UserManagerBridge forwards events from UserManager)
+        if (!addedToManager) {
+            addEvent('userJoin', userData);
+            broadcastToWidget('userJoin', userData);
+        }
+        
         results.push({ username, userId, success: true });
 
         // Update existing angles for next user
-        existingAngles.push(user.angle);
+        existingAngles.push(angle);
 
         if (delayMs > 0) {
             await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -4839,27 +5526,55 @@ ipcMain.handle('join-all-test-users', async () => {
     
     for (const username of testUsers) {
         const userId = username.toLowerCase();
-        if (!activeUsers.has(userId)) {
-            const color = await getViewerColor(username, userId);
-            const user = {
-                username,
-                userId,
-                color: color,
-                selectedSprite: null,
-                joinedAt: Date.now(),
-                angle: Math.random() * 360,
-                source: 'test-users-toggle'
-            };
-            
-            activeUsers.set(userId, user);
-            addEvent('userJoin', user);
-            broadcastToWidget('userJoin', user);
-            console.log('[Main Process] Added test user to activeUsers:', username);
-            
-            results.push({ username, success: true });
-        } else {
+        
+        // Check if already joined in UserManager (source of truth) or legacy activeUsers
+        const alreadyInManager = userManager && userManager.hasUser(userId);
+        const alreadyInLegacy = activeUsers.has(userId);
+        
+        if (alreadyInManager || alreadyInLegacy) {
             results.push({ username, success: false, error: 'Already joined' });
+            continue;
         }
+        
+        const color = await getViewerColor(username, userId);
+        const angle = Math.random() * 360;
+        const userData = {
+            username,
+            userId,
+            color: color,
+            selectedSprite: null,
+            joinedAt: Date.now(),
+            angle,
+            source: 'test-users-toggle'
+        };
+        
+        // Use UserManager as primary (single source of truth)
+        let addedToManager = false;
+        if (userManager) {
+            try {
+                await userManager.joinUser(userId, {
+                    username,
+                    angle,
+                    source: 'test-users-toggle'
+                });
+                addedToManager = true;
+                console.log('[Main Process] Added test user to UserManager:', username);
+            } catch (err) {
+                console.error(`[Main Process] Error adding test user ${username} to UserManager:`, err);
+            }
+        }
+        
+        // Also add to legacy activeUsers for backward compatibility
+        activeUsers.set(userId, userData);
+        
+        // Only broadcast manually if UserManager didn't handle it
+        if (!addedToManager) {
+            addEvent('userJoin', userData);
+            broadcastToWidget('userJoin', userData);
+            console.log('[Main Process] Added test user to activeUsers (legacy):', username);
+        }
+        
+        results.push({ username, success: true });
     }
     
     // Update Members window if open
@@ -4873,21 +5588,36 @@ ipcMain.handle('join-all-test-users', async () => {
 
 // Kick all test users
 ipcMain.handle('kick-all-test-users', async () => {
+    console.log('[Main Process] kick-all-test-users called');
     const testUsers = ['TestUser1', 'TestUser2', 'TestUser3'];
     const results = [];
     
     for (const username of testUsers) {
         const userId = username.toLowerCase();
         
-        // Remove from main process
+        // Remove from UserManager first (single source of truth)
+        let removedFromManager = false;
+        if (userManager && userManager.hasUser(userId)) {
+            userManager.leaveUser(userId);
+            removedFromManager = true;
+            console.log('[Main Process] Removed test user from UserManager:', username);
+        }
+        
+        // Also remove from legacy activeUsers for backward compatibility
+        let removedFromLegacy = false;
         if (activeUsers.has(userId)) {
             const user = activeUsers.get(userId);
             activeUsers.delete(userId);
-            addEvent('userKick', { username: user.username, userId });
-            broadcastToWidget('userLeave', { username: user.username, userId });
+            removedFromLegacy = true;
+            
+            // Only broadcast manually if UserManager didn't handle it
+            if (!removedFromManager) {
+                addEvent('userKick', { username: user.username, userId });
+                broadcastToWidget('userLeave', { username: user.username, userId });
+            }
         }
         
-        results.push({ username, success: true });
+        results.push({ username, success: true, removedFromManager, removedFromLegacy });
     }
     
     // Update Members window if open
@@ -4895,6 +5625,7 @@ ipcMain.handle('kick-all-test-users', async () => {
         membersWindow.webContents.send('refresh-members');
     }
     
+    console.log('[Main Process] kick-all-test-users completed:', results);
     return { success: true, results };
 });
 
