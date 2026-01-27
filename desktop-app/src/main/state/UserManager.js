@@ -524,8 +524,9 @@ class UserManager extends EventEmitter {
       }
       
       // Check for SLEEPY transition
+      // Both ACTIVE and JOINED users should transition to SLEEPY after inactivity
       if (timeSinceActivity >= USER_STATE_TIMINGS.SLEEPY_THRESHOLD) {
-        if (user.state === USER_STATES.ACTIVE) {
+        if (user.state === USER_STATES.ACTIVE || user.state === USER_STATES.JOINED) {
           user.state = USER_STATES.SLEEPY;
           // Emit with 3 separate arguments to match UserIPCHandlers listener signature
           this.emit('user:stateChanged', user, oldState, USER_STATES.SLEEPY);
