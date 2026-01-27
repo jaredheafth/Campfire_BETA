@@ -3665,7 +3665,10 @@ async function handleWhoCommand(username, userId, message, tags) {
         'AFK': '💤',
         'LURK': '👁️'
     };
-    const stateIcons = whoCmd.stateIcons || defaultStateIcons;
+    // Merge with defaults to ensure all states have icons
+    const stateIcons = { ...defaultStateIcons, ...(whoCmd.stateIcons || {}) };
+    
+    console.log('[handleWhoCommand] State icons:', JSON.stringify(stateIcons));
     
     // Get state filters from command config (which states to include)
     const defaultStateFilters = { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true };
@@ -3735,6 +3738,9 @@ async function handleWhoCommand(username, userId, message, tags) {
         const state = getUserState(user);
         const icon = stateIcons[state] || stateIcons['ACTIVE'] || '🔥';
         const displayName = user.displayName || user.username;
+        
+        // Debug logging
+        console.log(`[handleWhoCommand] User: ${displayName}, State: ${state}, Icon: ${icon}`);
         
         // Apply the customizable format
         return userLineFormat
