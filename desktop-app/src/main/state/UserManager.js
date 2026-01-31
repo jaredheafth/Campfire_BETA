@@ -501,8 +501,13 @@ class UserManager extends EventEmitter {
       const timeSinceActivity = now - user.lastActivity;
       const oldState = user.state;
       
-      // Check for auto-leave (if enabled)
-      if (timeSinceActivity >= USER_STATE_TIMINGS.AUTO_LEAVE_THRESHOLD) {
+      // Stacking timers: each threshold is ADDED to the previous one
+      // Example: 5min sleepy + 15min afk = 20min total to become AFK
+      const sleepyToAfkThreshold = USER_STATE_TIMINGS.SLEEPY_THRESHOLD + USER_STATE_TIMINGS.AFK_THRESHOLD;
+      const afkToLeaveThreshold = USER_STATE_TIMINGS.SLEEPY_THRESHOLD + USER_STATE_TIMINGS.AFK_THRESHOLD + USER_STATE_TIMINGS.AUTO_LEAVE_THRESHOLD;
+      
+      // Check for auto-leave (longest stacked threshold)
+      if (timeSinceActivity >= afkToLeaveThreshold) {
         // This would be handled by settings check in the actual implementation
         // For now, just transition to AFK
         if (user.state !== USER_STATES.AFK) {
@@ -513,8 +518,8 @@ class UserManager extends EventEmitter {
         continue;
       }
       
-      // Check for AFK transition
-      if (timeSinceActivity >= USER_STATE_TIMINGS.AFK_THRESHOLD) {
+      // Check for AFK transition (stacked: sleepy + afk time)
+      if (timeSinceActivity >= sleepyToAfkThreshold) {
         if (user.state !== USER_STATES.AFK) {
           user.state = USER_STATES.AFK;
           // Emit with 3 separate arguments to match UserIPCHandlers listener signature

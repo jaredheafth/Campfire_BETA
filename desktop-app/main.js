@@ -40,6 +40,7 @@ let dashboardWindow;     // Secondary window - streamer dashboard
 let settingsWindow;      // Settings-only window (gear icon)
 let membersWindow;       // Members-only window
 let chatPopoutWindow;    // Chat popout window
+let buddyListWindow;     // Buddy list window
 let memberDashboardWindows = new Map(); // Individual viewer dashboards
 let tray;
 let twitchClient = null;
@@ -53,6 +54,9 @@ let lastSeparateChatBotUsername = null;
 let isRecreatingWidgetWindow = false;
 let isQuittingApp = false;
 let isQuittingForUpdate = false;
+
+// Auto-join flag - prevents duplicate joins on startup/reconnect
+let hasAutoJoinedStreamerBot = false;
 
 // Active users and chat state
 let activeUsers = new Map(); // userId -> user data (LEGACY - being replaced by userManager)
@@ -1001,6 +1005,293 @@ function createChatPopoutWindow() {
     chatPopoutWindow.on('closed', () => {
         chatPopoutWindow = null;
     });
+    
+    // ============================================
+    // SNAP-TO-EDGE WINDOW GROUPING
+    // ============================================
+    
+    // Track snap state
+    chatPopoutWindow.snappedTo = null;      // 'widget-right', 'buddy-right', or null
+    chatPopoutWindow.snappedFrom = null;    // 'buddy-left' or null (who snapped to us)
+    chatPopoutWindow.isSnapped = false;     // Are we snapped to anyone?
+    
+    // When Chat moves, check if it should unsnap (don't re-snap during movement)
+    chatPopoutWindow.on('move', () => {
+        if (!buddyListWindow || buddyListWindow.isDestroyed()) return;
+        
+        // Only check for unsnap if already snapped (don't re-snap during movement)
+        if (chatPopoutWindow.snappedTo === 'buddy-right') {
+            const chatBounds = chatPopoutWindow.getBounds();
+            const buddyBounds = buddyListWindow.getBounds();
+            
+            // If user moved Chat vertically while snapped - unsnap
+            // Allow some tolerance for Y position
+            const Y_TOLERANCE = 15;
+            if (Math.abs(chatBounds.y - buddyBounds.y) > Y_TOLERANCE) {
+                chatPopoutWindow.snappedTo = null;
+                chatPopoutWindow.snappedFrom = null;
+                buddyListWindow.snappedFrom = null;
+                chatPopoutWindow.isSnapped = false;
+                buddyListWindow.isSnapped = false;
+                notifySnapStateChanged(null);
+                console.log('[Snap] Chat unsnapped due to vertical movement');
+            }
+        }
+    });
+    
+    // When Chat moves while snapped, move Buddy List too
+    chatPopoutWindow.on('moving', () => {
+        // Check if Chat is snapped TO Buddy List OR if Buddy List is snapped TO Chat
+        const isSnappedToBuddy = (chatPopoutWindow.snappedTo === 'buddy-right');
+        const buddySnappedToChat = (buddyListWindow?.snappedTo === 'chat-left');
+        const isSnapped = isSnappedToBuddy || buddySnappedToChat;
+        
+        console.log(`[Snap] Chat moving - isSnapped: ${isSnapped}, snappedTo: ${chatPopoutWindow.snappedTo}, buddy.snappedTo: ${buddyListWindow?.snappedTo}`);
+        
+        if (isSnapped && buddyListWindow && !buddyListWindow.isDestroyed()) {
+            const chatBounds = chatPopoutWindow.getBounds();
+            const buddyBounds = buddyListWindow.getBounds();
+            
+            // Move Buddy List to be adjacent to Chat
+            // Chat's left edge minus Buddy List width (no gap for clean drop shadow merge)
+            const SNAP_GAP = 0;
+            const targetX = chatBounds.x - SNAP_GAP - buddyBounds.width;
+            const targetY = chatBounds.y;
+            
+            console.log(`[Snap] Moving Buddy List to x:${targetX}, y:${targetY}`);
+            
+            // Only move if significantly different to avoid jitter
+            if (Math.abs(buddyBounds.x - targetX) > 2 || Math.abs(buddyBounds.y - targetY) > 2) {
+                buddyListWindow.setPosition(targetX, targetY);
+            }
+        }
+    });
+    
+    // When Chat is released (move ended), check if it should snap to Buddy List
+    chatPopoutWindow.on('moved', () => {
+        if (!buddyListWindow || buddyListWindow.isDestroyed()) return;
+        
+        const chatBounds = chatPopoutWindow.getBounds();
+        const buddyBounds = buddyListWindow.getBounds();
+        
+        // Check if Buddy List is to the left of Chat
+        const buddyRight = buddyBounds.x + buddyBounds.width;
+        const distance = chatBounds.x - buddyRight;
+        
+        // Snap threshold (pixels)
+        const SNAP_THRESHOLD = 30;
+        const Y_TOLERANCE = 10; // Allow 10 pixels Y difference for snapping
+        
+        // Only snap if not already snapped
+        if (chatPopoutWindow.snappedTo === 'buddy-right') {
+            console.log('[Snap] Chat already snapped to Buddy List');
+            return;
+        }
+        
+        if (Math.abs(distance) < SNAP_THRESHOLD && Math.abs(chatBounds.y - buddyBounds.y) <= Y_TOLERANCE) {
+            // Snap Chat to the right edge of Buddy List
+            chatPopoutWindow.setPosition(buddyRight, buddyBounds.y);
+            chatPopoutWindow.snappedTo = 'buddy-right';
+            chatPopoutWindow.snappedFrom = null;
+            buddyListWindow.snappedTo = null;
+            buddyListWindow.snappedFrom = 'chat-left';
+            
+            chatPopoutWindow.isSnapped = true;
+            buddyListWindow.isSnapped = true;
+            
+            // Resize Buddy List to match Chat height
+            const newChatBounds = chatPopoutWindow.getBounds();
+            const newBuddyBounds = buddyListWindow.getBounds();
+            buddyListWindow.setSize(newBuddyBounds.width, newChatBounds.height);
+            
+            // Notify renderer processes of snap state change
+            notifySnapStateChanged('buddy-right');
+            
+            console.log('[Snap] Chat snapped to Buddy List (released)');
+        } else {
+            console.log('[Snap] Chat released - distance:', distance, 'yDiff:', Math.abs(chatBounds.y - buddyBounds.y));
+        }
+    });
+    
+    // When Chat closes, unsnap Buddy List
+    chatPopoutWindow.on('close', () => {
+        if (buddyListWindow && !buddyListWindow.isDestroyed()) {
+            buddyListWindow.snappedTo = null;
+            buddyListWindow.snappedFrom = null;
+            buddyListWindow.isSnapped = false;
+        }
+    });
+}
+
+/**
+ * Create the Buddy List window
+ * Shows a list of users around the campfire with their states
+ */
+function createBuddyListWindow() {
+    // Check if buddy list window already exists
+    if (buddyListWindow && !buddyListWindow.isDestroyed()) {
+        buddyListWindow.focus();
+        return;
+    }
+
+    // Portrait dimensions (taller than wide) - AIM style buddy list
+    buddyListWindow = new BrowserWindow({
+        width: 280,
+        height: 500,
+        minWidth: 220,
+        minHeight: 350,
+        frame: false,
+        transparent: true,
+        resizable: true,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
+        },
+        icon: path.join(__dirname, 'assets', 'icon.png'),
+        title: 'Campfire Widget - Buddy List',
+        backgroundColor: '#00000000' // Transparent for Modern mode
+    });
+
+    buddyListWindow.loadFile(path.join(__dirname, 'server', 'buddy-list.html'));
+    
+    // Update windows object for IPC event forwarding
+    if (typeof windows !== 'undefined' && windows) {
+        windows.buddyList = buddyListWindow;
+    }
+    
+    // Also update the userIPCHandlers windows reference if it exists
+    if (typeof userIPCHandlers !== 'undefined' && userIPCHandlers) {
+        userIPCHandlers.windows.buddyList = buddyListWindow;
+        console.log('[BuddyList] Registered in UserIPCHandlers');
+    } else {
+        console.log('[BuddyList] WARNING: userIPCHandlers not available');
+    }
+    
+    // Store original height for restore on detach
+    buddyListWindow.originalHeight = 500;
+
+    buddyListWindow.on('closed', () => {
+        buddyListWindow = null;
+    });
+    
+    // ============================================
+    // SNAP-TO-EDGE WINDOW GROUPING (Buddy List)
+    // ============================================
+    
+    // Track snap state
+    buddyListWindow.snappedTo = null;      // 'chat-left' or null
+    buddyListWindow.snappedFrom = null;    // 'widget-right' or null
+    buddyListWindow.isSnapped = false;
+    
+    // When Buddy List moves, check if it should unsnap (don't re-snap during movement)
+    buddyListWindow.on('move', () => {
+        if (!chatPopoutWindow || chatPopoutWindow.isDestroyed()) return;
+        
+        // Only check for unsnap if already snapped (don't re-snap during movement)
+        if (buddyListWindow.snappedTo === 'chat-left') {
+            const buddyBounds = buddyListWindow.getBounds();
+            const chatBounds = chatPopoutWindow.getBounds();
+            
+            // If user moved Buddy List vertically while snapped - unsnap
+            // Allow some tolerance for Y position
+            const Y_TOLERANCE = 15;
+            if (Math.abs(buddyBounds.y - chatBounds.y) > Y_TOLERANCE) {
+                buddyListWindow.snappedTo = null;
+                buddyListWindow.snappedFrom = null;
+                chatPopoutWindow.snappedFrom = null;
+                buddyListWindow.isSnapped = false;
+                chatPopoutWindow.isSnapped = false;
+                notifySnapStateChanged(null);
+                console.log('[Snap] Buddy List unsnapped due to vertical movement');
+            }
+        }
+    });
+    
+    // When Buddy List moves while snapped, move Chat too
+    buddyListWindow.on('moving', () => {
+        // Check if Buddy List is snapped TO Chat OR if Chat is snapped TO Buddy List
+        const isSnappedToChat = (buddyListWindow.snappedTo === 'chat-left');
+        const chatSnappedToBuddy = (chatPopoutWindow?.snappedTo === 'buddy-right');
+        const isSnapped = isSnappedToChat || chatSnappedToBuddy;
+        
+        console.log(`[Snap] Buddy List moving - isSnapped: ${isSnapped}, snappedTo: ${buddyListWindow.snappedTo}, chat.snappedTo: ${chatPopoutWindow?.snappedTo}`);
+        
+        if (isSnapped && chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
+            const buddyBounds = buddyListWindow.getBounds();
+            const chatBounds = chatPopoutWindow.getBounds();
+            
+            // Move Chat to be adjacent to Buddy List
+            // Buddy List's right edge (no gap for clean drop shadow merge)
+            const SNAP_GAP = 0;
+            const targetX = buddyBounds.x + buddyBounds.width + SNAP_GAP;
+            const targetY = buddyBounds.y;
+            
+            console.log(`[Snap] Moving Chat to x:${targetX}, y:${targetY}`);
+            
+            // Only move if significantly different to avoid jitter
+            if (Math.abs(chatBounds.x - targetX) > 2 || Math.abs(chatBounds.y - targetY) > 2) {
+                chatPopoutWindow.setPosition(targetX, targetY);
+            }
+        }
+    });
+    
+    // When Buddy List is released (move ended), check if it should snap to Chat
+    buddyListWindow.on('moved', () => {
+        if (!chatPopoutWindow || chatPopoutWindow.isDestroyed()) return;
+        
+        const buddyBounds = buddyListWindow.getBounds();
+        const chatBounds = chatPopoutWindow.getBounds();
+        
+        // Check if Chat is to the right of Buddy List
+        const buddyRight = buddyBounds.x + buddyBounds.width;
+        const distance = chatBounds.x - buddyRight;
+        
+        // Snap threshold (pixels)
+        const SNAP_THRESHOLD = 30;
+        const Y_TOLERANCE = 10; // Allow 10 pixels Y difference for snapping
+        
+        // Only snap if not already snapped
+        if (buddyListWindow.snappedTo === 'chat-left') {
+            console.log('[Snap] Buddy List already snapped to Chat');
+            return;
+        }
+        
+        if (Math.abs(distance) < SNAP_THRESHOLD && Math.abs(buddyBounds.y - chatBounds.y) <= Y_TOLERANCE) {
+            // Snap Buddy List to the left edge of Chat
+            buddyListWindow.setPosition(chatBounds.x - buddyBounds.width, chatBounds.y);
+            buddyListWindow.snappedTo = 'chat-left';
+            buddyListWindow.snappedFrom = null;
+            chatPopoutWindow.snappedTo = null;
+            chatPopoutWindow.snappedFrom = 'buddy-right';
+            
+            buddyListWindow.isSnapped = true;
+            chatPopoutWindow.isSnapped = true;
+            
+            // Resize Buddy List to match Chat height
+            const newChatBounds = chatPopoutWindow.getBounds();
+            buddyListWindow.setSize(buddyBounds.width, newChatBounds.height);
+            
+            // Notify renderer processes of snap state change
+            notifySnapStateChanged('chat-left');
+            
+            console.log('[Snap] Buddy List snapped to Chat (released)');
+        } else {
+            console.log('[Snap] Buddy List released - distance:', distance, 'yDiff:', Math.abs(buddyBounds.y - chatBounds.y));
+        }
+    });
+    
+    // When Buddy List closes, unsnap Chat
+    buddyListWindow.on('close', () => {
+        if (chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
+            chatPopoutWindow.snappedTo = null;
+            chatPopoutWindow.snappedFrom = null;
+            chatPopoutWindow.isSnapped = false;
+        }
+    });
+
+    // Log successful creation
+    console.log('[Main] Buddy List window created');
 }
 
 // ============================================
@@ -1664,13 +1955,50 @@ function connectTwitch() {
         
         // Fetch and store real Twitch IDs for streamer and bot
         // This eliminates placeholder IDs and ensures PopOut Chat uses same identity as Twitch Chat
-        fetchAndStoreRealTwitchIds().then(() => {
+        fetchAndStoreRealTwitchIds().then(async () => {
             // After fetching real IDs, refresh chatters list from Twitch API
             // This populates the members list on startup
             console.log('[Twitch] Fetching chatters list from API...');
-            refreshChattersFromAPI().catch(e => {
+            await refreshChattersFromAPI().catch(e => {
                 console.warn('[Twitch] Could not fetch chatters from API:', e.message);
             });
+            
+            // Auto-join streamer and bot accounts (main process - works even if widget fails to initialize)
+            // This is the primary auto-join, independent of widget state
+            if (!hasAutoJoinedStreamerBot && twitchConfig.streamerUserId && twitchConfig.botUserId) {
+                hasAutoJoinedStreamerBot = true;
+                console.log('[Main] Auto-joining streamer and bot accounts...');
+                
+                // Join streamer
+                const streamerUsername = (twitchConfig.channelName || '').replace(/^#/, '');
+                if (streamerUsername && twitchConfig.streamerUserId) {
+                    console.log(`[Main] Auto-joining streamer: ${streamerUsername} (${twitchConfig.streamerUserId})`);
+                    await handleJoinCommand(streamerUsername, twitchConfig.streamerUserId, {
+                        'user-id': twitchConfig.streamerUserId,
+                        'username': streamerUsername.toLowerCase(),
+                        'display-name': streamerUsername,
+                        'color': twitchConfig.streamerChatColor || null,
+                        'mod': '0',
+                        'badges': ''
+                    });
+                }
+                
+                // Join bot (if different from streamer)
+                const botUsername = (twitchConfig.chatBotUsername || '').trim();
+                if (botUsername && botUsername.toLowerCase() !== streamerUsername.toLowerCase() && twitchConfig.botUserId) {
+                    console.log(`[Main] Auto-joining bot: ${botUsername} (${twitchConfig.botUserId})`);
+                    await handleJoinCommand(botUsername, twitchConfig.botUserId, {
+                        'user-id': twitchConfig.botUserId,
+                        'username': botUsername.toLowerCase(),
+                        'display-name': botUsername,
+                        'color': twitchConfig.botChatColor || null,
+                        'mod': '0',
+                        'badges': ''
+                    });
+                }
+                
+                console.log('[Main] Auto-join complete for streamer and bot');
+            }
         }).catch(e => {
             console.error('[Twitch IDs] Error fetching real Twitch IDs:', e);
         });
@@ -1811,6 +2139,20 @@ function connectTwitch() {
         // Check if this is an action message (/me)
         const isAction = tags['message-type'] === 'action';
         
+        // Check if this is a command that should be silenced in popout chat
+        let shouldShowInPopout = true;
+        if (isCommandLike && botMessagesCache) {
+            const matchedCmd = botMessagesCache.find(cmd =>
+                cmd.enabled &&
+                cmd.commands.some(c => trimmed.toLowerCase() === c || trimmed.toLowerCase().startsWith(c + ' '))
+            );
+            if (matchedCmd && matchedCmd.silent) {
+                shouldShowInPopout = false;
+            }
+        }
+        
+        // Send to widget for chat bubbles (only non-commands)
+        // Pass shouldShowInPopout flag to control popout chat display
         if (!isCommandLike && allowBubble && !suppressBubble) {
             broadcastToWidget('chatMessage', {
                 username,
@@ -1820,7 +2162,8 @@ function connectTwitch() {
                 allowBubble: true,
                 isAction,
                 displayName: tags['display-name'] || tags.username || username,
-                color: tags.color || null
+                color: tags.color || null,
+                _shouldShowInPopout: shouldShowInPopout
             });
         }
         // Send to dashboard Chat tab
@@ -1927,7 +2270,9 @@ const actionFunctions = {
     handleSpinCommand,
     handleDanceCommand,
     handleSparkleCommand,
-    handleWhoCommand
+    handleWhoCommand,
+    handleDuelCommand,
+    handleRollCommand
 };
 
 // Bot messages cache for main process
@@ -1945,7 +2290,7 @@ let botMessagesCache = [
     { id: 'leave', name: 'Leave Command', commands: ['!leave', '!exit'], command: '!leave', message: '{username} left the campfire.', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLeaveCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
     { id: 'afk', name: 'AFK Command', commands: ['!afk'], command: '!afk', message: '{username} went AFK 💤', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleAfkCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
     { id: 'lurk', name: 'Lurk Command', commands: ['!lurk'], command: '!lurk', message: '{username} is now lurking 👁️', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLurkCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
-    { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleReturnCommand', allowNonCampers: false, cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+    { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, category: 'APP', silent: false, respondAllChats: true, action: 'handleReturnCommand', allowNonCampers: false, cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true, returnFromStates: { AFK: true, SLEEPY: false, LURK: true } },
 
     // MOVEMENT
     { id: 'cw', name: 'Clockwise Rotation', commands: ['!cw'], command: '!cw', message: '', enabled: true, category: 'MOVEMENT', silent: true, respondAllChats: false, action: 'handleCwCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
@@ -1969,6 +2314,10 @@ let botMessagesCache = [
 
     // SPECIAL - !who command (lists users around campfire)
     { id: 'who', name: 'Who Command', commands: ['!who'], command: '!who', message: '🔥 Around the campfire:', enabled: true, category: 'APP', silent: false, respondAllChats: true, action: 'handleWhoCommand', cooldown: DEFAULT_WHO_COOLDOWN_SECONDS, cooldownEnabled: true, cooldownType: 'global', undeletable: true, userLineFormat: '{icon} {username}', userSeparator: ' • ', stateIcons: { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' }, stateFilters: { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true } },
+
+    // APP - Fun commands for viewer engagement (default disabled)
+    { id: 'duel', name: 'Duel Command', commands: ['!duel'], command: '!duel', message: '{winner} defeats {loser} in a duel! ⚔️', enabled: false, category: 'APP', silent: false, respondAllChats: true, action: 'handleDuelCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: true, cooldownType: 'per-user', allowNonCampers: true, undeletable: true },
+    { id: 'roll', name: 'Roll Command', commands: ['!roll'], command: '!roll', message: '{username} rolls {roll} (1-{max}) 🎲', enabled: false, category: 'APP', silent: false, respondAllChats: true, action: 'handleRollCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: true, cooldownType: 'per-user', allowNonCampers: true, undeletable: true },
 
     // Note: Automatic announcements removed - STATE commands now handle user-triggered responses
 ];
@@ -2001,7 +2350,7 @@ function getDefaultBotMessages() {
         { id: 'leave', name: 'Leave Command', commands: ['!leave', '!exit'], command: '!leave', message: '{username} left the campfire.', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLeaveCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
         { id: 'afk', name: 'AFK Command', commands: ['!afk'], command: '!afk', message: '{username} went AFK 💤', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleAfkCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
         { id: 'lurk', name: 'Lurk Command', commands: ['!lurk'], command: '!lurk', message: '{username} is now lurking 👁️', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleLurkCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
-        { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, category: 'STATE', silent: false, respondAllChats: true, action: 'handleReturnCommand', allowNonCampers: false, cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
+        { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, category: 'APP', silent: false, respondAllChats: true, action: 'handleReturnCommand', allowNonCampers: false, cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true, returnFromStates: { AFK: true, SLEEPY: false, LURK: true } },
 
         // MOVEMENT
         { id: 'cw', name: 'Clockwise Rotation', commands: ['!cw'], command: '!cw', message: '', enabled: true, category: 'MOVEMENT', silent: true, respondAllChats: false, action: 'handleCwCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: false, cooldownType: 'per-user', undeletable: true },
@@ -2025,21 +2374,36 @@ function getDefaultBotMessages() {
 
         // SPECIAL - !who command (lists users around campfire)
         { id: 'who', name: 'Who Command', commands: ['!who'], command: '!who', message: '🔥 Around the campfire:', enabled: true, category: 'APP', silent: false, respondAllChats: true, action: 'handleWhoCommand', cooldown: DEFAULT_WHO_COOLDOWN_SECONDS, cooldownEnabled: true, cooldownType: 'global', undeletable: true, userLineFormat: '{icon} {username}', userSeparator: ' • ', stateIcons: { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' }, stateFilters: { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true } },
+
+        // APP - Fun commands for viewer engagement (default disabled)
+        { id: 'duel', name: 'Duel Command', commands: ['!duel'], command: '!duel', message: '{winner} defeats {loser} in a duel! ⚔️', enabled: false, category: 'APP', silent: false, respondAllChats: true, action: 'handleDuelCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: true, cooldownType: 'per-user', allowNonCampers: true, undeletable: true },
+        { id: 'roll', name: 'Roll Command', commands: ['!roll'], command: '!roll', message: '{username} rolls {roll} (1-{max}) 🎲', enabled: false, category: 'APP', silent: false, respondAllChats: true, action: 'handleRollCommand', cooldown: DEFAULT_COOLDOWN_SECONDS, cooldownEnabled: true, cooldownType: 'per-user', allowNonCampers: true, undeletable: true },
     ];
 }
 
 // Ensure all default commands are present in the saved messages
 // This prevents accidental deletion of core commands
+// NOTE: Only adds MISSING commands (first install scenario) - never overwrites user preferences
 function ensureDefaultCommands(savedMessages) {
     const defaults = getDefaultBotMessages();
     const result = [...savedMessages];
+    let addedCount = 0;
     
     for (const defaultCmd of defaults) {
         const exists = result.find(msg => msg.id === defaultCmd.id);
         if (!exists) {
-            console.log(`[Main] Restoring missing default command: ${defaultCmd.id}`);
+            // Only add commands that don't exist (first install or new command added in update)
+            // This preserves user's enabled/disabled preferences for existing commands
+            console.log(`[Main] Adding new default command: ${defaultCmd.id}`);
             result.push(defaultCmd);
+            addedCount++;
         }
+        // Intentionally NOT overwriting existing command properties
+        // User preferences (enabled, message, cooldown, etc.) are preserved
+    }
+    
+    if (addedCount > 0) {
+        console.log(`[Main] Added ${addedCount} new command(s) to existing configuration`);
     }
     
     return result;
@@ -2411,6 +2775,16 @@ async function parseChatCommand(username, userId, message, tags) {
     // This ensures users using commands don't go AFK/SLEEPY
     if (command.startsWith('!')) {
         broadcastToWidget('userActivity', { username, userId });
+        
+        // Also update the main process UserManager (single source of truth)
+        // This ensures auto-state transitions are based on the latest activity
+        if (userManager && userId) {
+            try {
+                userManager.recordActivity(userId);
+            } catch (error) {
+                console.error(`[parseChatCommand] Failed to record activity for ${username}:`, error);
+            }
+        }
     }
     const joinMethod = String(settings.joinMethod || 'command').toLowerCase();
     const joinCommands = Array.isArray(settings.commands) ? settings.commands : [(settings.command || '!join')];
@@ -2918,12 +3292,22 @@ async function handleReturnCommand(username, userId) {
     // Broadcast RETURN state to widget
     broadcastToWidget('userReturnFromLurk', { username, userId: normalizedUserId });
     
-    // Send RETURN announcement using BotMessageHelper
+    // Send RETURN announcement using BotMessageHelper (only if state filter allows)
     if (botMessageHelper) {
-        await botMessageHelper.sendBotMessage('return', { username });
+        // Get the return command config to check state filters
+        const returnCmd = botMessagesCache.find(cmd => cmd.id === 'return');
+        const returnFromStates = returnCmd?.returnFromStates || { AFK: true, SLEEPY: false, LURK: true };
+        
+        // Check if we should announce based on the state the user is returning from
+        const stateKey = currentState.toUpperCase();
+        if (returnFromStates[stateKey] !== false) {
+            await botMessageHelper.sendBotMessage('return', { username });
+        } else {
+            console.log(`[handleReturnCommand] Skipping announcement for ${username} returning from ${currentState} (filtered)`);
+        }
     }
     
-    console.log(`🔙 ${username} has returned from LURK/AFK`);
+    console.log(`🔙 ${username} has returned from ${currentState.toUpperCase()}`);
 }
 
 function handleMoveCommand(username, userId, direction, degrees) {
@@ -3663,7 +4047,8 @@ async function handleWhoCommand(username, userId, message, tags) {
         'ACTIVE': '🔥',
         'SLEEPY': '😴',
         'AFK': '💤',
-        'LURK': '👁️'
+        'LURK': '👁️',
+        'BOT': '🤖'
     };
     // Merge with defaults to ensure all states have icons
     const stateIcons = { ...defaultStateIcons, ...(whoCmd.stateIcons || {}) };
@@ -3733,14 +4118,62 @@ async function handleWhoCommand(username, userId, message, tags) {
     // Get the separator from command config (for inline display)
     const userSeparator = whoCmd.userSeparator || ' • ';
     
+    // Sort users by state priority: ACTIVE -> SLEEPY -> LURK -> AFK -> BOTS
+    const statePriority = {
+        'ACTIVE': 1,
+        'JOINED': 1,  // JOINED is same as ACTIVE for display purposes
+        'SLEEPY': 2,
+        'LURK': 3,
+        'AFK': 4
+    };
+    
+    // Helper to check if user is a bot (configured bot account or has bot badge)
+    const isBotUser = (user) => {
+        // Check if this is the configured CHAT BOT account (separate bot speaker)
+        // Note: chatBotUsername is the separate bot account for sending messages,
+        // while botUsername is the main Twitch connection account (streamer)
+        const botUsername = twitchConfig?.chatBotUsername?.toLowerCase();
+        if (botUsername && user.username?.toLowerCase() === botUsername) {
+            return true;
+        }
+        // Check for bot badge in user roles/tags
+        if (user.roles?.isBot || user.tags?.badges?.bot === '1' || user.tags?.badges?.verified === '1') {
+            return true;
+        }
+        return false;
+    };
+    
+    // Sort filtered users by priority (bots last)
+    const sortedUsers = [...filteredUsers].sort((a, b) => {
+        const aIsBot = isBotUser(a);
+        const bIsBot = isBotUser(b);
+        
+        // Bots always go to the end
+        if (aIsBot && !bIsBot) return 1;
+        if (!aIsBot && bIsBot) return -1;
+        
+        // Both bots or both non-bots: sort by state priority
+        const aState = getUserState(a);
+        const bState = getUserState(b);
+        const aPriority = statePriority[aState] || 5;
+        const bPriority = statePriority[bState] || 5;
+        
+        return aPriority - bPriority;
+    });
+    
     // Format: each user with status icon
-    const userLines = filteredUsers.map(user => {
+    const userLines = sortedUsers.map(user => {
         const state = getUserState(user);
-        const icon = stateIcons[state] || stateIcons['ACTIVE'] || '🔥';
+        const isBot = isBotUser(user);
+        
+        // Use BOT icon if user is a bot, otherwise use their state icon
+        const icon = isBot 
+            ? (stateIcons['BOT'] || '🤖') 
+            : (stateIcons[state] || stateIcons['ACTIVE'] || '🔥');
         const displayName = user.displayName || user.username;
         
         // Debug logging
-        console.log(`[handleWhoCommand] User: ${displayName}, State: ${state}, Icon: ${icon}`);
+        console.log(`[handleWhoCommand] User: ${displayName}, State: ${state}, IsBot: ${isBot}, Icon: ${icon}`);
         
         // Apply the customizable format
         return userLineFormat
@@ -3855,6 +4288,189 @@ function parseColor(colorInput) {
     return null; // Invalid color
 }
 
+/**
+ * Handle the !duel command - two users duel, random winner
+ * @param {string} username - The username who triggered the command
+ * @param {string} userId - The user ID who triggered the command
+ * @param {string} message - The full message (e.g., "!duel @targetuser")
+ * @param {Object} tags - Twitch IRC tags
+ */
+async function handleDuelCommand(username, userId, message, tags) {
+    // Get the !duel command configuration from cache
+    const duelCmd = botMessagesCache.find(cmd => cmd.id === 'duel');
+    if (!duelCmd || !duelCmd.enabled) {
+        console.log('[handleDuelCommand] !duel command is disabled');
+        return;
+    }
+    
+    // Check cooldown
+    const cooldownCheck = checkCommandCooldown('duel', userId, duelCmd);
+    if (cooldownCheck.onCooldown) {
+        console.log(`[handleDuelCommand] ${username} is on cooldown (${cooldownCheck.remainingSeconds}s remaining)`);
+        return;
+    }
+    
+    // Extract target user from message (e.g., "!duel @username" or "!duel username")
+    const targetMatch = message.match(/@?(\w+)/g);
+    let targetUsername = null;
+    
+    if (targetMatch && targetMatch.length > 1) {
+        // First match is the command itself (!duel), second is the target
+        targetUsername = targetMatch[1];
+    }
+    
+    if (!targetUsername) {
+        console.log(`[handleDuelCommand] No target specified by ${username}`);
+        const errorMsg = `@${username} You need to specify who to duel! Usage: !duel @username`;
+        if (!duelCmd.silent) {
+            await sayInChannel(errorMsg, 'bot', false);
+        }
+        return;
+    }
+    
+    // Prevent dueling yourself
+    if (targetUsername.toLowerCase() === username.toLowerCase()) {
+        const selfMsg = `@${username} You can't duel yourself!`;
+        if (!duelCmd.silent) {
+            await sayInChannel(selfMsg, 'bot', false);
+        }
+        return;
+    }
+    
+    // Determine winner randomly (50/50 chance)
+    const challengerWins = Math.random() < 0.5;
+    const winner = challengerWins ? username : targetUsername;
+    const loser = challengerWins ? targetUsername : username;
+    
+    // Build response message
+    const responseTemplate = duelCmd.message || '{winner} defeats {loser} in a duel! ⚔️';
+    const responseMsg = responseTemplate
+        .replace('{winner}', winner)
+        .replace('{loser}', loser)
+        .replace('{challenger}', username)
+        .replace('{target}', targetUsername);
+    
+    // Update cooldown
+    updateCommandCooldown('duel', userId, duelCmd);
+    
+    // Send to Twitch chat
+    if (!duelCmd.silent) {
+        await sayInChannel(responseMsg, 'bot', true);
+    }
+    
+    // Send to Popout Chat
+    if (duelCmd.respondAllChats) {
+        sendToPopoutChat({
+            username: '',
+            message: responseMsg,
+            userId: null,
+            emotes: null,
+            allowBubble: false,
+            isAction: true,
+            displayName: '',
+            color: null,
+            commandCategory: 'GAME'
+        });
+    }
+    
+    // Always send to dashboard Internal Chat
+    if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+        dashboardWindow.webContents.send('twitchChatMessage', {
+            username: '',
+            message: responseMsg,
+            userId: null,
+            isAction: true,
+            commandCategory: 'GAME',
+            isBotResponse: true
+        });
+    }
+    
+    console.log(`[handleDuelCommand] ${username} challenged ${targetUsername}, ${winner} won`);
+}
+
+/**
+ * Handle the !roll command - roll a random number
+ * @param {string} username - The username who triggered the command
+ * @param {string} userId - The user ID who triggered the command
+ * @param {string} message - The full message (e.g., "!roll 100" or "!roll")
+ * @param {Object} tags - Twitch IRC tags
+ */
+async function handleRollCommand(username, userId, message, tags) {
+    // Get the !roll command configuration from cache
+    const rollCmd = botMessagesCache.find(cmd => cmd.id === 'roll');
+    if (!rollCmd || !rollCmd.enabled) {
+        console.log('[handleRollCommand] !roll command is disabled');
+        return;
+    }
+    
+    // Check cooldown
+    const cooldownCheck = checkCommandCooldown('roll', userId, rollCmd);
+    if (cooldownCheck.onCooldown) {
+        console.log(`[handleRollCommand] ${username} is on cooldown (${cooldownCheck.remainingSeconds}s remaining)`);
+        return;
+    }
+    
+    // Parse max value from message (default 100)
+    const match = message.match(/!roll\s*(\d+)?/);
+    const maxValue = match && match[1] ? parseInt(match[1], 10) : 100;
+    
+    // Validate max value
+    if (maxValue < 1 || maxValue > 1000000) {
+        const errorMsg = `@${username} Please use a number between 1 and 1,000,000!`;
+        if (!rollCmd.silent) {
+            await sayInChannel(errorMsg, 'bot', false);
+        }
+        return;
+    }
+    
+    // Generate random roll
+    const roll = Math.floor(Math.random() * maxValue) + 1;
+    
+    // Build response message
+    const responseTemplate = rollCmd.message || '{username} rolls {roll} (1-{max}) 🎲';
+    const responseMsg = responseTemplate
+        .replace('{username}', username)
+        .replace('{roll}', roll)
+        .replace('{max}', maxValue);
+    
+    // Update cooldown
+    updateCommandCooldown('roll', userId, rollCmd);
+    
+    // Send to Twitch chat
+    if (!rollCmd.silent) {
+        await sayInChannel(responseMsg, 'bot', true);
+    }
+    
+    // Send to Popout Chat
+    if (rollCmd.respondAllChats) {
+        sendToPopoutChat({
+            username: '',
+            message: responseMsg,
+            userId: null,
+            emotes: null,
+            allowBubble: false,
+            isAction: true,
+            displayName: '',
+            color: null,
+            commandCategory: 'GAME'
+        });
+    }
+    
+    // Always send to dashboard Internal Chat
+    if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+        dashboardWindow.webContents.send('twitchChatMessage', {
+            username: '',
+            message: responseMsg,
+            userId: null,
+            isAction: true,
+            commandCategory: 'GAME',
+            isBotResponse: true
+        });
+    }
+    
+    console.log(`[handleRollCommand] ${username} rolled ${roll} (1-${maxValue})`);
+}
+
 async function getViewerColor(username, userId) {
     // First, try to get color from widget's localStorage (most up-to-date)
     if (widgetWindow && !widgetWindow.isDestroyed()) {
@@ -3955,8 +4571,20 @@ function broadcastToWidget(channel, data) {
     // Also send chat messages to the chat popout window (for regular user messages)
     // Bot responses are handled separately via sendToPopoutChat
     if (channel === 'chatMessage') {
+        // Check if this message should be shown in popout chat
+        // (_shouldShowInPopout is false for commands with silent: true)
+        const shouldShowInPopout = data._shouldShowInPopout !== false;
+        
+        // Only proceed if we should show in popout chat
+        if (!shouldShowInPopout) {
+            return; // Skip popout chat for silent commands
+        }
+        
         // Add isCamper flag for grey non-campers feature
         const enhancedData = { ...data, timestamp: Date.now() };
+        // Remove internal flag before sending
+        delete enhancedData._shouldShowInPopout;
+        
         if (data.userId) {
             enhancedData.isCamper = activeUsers.has(String(data.userId));
         } else if (data.username) {
@@ -3976,6 +4604,12 @@ function broadcastToWidget(channel, data) {
         if (chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
             chatPopoutWindow.webContents.send(channel, enhancedData);
         }
+    }
+    
+    // Send user-related events to buddy list window for real-time updates
+    const userChannels = ['userJoin', 'userLeave', 'userStateChange', 'userKick', 'userActive', 'userAway', 'userSleepy'];
+    if (userChannels.includes(channel) && buddyListWindow && !buddyListWindow.isDestroyed()) {
+        buddyListWindow.webContents.send(channel, data);
     }
 }
 
@@ -4344,6 +4978,163 @@ ipcMain.handle('bring-widget-to-front', () => {
     return { success: false, error: 'Widget window not open' };
 });
 
+// Buddy List handlers
+ipcMain.handle('open-buddy-list', () => {
+    createBuddyListWindow();
+    return { success: true };
+});
+
+ipcMain.handle('bring-buddy-list-to-front', () => {
+    if (buddyListWindow && !buddyListWindow.isDestroyed()) {
+        buddyListWindow.show();
+        buddyListWindow.focus();
+        buddyListWindow.moveTop();
+        return { success: true };
+    }
+    return { success: false, error: 'Buddy list window not open' };
+});
+
+// ============================================
+// SNAP CONTROL HANDLERS
+// ============================================
+
+ipcMain.handle('get-window-snap-status', () => {
+    return {
+        chatSnappedTo: chatPopoutWindow?.snappedTo || null,
+        chatSnappedFrom: chatPopoutWindow?.snappedFrom || null,
+        chatIsSnapped: chatPopoutWindow?.isSnapped || false,
+        buddySnappedTo: buddyListWindow?.snappedTo || null,
+        buddySnappedFrom: buddyListWindow?.snappedFrom || null,
+        buddyIsSnapped: buddyListWindow?.isSnapped || false,
+        bothSnapped: (chatPopoutWindow?.isSnapped && buddyListWindow?.isSnapped) || false
+    };
+});
+
+ipcMain.handle('set-snap-enabled', (event, enabled) => {
+    // Store snap preference (could be used to temporarily disable snapping)
+    console.log('[Snap] Snap enabled:', enabled);
+    return { success: true };
+});
+
+ipcMain.handle('unsnap-all-windows', () => {
+    // Unsnap Chat
+    if (chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
+        chatPopoutWindow.snappedTo = null;
+        chatPopoutWindow.snappedFrom = null;
+        chatPopoutWindow.isSnapped = false;
+    }
+    // Unsnap Buddy List
+    if (buddyListWindow && !buddyListWindow.isDestroyed()) {
+        buddyListWindow.snappedTo = null;
+        buddyListWindow.snappedFrom = null;
+        buddyListWindow.isSnapped = false;
+    }
+    console.log('[Snap] All windows unsnapped');
+    return { success: true };
+});
+
+// Detach Buddy List from Chat (when user clicks Detach button)
+ipcMain.handle('detach-buddy-list', () => {
+    console.log('[Snap] Detaching buddy list...');
+    
+    // Unsnap both windows
+    if (chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
+        chatPopoutWindow.snappedTo = null;
+        chatPopoutWindow.snappedFrom = null;
+        chatPopoutWindow.isSnapped = false;
+    }
+    if (buddyListWindow && !buddyListWindow.isDestroyed()) {
+        // Store current dimensions before detaching
+        const bounds = buddyListWindow.getBounds();
+        
+        // Move buddy list slightly to the left to show it's detached
+        buddyListWindow.setPosition(bounds.x - 20, bounds.y);
+        
+        // Restore original height when detaching
+        if (buddyListWindow.originalHeight) {
+            buddyListWindow.setSize(bounds.width, buddyListWindow.originalHeight);
+            console.log(`[Snap] Restored buddy list to original height: ${buddyListWindow.originalHeight}px`);
+        }
+        
+        buddyListWindow.snappedTo = null;
+        buddyListWindow.snappedFrom = null;
+        buddyListWindow.isSnapped = false;
+    }
+    
+    // Notify renderer processes of snap state change
+    notifySnapStateChanged(null);
+    
+    console.log('[Snap] Buddy list detached');
+    return { success: true };
+});
+
+// Helper function to notify all windows of snap state changes
+function notifySnapStateChanged(snapState) {
+    const status = {
+        bothSnapped: snapState !== null,
+        snapState: snapState
+    };
+    
+    // Send to Chat Popout window
+    if (chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
+        chatPopoutWindow.webContents.send('window-snap-changed', status);
+    }
+    
+    // Send to Buddy List window
+    if (buddyListWindow && !buddyListWindow.isDestroyed()) {
+        buddyListWindow.webContents.send('window-snap-changed', status);
+    }
+}
+
+// Sync window dimensions when attached (for synchronized height)
+ipcMain.handle('sync-window-dimensions', (event, { targetWindow, height }) => {
+    if (targetWindow === 'buddy' && chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
+        // Buddy list height changed - sync with chat
+        const chatBounds = chatPopoutWindow.getBounds();
+        // Don't resize chat, just inform buddy list of chat height
+        return { height: chatBounds.height };
+    }
+    if (targetWindow === 'chat' && buddyListWindow && !buddyListWindow.isDestroyed()) {
+        // Chat height changed - sync buddy list height
+        const buddyBounds = buddyListWindow.getBounds();
+        // Resize buddy list to match chat height
+        buddyListWindow.setSize(buddyBounds.width, height);
+        return { success: true };
+    }
+    return { success: false };
+});
+
+ipcMain.handle('minimize-window', () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win && !win.isDestroyed()) {
+        win.minimize();
+        return { success: true };
+    }
+    return { success: false, error: 'No focused window' };
+});
+
+ipcMain.handle('maximize-window', () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win && !win.isDestroyed()) {
+        if (win.isMaximized()) {
+            win.unmaximize();
+        } else {
+            win.maximize();
+        }
+        return { success: true };
+    }
+    return { success: false, error: 'No focused window' };
+});
+
+ipcMain.handle('close-window', () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win && !win.isDestroyed()) {
+        win.close();
+        return { success: true };
+    }
+    return { success: false, error: 'No focused window' };
+});
+
 ipcMain.handle('open-settings-modal', () => {
     // Create a separate settings window instead of opening dashboard
     createSettingsWindow();
@@ -4668,7 +5459,8 @@ ipcMain.handle('get-twitch-status', () => {
         connected: isTwitchConnected,
         chatBotEnabled: useSeparateChatBot,
         chatBotConnected: effectiveChatBotConnected,
-        chatBotUsername: effectiveChatBotUsername
+        chatBotUsername: effectiveChatBotUsername,
+        autoJoinedStreamerBot: hasAutoJoinedStreamerBot
     };
 });
 
@@ -4974,8 +5766,30 @@ ipcMain.handle('send-chat-message', async (event, message, speaker = 'main') => 
         // Send to Twitch only if not silent
         if (shouldSendToTwitch) {
             const ok = await sayInChannel(trimmedMessage, speaker);
+            
+            // Record activity for main speaker (streamer) after sending message
+            // This ensures Popout Chat messages update activity even before Twitch echo
+            if (ok && speaker === 'main') {
+                const streamerUsername = (twitchConfig.channelName || '').replace(/^#/, '').toLowerCase();
+                const streamerUserId = twitchConfig.streamerUserId;
+                
+                if (streamerUserId && userManager) {
+                    try {
+                        userManager.recordActivity(streamerUserId);
+                        broadcastToWidget('userActivity', { 
+                            username: streamerUsername, 
+                            userId: streamerUserId 
+                        });
+                        console.log(`[send-chat-message] Recorded activity for streamer: ${streamerUsername}`);
+                    } catch (error) {
+                        console.error(`[send-chat-message] Failed to record activity for streamer:`, error);
+                    }
+                }
+            }
+            
             return ok ? { ok: true } : { ok: false, error: 'Not connected to Twitch' };
         } else {
+            // For silent commands processed locally, activity is recorded in parseChatCommand
             return { ok: true, silent: true };
         }
     } catch (e) {
@@ -5009,6 +5823,49 @@ ipcMain.handle('get-potential-members', () => {
     return Array.from(allChatters.values());
 });
 
+// Get chatters list for @ mention autocomplete in popout chat
+ipcMain.handle('get-chatters-list', () => {
+    // Return sorted list of usernames for autocomplete
+    const chatters = Array.from(allChatters.values());
+    return chatters
+        .filter(c => c && c.username)
+        .map(c => ({
+            username: c.username,
+            userId: c.userId,
+            isBroadcaster: c.isBroadcaster || false,
+            isMod: c.isMod || false,
+            isVip: c.isVip || false,
+            isSubscriber: c.isSubscriber || false
+        }))
+        .sort((a, b) => a.username.localeCompare(b.username));
+});
+
+// Handle state updates from widget (auto-state transitions)
+ipcMain.on('widget-user-state-update', (event, { userId, newState, oldState }) => {
+    if (!userManager) {
+        console.warn('[Main] UserManager not initialized, cannot update user state');
+        return;
+    }
+
+    const user = userManager.getUser(userId);
+    if (!user) {
+        console.warn(`[Main] Cannot update state for unknown user: ${userId}`);
+        return;
+    }
+
+    // Normalize state to uppercase to match USER_STATES constants
+    const normalizedNewState = newState.toUpperCase();
+    const normalizedOldState = oldState ? oldState.toUpperCase() : oldState;
+
+    // Only update if state actually changed
+    if (user.state !== normalizedNewState) {
+        console.log(`[Main] Widget reported state change for ${user.username}: ${normalizedOldState} -> ${normalizedNewState}`);
+        user.state = normalizedNewState;
+        // Emit event for auto-state announcements
+        userManager.emit('user:stateChanged', user, normalizedOldState, normalizedNewState);
+    }
+});
+
 ipcMain.handle('add-to-chatters', (event, username, userData) => {
     // Add a user to the chatters list (for showing as "In Chat" in dashboard)
     const key = username.toLowerCase();
@@ -5026,6 +5883,33 @@ ipcMain.handle('add-to-chatters', (event, username, userData) => {
 // Refresh chatters from Twitch API
 ipcMain.handle('refresh-chatters', async () => {
     return await refreshChattersFromAPI();
+});
+
+// Sync user activity from widget to main process (bidirectional activity tracking)
+ipcMain.handle('sync-user-activity', (event, userId) => {
+    if (!userId) {
+        console.warn('[sync-user-activity] No userId provided');
+        return { success: false, error: 'No userId provided' };
+    }
+    
+    if (!userManager) {
+        console.warn('[sync-user-activity] UserManager not initialized');
+        return { success: false, error: 'UserManager not initialized' };
+    }
+    
+    try {
+        const user = userManager.recordActivity(userId);
+        if (user) {
+            console.log(`[sync-user-activity] Recorded activity for user: ${user.username} (${userId})`);
+            return { success: true, userId: userId };
+        } else {
+            console.warn(`[sync-user-activity] User not found: ${userId}`);
+            return { success: false, error: 'User not found' };
+        }
+    } catch (error) {
+        console.error(`[sync-user-activity] Error recording activity for ${userId}:`, error);
+        return { success: false, error: error.message };
+    }
 });
 
 // Widget's actual display users (including restored from localStorage) for Members list + restored icon
@@ -6212,7 +7096,8 @@ app.whenReady().then(() => {
         widget: widgetWindow,
         dashboard: dashboardWindow,
         members: membersWindow,
-        chatPopout: chatPopoutWindow
+        chatPopout: chatPopoutWindow,
+        buddyList: buddyListWindow
     });
     userIPCHandlers.register();
     console.log('[Main] UserIPCHandlers registered');
@@ -6240,6 +7125,52 @@ app.whenReady().then(() => {
         }
     });
     console.log('[Main] Auto-return event listener registered');
+
+    // Listen for auto-state transitions (SLEEPY, AFK from inactivity)
+    userManager.on('user:stateChanged', async (user, oldState, newState) => {
+        // Normalize states to uppercase for comparison
+        const normalizedNewState = newState.toUpperCase();
+        const normalizedOldState = oldState ? oldState.toUpperCase() : oldState;
+
+        // Only process auto-transitions (not manual commands)
+        // Manual commands are handled by their respective command handlers
+
+        // Check for SLEEPY transition (auto-triggered from inactivity)
+        if (normalizedNewState === 'SLEEPY' && (normalizedOldState === 'ACTIVE' || normalizedOldState === 'JOINED')) {
+            console.log(`[Main] Auto-sleepy detected for ${user.username}`);
+            try {
+                await botMessageHelper.sendBotMessage('sleepy', {
+                    username: user.username
+                }, {
+                    commandCategory: 'AUTO_STATE'
+                });
+            } catch (error) {
+                console.error('[Main] Error sending sleepy message:', error);
+            }
+        }
+        // Check for AFK transition (auto-triggered from inactivity)
+        // Note: manual AFK is handled by the !afk command handler
+        else if (normalizedNewState === 'AFK' && normalizedOldState !== 'AFK') {
+            // Determine if this was an auto-transition or manual
+            // Auto-transitions come from SLEEPY or ACTIVE via widget state updates
+            // Manual AFK comes from setUserAfk which sets manualAfk flag
+            const isAutoTransition = (normalizedOldState === 'SLEEPY' || normalizedOldState === 'ACTIVE' || normalizedOldState === 'JOINED') && !user.manualAfk;
+
+            if (isAutoTransition) {
+                console.log(`[Main] Auto-afk detected for ${user.username}`);
+                try {
+                    await botMessageHelper.sendBotMessage('auto-afk', {
+                        username: user.username
+                    }, {
+                        commandCategory: 'AUTO_STATE'
+                    });
+                } catch (error) {
+                    console.error('[Main] Error sending auto-afk message:', error);
+                }
+            }
+        }
+    });
+    console.log('[Main] Auto-state transition listener registered');
     
     // Connect to Twitch
     console.log('[Main] About to call connectTwitch() on startup');

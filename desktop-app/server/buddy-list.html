@@ -1,0 +1,1980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campfire Buddy List</title>
+    <link rel="stylesheet" href="styles/shared-styles.css">
+    <style>
+        /* ========================================
+           CAMPFIRE BUDDY LIST - STYLES
+           ======================================== */
+        
+        @font-face {
+            font-family: 'W95FA';
+            src: url('fonts/w95fa.woff2') format('woff2'),
+                 url('fonts/w95fa.woff') format('woff'),
+                 url('fonts/W95FA.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100vh;
+            overflow: hidden;
+            background: transparent !important;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            color: #efeff1;
+        }
+        
+        /* ========================================
+           MODERN MODE STYLES
+           ======================================== */
+        
+        body.mode-modern .buddy-window {
+            background: rgba(30, 30, 30, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        
+        body.mode-modern .buddy-header {
+            background: rgba(18, 18, 18, 0.92);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+            -webkit-app-region: drag;
+            cursor: move;
+        }
+        
+        body.mode-modern .campfire-select {
+            background: rgba(28, 28, 28, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+            border-radius: 6px;
+        }
+        
+        body.mode-modern .buddy-list-container {
+            background: rgba(22, 22, 22, 0.6);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        body.mode-modern .buddy-group {
+            /* Group separator - matches buddy-item border style */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        body.mode-modern .buddy-group:last-child {
+            /* Last group has no bottom border (footer handles that) */
+            border-bottom: none;
+        }
+        
+        body.mode-modern .buddy-item {
+            color: #efeff1;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        body.mode-modern .buddy-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        body.mode-modern .buddy-item.selected {
+            background: rgba(145, 71, 255, 0.3);
+        }
+        
+        body.mode-modern .buddy-name {
+            color: #efeff1;
+        }
+        
+        body.mode-modern .buddy-state-text {
+            color: #aaa;
+        }
+        
+        body.mode-modern .buddy-footer {
+            background: rgba(18, 18, 18, 0.92);
+            border-top: 1px solid rgba(255, 255, 255, 0.14);
+            color: #888;
+        }
+        
+        body.mode-modern .settings-dropdown {
+            background: rgba(18, 18, 18, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            color: #efeff1;
+        }
+        
+        body.mode-modern .settings-row {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        body.mode-modern .settings-label {
+            color: #efeff1;
+        }
+        
+        body.mode-modern .settings-select {
+            background: rgba(40, 40, 40, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #efeff1;
+        }
+        
+        /* Window controls in modern mode */
+        body.mode-modern .window-controls {
+            display: flex;
+            gap: 4px;
+            -webkit-app-region: no-drag;
+        }
+        
+        body.mode-modern .window-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.15s;
+            background: rgba(28, 28, 28, 0.95);
+            color: #fff;
+        }
+        
+        body.mode-modern .window-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        body.mode-modern .window-btn-minimize:hover {
+            background: rgba(255, 193, 7, 0.3);
+            border-color: rgba(255, 193, 7, 0.5);
+        }
+        
+        body.mode-modern .window-btn-maximize:hover {
+            background: rgba(76, 175, 80, 0.3);
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+        
+        body.mode-modern .window-btn-close:hover {
+            background: rgba(244, 67, 54, 0.3);
+            border-color: rgba(244, 67, 54, 0.5);
+        }
+        
+        body.mode-modern .window-btn-attach {
+            background: rgba(145, 71, 255, 0.3);
+            border: 1px solid rgba(145, 71, 255, 0.5);
+        }
+        
+        body.mode-modern .window-btn-attach:hover {
+            background: rgba(145, 71, 255, 0.5);
+        }
+        
+        /* ========================================
+           NOSTALGIA MODE - ORIGINAL WINDOWS 95 STYLE
+           ======================================== */
+        
+        body.mode-nostalgia {
+            background: #ECE9D8 !important;
+        }
+        
+        body.mode-nostalgia .buddy-window {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #DFDFDF #808080 #808080 #DFDFDF;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        
+        body.mode-nostalgia .buddy-header {
+            background: linear-gradient(to bottom, #0A246A 0%, #0A246A 8%, #A6CAF0 92%, #A6CAF0 100%);
+            color: white;
+            padding: 3px 5px;
+            font-size: 11px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: move;
+            user-select: none;
+            -webkit-app-region: drag;
+        }
+        
+        body.mode-nostalgia .title-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        body.mode-nostalgia .title-icon {
+            width: 16px;
+            height: 16px;
+            background: #ff6600;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            -webkit-app-region: no-drag;
+        }
+        
+        body.mode-nostalgia .campfire-selector {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+            font-size: 11px;
+            padding: 4px 8px;
+        }
+        
+        body.mode-nostalgia .campfire-selector:focus {
+            outline: none;
+        }
+        
+        body.mode-nostalgia .window-controls {
+            display: flex;
+            gap: 2px;
+            -webkit-app-region: no-drag;
+        }
+        
+        body.mode-nostalgia .window-btn {
+            width: 16px;
+            height: 14px;
+            background: #C0C0C0;
+            border: 1px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            font-size: 9px;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: sans-serif;
+        }
+        
+        body.mode-nostalgia .window-btn:active {
+            border-color: #808080 #FFFFFF #FFFFFF #808080;
+        }
+        
+        body.mode-nostalgia .buddy-list-container {
+            background: #FFFFFF;
+            border: 2px solid;
+            border-color: #808080 #FFFFFF #FFFFFF #808080;
+            margin: 4px;
+            margin-top: 0;
+        }
+        
+        body.mode-nostalgia .buddy-group {
+            border-bottom: 1px solid #E0E0E0;
+        }
+        
+        body.mode-nostalgia .buddy-group:last-child {
+            border-bottom: none;
+        }
+        
+        body.mode-nostalgia .buddy-item {
+            color: #000;
+            border-bottom: 1px solid #F0F0F0;
+            font-size: 11px;
+            font-family: 'W95FA', sans-serif;
+        }
+        
+        body.mode-nostalgia .buddy-item:hover {
+            background: #E8F4FF;
+        }
+        
+        body.mode-nostalgia .buddy-item.selected {
+            background: #316AC5;
+            color: white;
+        }
+        
+        body.mode-nostalgia .buddy-name {
+            color: inherit;
+        }
+        
+        body.mode-nostalgia .buddy-state-text {
+            color: #666;
+        }
+        
+        body.mode-nostalgia .buddy-item.selected .buddy-state-text {
+            color: #CCE0FF;
+        }
+        
+        body.mode-nostalgia .buddy-footer {
+            background: #ECE9D8;
+            border-top: 1px solid #808080;
+            padding: 4px 8px;
+            font-size: 9px;
+            color: #666;
+            font-family: 'W95FA', sans-serif;
+            border-radius: 0;
+        }
+        
+        body.mode-nostalgia .footer-campfire-select {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+            font-size: 11px;
+            padding: 2px 4px;
+        }
+        
+        body.mode-nostalgia .buddy-title {
+            font-family: 'W95FA', sans-serif;
+            font-size: 11px;
+        }
+        
+        body.mode-nostalgia .settings-dropdown {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            font-family: 'W95FA', sans-serif;
+        }
+        
+        body.mode-nostalgia .settings-row {
+            border-bottom: 1px solid #808080;
+        }
+        
+        body.mode-nostalgia .settings-label {
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+        }
+        
+        body.mode-nostalgia .settings-select {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+        }
+        
+        /* ========================================
+           COMMON STYLES
+           ======================================== */
+        
+        .buddy-window {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            margin: 8px;
+            overflow: hidden;
+        }
+        
+        /* Buddy List Header */
+        .buddy-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .buddy-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .buddy-title {
+            font-size: 12px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+        
+        .campfire-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        
+        .campfire-select {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: inherit;
+            max-width: 200px;
+        }
+        
+        .campfire-select:focus {
+            outline: none;
+        }
+        
+        /* Window controls container */
+        .window-controls {
+            display: flex;
+            gap: 4px;
+            -webkit-app-region: no-drag;
+        }
+        
+        .window-btn {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+        
+        .window-btn:hover {
+            opacity: 0.8;
+        }
+        
+        /* Buddy List Container */
+        .buddy-list-container {
+            flex: 1;
+            overflow-y: auto;
+            border-radius: 0;
+        }
+        
+        .buddy-list-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .buddy-list-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+        
+        .buddy-list-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        .buddy-list-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        body.mode-nostalgia .buddy-list-container::-webkit-scrollbar {
+            width: 16px;
+        }
+        
+        body.mode-nostalgia .buddy-list-container::-webkit-scrollbar-track {
+            background: #D4D0C8;
+            border-left: 1px solid #808080;
+        }
+        
+        body.mode-nostalgia .buddy-list-container::-webkit-scrollbar-thumb {
+            background: #C0C0C0;
+            border: 1px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+        }
+        
+        /* Mode line at bottom of list */
+        .buddy-mode-line {
+            padding: 8px 12px;
+            font-size: 10px;
+            color: #888;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(18, 18, 18, 0.5);
+        }
+        
+        body.mode-nostalgia .buddy-mode-line {
+            font-family: 'W95FA', sans-serif;
+            background: #ECE9D8;
+            border-top: 1px solid #808080;
+            color: #666;
+        }
+        
+        /* Group Headers */
+        .buddy-group {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        /* Buddy List Items */
+        .buddy-list {
+            list-style: none;
+        }
+        
+        .buddy-item {
+            padding: 8px 12px 8px 36px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            -webkit-app-region: no-drag;
+            transition: background 0.1s;
+        }
+        
+        .buddy-item:hover {
+            transition: background 0.1s;
+        }
+        
+        .buddy-item.selected {
+            transition: background 0.1s;
+        }
+        
+        /* State Icon */
+        .buddy-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            position: absolute;
+            left: 8px;
+        }
+        
+        /* Blue fire icon for sleepy users (robin's egg blue) */
+        .buddy-icon.sleepy-fire {
+            filter: hue-rotate(180deg) brightness(1.2) saturate(0.8);
+        }
+        
+        .buddy-name {
+            flex: 0 1 auto;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: calc(100% - 120px);
+        }
+        
+        .buddy-state-text {
+            font-size: 10px;
+            font-style: italic;
+        }
+        
+        /* Right-side state icon (for sleepy indicator) */
+        .buddy-right-icon {
+            font-size: 14px;
+            margin-left: 4px;
+            min-width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        
+        /* Offline user styling */
+        .buddy-item.offline {
+            color: #888;
+            font-style: italic;
+        }
+        
+        body.mode-nostalgia .buddy-item.offline {
+            color: #999;
+        }
+        
+        .buddy-item.offline .buddy-name {
+            font-style: italic;
+            color: #888;
+        }
+        
+        /* LURK usernames - purple like widget */
+        .buddy-item.lurk .buddy-name {
+            color: #9b59b6;
+        }
+        
+        /* AFK usernames - blue color */
+        .buddy-item.afk .buddy-name {
+            color: #3498db;
+        }
+        
+        /* Bot user styling */
+        .buddy-item.bot .buddy-icon {
+            font-size: 14px;
+        }
+        
+        .buddy-time {
+            font-size: 9px;
+        }
+        
+        /* Group Headers */
+        .buddy-group-header {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #aaa;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            user-select: none;
+        }
+        
+        .buddy-group-header:hover {
+            background: rgba(255, 255, 255, 0.06);
+        }
+        
+        .buddy-group-arrow {
+            margin-right: 8px;
+            font-size: 8px;
+            transition: transform 0.2s;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 8px solid #aaa;
+            border-radius: 3px;
+        }
+        
+        .buddy-group-header.collapsed .buddy-group-arrow {
+            border-top: none;
+            border-bottom: 8px solid #aaa;
+        }
+        
+        .buddy-group-title {
+            flex: 1;
+        }
+        
+        .buddy-group-count {
+            font-size: 10px;
+            color: #888;
+        }
+        
+        /* Offline group specific styling */
+        .buddy-group-header.offline-header {
+            color: #888;
+            font-style: italic;
+        }
+        
+        .buddy-group-header.offline-header .buddy-group-title {
+            font-style: italic;
+        }
+        
+        /* Collapsed list styling */
+        .buddy-list-collapsed {
+            display: none;
+        }
+        
+        /* Nostalgia mode group headers */
+        body.mode-nostalgia .buddy-group-header {
+            font-family: 'W95FA', sans-serif;
+            font-size: 10px;
+            color: #666;
+            background: #E8E8E8;
+            border-bottom: 1px solid #CCC;
+        }
+        
+        body.mode-nostalgia .buddy-group-header.offline-header {
+            color: #999;
+        }
+        
+        body.mode-nostalgia .buddy-group-count {
+            color: #888;
+        }
+        
+        /* User Badges */
+        .user-badge {
+            font-size: 8px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-left: 4px;
+        }
+        
+        .user-badge.broadcaster {
+            background: #E91E63;
+            color: white;
+        }
+        
+        .user-badge.mod {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .user-badge.vip {
+            background: #9C27B0;
+            color: white;
+        }
+        
+        .user-badge.subscriber {
+            background: #2196F3;
+            color: white;
+        }
+        
+        /* Footer / Status Bar */
+        .buddy-footer {
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+            border-radius: 0 0 12px 12px;
+        }
+        
+        .footer-left,
+        .footer-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .footer-campfire-select {
+            padding: 4px 8px;
+            font-size: 11px;
+            min-width: 150px;
+        }
+        
+        .connection-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        
+        .status-dot.connected {
+            background: #00FF00;
+            box-shadow: 0 0 4px #00FF00;
+        }
+        
+        .status-dot.disconnected {
+            background: #FF0000;
+            box-shadow: 0 0 4px #FF0000;
+        }
+        
+        .status-dot.connecting {
+            background: #FFA500;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Settings Dropdown */
+        .settings-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            border-radius: 8px;
+            padding: 12px;
+            display: none;
+            z-index: 1000;
+            min-width: 180px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+        
+        .settings-dropdown.show {
+            display: block;
+        }
+        
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+        
+        .settings-label {
+            font-size: 11px;
+        }
+        
+        .settings-select {
+            padding: 6px 10px;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        /* Loading State */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #9147ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        body.mode-nostalgia .loading-spinner {
+            border-color: #E0E0E0;
+            border-top-color: #0A246A;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            margin-top: 12px;
+            font-size: 12px;
+        }
+        
+        /* Settings button in header */
+        .header-settings-btn {
+            background: rgba(28, 28, 28, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 6px 8px;
+            opacity: 0.7;
+            transition: all 0.2s;
+            -webkit-app-region: no-drag;
+        }
+        
+        .header-settings-btn:hover {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        body.mode-nostalgia .header-settings-btn {
+            font-family: 'W95FA', sans-serif;
+            background: #C0C0C0;
+            border: 1px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+        }
+        
+        body.mode-nostalgia .header-settings-btn:active {
+            border-color: #808080 #FFFFFF #FFFFFF #808080;
+        }
+    </style>
+</head>
+<body class="mode-modern">
+    <!-- Main window container -->
+    <div class="buddy-window">
+        <!-- Header with title bar style -->
+        <div class="buddy-header">
+            <!-- Settings button (gear icon, far left) -->
+            <button class="header-settings-btn" id="btnHeaderSettings" onclick="toggleSettings()" title="Settings">⚙️</button>
+            <!-- Title with silhouettes icon -->
+            <div class="buddy-header-left">
+                <div class="title-icon">👥</div>
+                <span class="buddy-title">Buddy List</span>
+            </div>
+            <!-- Window controls -->
+            <div class="window-controls" id="windowControls">
+                <!-- Detach button (shown when attached) -->
+                <button class="window-btn window-btn-attach" id="btnAttach" onclick="detachWindow()" title="Detach from Chat">↔</button>
+                <!-- Minimize/Maximize/Close (shown when detached) -->
+                <button class="window-btn window-btn-minimize" id="btnMinimize" onclick="minimizeWindow()" title="Minimize">_</button>
+                <button class="window-btn window-btn-maximize" id="btnMaximize" onclick="maximizeWindow()" title="Maximize">□</button>
+                <button class="window-btn window-btn-close" id="btnClose" onclick="closeWindow()" title="Close">×</button>
+            </div>
+            
+            <!-- Settings dropdown -->
+            <div class="settings-dropdown" id="settingsDropdown">
+                <div class="settings-row">
+                    <span class="settings-label">Style:</span>
+                    <select class="settings-select" id="styleMode" onchange="changeStyleMode(this.value)">
+                        <option value="modern">Modern</option>
+                        <option value="nostalgia">Nostalgia</option>
+                    </select>
+                </div>
+                <div class="settings-row">
+                    <span class="settings-label">Font:</span>
+                    <select class="settings-select" id="fontSelect" onchange="changeFont(this.value)">
+                        <option value="tahoma">System</option>
+                        <option value="w95fa">Windows 95</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Buddy list container -->
+        <div class="buddy-list-container" id="buddyListContainer">
+            <!-- Online users group (active, sleepy, lurk, afk) -->
+            <div class="buddy-group" id="group-online">
+                <div class="buddy-group-header" id="header-online" onclick="toggleGroup('online')">
+                    <span class="buddy-group-arrow"></span>
+                    <span class="buddy-group-title">Online</span>
+                    <span class="buddy-group-count" id="count-online">0</span>
+                </div>
+                <ul class="buddy-list" id="list-online" style="display: block;"></ul>
+            </div>
+            
+            <!-- Offline users group (users who have ever joined) -->
+            <div class="buddy-group" id="group-offline">
+                <div class="buddy-group-header offline-header" id="header-offline" onclick="toggleGroup('offline')">
+                    <span class="buddy-group-arrow"></span>
+                    <span class="buddy-group-title">Offline</span>
+                    <span class="buddy-group-count" id="count-offline">0</span>
+                </div>
+                <ul class="buddy-list" id="list-offline"></ul>
+            </div>
+            
+            <!-- Mode indicator at bottom of list -->
+            <div class="buddy-mode-line" id="buddyModeLine">
+                Creator Mode
+            </div>
+        </div>
+        
+        <!-- Footer with connection status and campfire selector -->
+        <div class="buddy-footer">
+            <div class="footer-left">
+                <select class="campfire-select footer-campfire-select" id="campfireSelect" onchange="changeCampfire(this.value)">
+                    <option value="heafth">heafth's Campfire <span id="campfireUserCount">(0)</span></option>
+                </select>
+            </div>
+            <div class="footer-right">
+                <div class="connection-indicator">
+                    <div class="status-dot disconnected" id="statusDot"></div>
+                    <span id="statusText">Connecting...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // ========================================
+        // CONFIGURATION
+        // ========================================
+        
+        const CONFIG = {
+            ACTIVE_THRESHOLD: 5 * 60 * 1000,
+            SLEEPY_THRESHOLD: 15 * 60 * 1000,
+            AFK_THRESHOLD: 30 * 60 * 1000,
+            MAX_USERS: 200,
+            STATE_UPDATE_INTERVAL: 30000
+        };
+        
+        // ========================================
+        // STATE
+        // ========================================
+        
+        let state = {
+            isStandalone: false,
+            isCreatorMode: false,
+            isAttached: false,
+            isConnected: false,
+            isConnecting: false,
+            currentCampfire: 'heafth',
+            currentUser: null,
+            users: new Map(),
+            userOrder: [],
+            selectedUser: null,
+            collapsedGroups: new Set(),
+            ircClient: null,
+            reconnectAttempts: 0,
+            maxReconnectAttempts: 5,
+            // Track users who have ever joined (for offline list)
+            knownUsers: new Map(),
+            // Known bot usernames
+            knownBots: new Set(),
+            // Configured bot username from Twitch settings
+            configuredBotUsername: null
+        };
+        
+        // ========================================
+        // USER STATE CONSTANTS
+        // ========================================
+        
+        const USER_STATES = {
+            ACTIVE: 'active',
+            SLEEPY: 'sleepy',
+            AFK: 'afk',
+            LURK: 'lurk',
+            OFFLINE: 'offline'
+        };
+        
+        const STATE_ICONS = {
+            [USER_STATES.ACTIVE]: '🔥',
+            [USER_STATES.SLEEPY]: '💤',
+            [USER_STATES.AFK]: '🌌',
+            [USER_STATES.LURK]: '🌲',
+            [USER_STATES.OFFLINE]: '🚪'
+        };
+        
+        // Bot icon
+        const BOT_ICON = '👾';
+        
+        // ========================================
+        // STATE NORMALIZATION
+        // ========================================
+        
+        /**
+         * Normalize user state to lowercase for consistent comparison
+         * Handles states from main process (uppercase) vs buddy list (lowercase)
+         * @param {string} state - User state from main process
+         * @returns {string} Normalized lowercase state
+         */
+        function normalizeState(state) {
+            if (!state) return USER_STATES.ACTIVE;
+            
+            const normalized = state.toLowerCase();
+            
+            // Map main process states to buddy list states
+            const STATE_MAP = {
+                'in_chat': USER_STATES.OFFLINE,
+                'joined': USER_STATES.ACTIVE,
+                'active': USER_STATES.ACTIVE,
+                'sleepy': USER_STATES.SLEEPY,
+                'afk': USER_STATES.AFK,
+                'lurk': USER_STATES.LURK,
+                // Also handle already-normalized lowercase states
+                'offline': USER_STATES.OFFLINE
+            };
+            
+            return STATE_MAP[normalized] || USER_STATES.ACTIVE;
+        }
+        
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+        
+        function init() {
+            console.log('[BuddyList] Initializing...');
+            
+            detectMode();
+            loadPreferences();
+            setupEventListeners();
+            updateWindowControls();
+            
+            if (state.isStandalone) {
+                initStandaloneMode();
+            } else {
+                initCreatorMode();
+            }
+            
+            console.log('[BuddyList] Initialization complete', { 
+                mode: state.isStandalone ? 'standalone' : 'creator',
+                isAttached: state.isAttached
+            });
+        }
+        
+        function detectMode() {
+            const hasElectronAPI = !!(window.electronAPI);
+            const urlParams = new URLSearchParams(window.location.search);
+            state.isAttached = urlParams.get('attached') === 'true';
+            
+            if (hasElectronAPI) {
+                state.isCreatorMode = true;
+                state.isStandalone = false;
+            } else {
+                state.isStandalone = true;
+                state.isCreatorMode = false;
+            }
+            
+            console.log('[BuddyList] Mode detected:', {
+                isStandalone: state.isStandalone,
+                isCreatorMode: state.isCreatorMode,
+                isAttached: state.isAttached
+            });
+        }
+        
+        function loadPreferences() {
+            const savedStyleMode = localStorage.getItem('buddyListStyleMode') || 'modern';
+            document.body.classList.remove('mode-modern', 'mode-nostalgia');
+            document.body.classList.add(`mode-${savedStyleMode}`);
+            const styleSelect = document.getElementById('styleMode');
+            if (styleSelect) styleSelect.value = savedStyleMode;
+            
+            const savedFont = localStorage.getItem('buddyListFont') || 'tahoma';
+            document.body.classList.remove('font-tahoma', 'font-w95fa');
+            document.body.classList.add(`font-${savedFont}`);
+            const fontSelect = document.getElementById('fontSelect');
+            if (fontSelect) fontSelect.value = savedFont;
+            
+            // All groups expanded by default (including OFFLINE)
+            const savedCollapsed = localStorage.getItem('buddyListCollapsedGroups');
+            if (savedCollapsed) {
+                try {
+                    state.collapsedGroups = new Set(JSON.parse(savedCollapsed));
+                } catch (e) {
+                    state.collapsedGroups = new Set(); // Empty = all expanded
+                }
+            } else {
+                state.collapsedGroups = new Set(); // Empty = all expanded
+            }
+            
+            const savedCampfire = localStorage.getItem('lastCampfire');
+            if (savedCampfire) {
+                state.currentCampfire = savedCampfire;
+                const select = document.getElementById('campfireSelect');
+                if (select) select.value = savedCampfire;
+            }
+            
+            // Load known users from localStorage for offline list persistence
+            loadKnownUsers();
+        }
+        
+        // ========================================
+        // OFFLINE USER PERSISTENCE
+        // ========================================
+        
+        const KNOWN_USERS_MAX = 300; // Max number of offline users to remember
+        
+        function loadKnownUsers() {
+            const savedKnownUsers = localStorage.getItem('buddyListKnownUsers');
+            if (savedKnownUsers) {
+                try {
+                    const parsed = JSON.parse(savedKnownUsers);
+                    
+                    // Deduplicate by userId (keep first occurrence)
+                    const uniqueUsers = new Map();
+                    const seenUsernames = new Set();
+                    let duplicatesRemoved = 0;
+                    
+                    for (const [key, user] of parsed) {
+                        const userIdStr = String(key).toLowerCase();
+                        const usernameStr = String(user.username || user.displayName || '').toLowerCase();
+                        
+                        // Skip if we already have this userId or username
+                        if (uniqueUsers.has(userIdStr) || seenUsernames.has(usernameStr)) {
+                            duplicatesRemoved++;
+                            continue;
+                        }
+                        
+                        uniqueUsers.set(key, user);
+                        seenUsernames.add(usernameStr);
+                    }
+                    
+                    state.knownUsers = uniqueUsers;
+                    
+                    if (duplicatesRemoved > 0) {
+                        console.log(`[BuddyList] Loaded ${state.knownUsers.size} known users, removed ${duplicatesRemoved} duplicates`);
+                    } else {
+                        console.log(`[BuddyList] Loaded ${state.knownUsers.size} known users from localStorage (states reset to OFFLINE)`);
+                    }
+                    
+                    // Reset all loaded users to OFFLINE state for fresh session
+                    // This ensures stale states (LURK, AFK, SLEEPY) don't persist across sessions
+                    for (const [userId, user] of state.knownUsers) {
+                        user.state = USER_STATES.OFFLINE;
+                        user.isAfk = false;
+                        user.isLurking = false;
+                        // Keep hasJoinedCampfire so we know they joined before
+                    }
+                    
+                    // Save cleaned data back to localStorage
+                    if (duplicatesRemoved > 0) {
+                        saveKnownUsers();
+                    }
+                } catch (e) {
+                    console.error('[BuddyList] Error loading knownUsers:', e);
+                    state.knownUsers = new Map();
+                }
+            }
+        }
+        
+        function saveKnownUsers() {
+            // Convert Map to array for JSON serialization
+            const usersArray = Array.from(state.knownUsers.entries());
+            
+            // Enforce max limit - remove oldest users if exceeding
+            if (usersArray.length > KNOWN_USERS_MAX) {
+                // Sort by lastSeen (oldest first) and keep only the most recent
+                usersArray.sort((a, b) => a[1].lastSeen - b[1].lastSeen);
+                const toRemove = usersArray.slice(0, usersArray.length - KNOWN_USERS_MAX);
+                toRemove.forEach(([userId]) => {
+                    state.knownUsers.delete(userId);
+                    state.knownBots.delete(userId);
+                });
+                console.log(`[BuddyList] Pruned ${toRemove.length} old users from knownUsers`);
+            }
+            
+            localStorage.setItem('buddyListKnownUsers', JSON.stringify(Array.from(state.knownUsers.entries())));
+            localStorage.setItem('buddyListKnownBots', JSON.stringify(Array.from(state.knownBots)));
+        }
+        
+        function setupEventListeners() {
+            document.addEventListener('click', (e) => {
+                const dropdown = document.getElementById('settingsDropdown');
+                const btnSettings = document.getElementById('btnHeaderSettings');
+                if (!dropdown.contains(e.target) && e.target !== btnSettings) {
+                    dropdown.classList.remove('show');
+                }
+            });
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    document.getElementById('settingsDropdown').classList.remove('show');
+                }
+            });
+            
+            // Graceful shutdown: move all active users to OFFLINE when page closes
+            window.addEventListener('beforeunload', handleGracefulShutdown);
+            window.addEventListener('pagehide', handleGracefulShutdown);
+            
+            // Listen for window snap status changes
+            if (window.electronAPI && window.electronAPI.getWindowSnapStatus) {
+                window.electronAPI.getWindowSnapStatus().then(status => {
+                    state.isAttached = status.bothSnapped;
+                    updateWindowControls();
+                });
+            }
+            
+            // Listen for snap status updates from main process
+            if (window.electronAPI && window.electronAPI.onWindowSnapChanged) {
+                window.electronAPI.onWindowSnapChanged((data) => {
+                    state.isAttached = data.bothSnapped;
+                    updateWindowControls();
+                });
+            }
+        }
+        
+        // ========================================
+        // GRACEFUL SHUTDOWN
+        // ========================================
+        
+        function handleGracefulShutdown() {
+            // Move all active users to knownUsers as OFFLINE before closing
+            let movedCount = 0;
+            
+            state.users.forEach((user, userId) => {
+                // Only move users who have joined the campfire
+                if (user.hasJoinedCampfire) {
+                    user.state = USER_STATES.OFFLINE;
+                    user.lastSeen = Date.now();
+                    state.knownUsers.set(userId, { ...user });
+                    
+                    // Keep bot status in knownBots
+                    if (user.isBot) {
+                        state.knownBots.add(userId);
+                    }
+                    
+                    movedCount++;
+                }
+            });
+            
+            if (movedCount > 0) {
+                console.log(`[BuddyList] Graceful shutdown: moved ${movedCount} users to offline`);
+                saveKnownUsers();
+            }
+        }
+        
+        // ========================================
+        // WINDOW CONTROLS
+        // ========================================
+        
+        function updateWindowControls() {
+            const attachBtn = document.getElementById('btnAttach');
+            const minimizeBtn = document.getElementById('btnMinimize');
+            const maximizeBtn = document.getElementById('btnMaximize');
+            const closeBtn = document.getElementById('btnClose');
+            
+            if (state.isAttached) {
+                // Show attach button, hide window controls
+                attachBtn.style.display = 'flex';
+                minimizeBtn.style.display = 'none';
+                maximizeBtn.style.display = 'none';
+                closeBtn.style.display = 'none';
+            } else {
+                // Show window controls, hide attach button
+                attachBtn.style.display = 'none';
+                minimizeBtn.style.display = 'flex';
+                maximizeBtn.style.display = 'flex';
+                closeBtn.style.display = 'flex';
+            }
+        }
+        
+        function detachWindow() {
+            if (window.electronAPI && window.electronAPI.detachBuddyList) {
+                window.electronAPI.detachBuddyList();
+            } else {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('attached');
+                window.location.href = url.toString();
+            }
+        }
+        
+        function minimizeWindow() {
+            if (window.electronAPI && window.electronAPI.minimizeWindow) {
+                window.electronAPI.minimizeWindow();
+            }
+        }
+        
+        function maximizeWindow() {
+            if (window.electronAPI && window.electronAPI.maximizeWindow) {
+                window.electronAPI.maximizeWindow();
+            }
+        }
+        
+        function closeWindow() {
+            // Ensure graceful shutdown before closing
+            handleGracefulShutdown();
+            
+            if (window.electronAPI && window.electronAPI.closeWindow) {
+                window.electronAPI.closeWindow();
+            } else {
+                window.close();
+            }
+        }
+        
+        // ========================================
+        // CREATOR MODE (IPC-based)
+        // ========================================
+        
+        function initCreatorMode() {
+            console.log('[BuddyList] Initializing Creator mode...');
+            
+            updateConnectionStatus(true, 'Connected');
+            
+            // Update mode line
+            const modeLine = document.getElementById('buddyModeLine');
+            if (modeLine) modeLine.textContent = 'Creator Mode';
+            
+            console.log('[BuddyList] window.electronAPI exists:', !!window.electronAPI);
+            
+            // Get the configured bot username from main process
+            if (window.electronAPI && window.electronAPI.getTwitchConfig) {
+                console.log('[BuddyList] Fetching Twitch config...');
+                window.electronAPI.getTwitchConfig().then(config => {
+                    console.log('[BuddyList] Twitch config received:', config ? 'config exists' : 'no config');
+                    if (config && config.chatBotUsername) {
+                        state.configuredBotUsername = config.chatBotUsername.toLowerCase();
+                        console.log('[BuddyList] Configured bot username:', state.configuredBotUsername);
+                        // Re-check all users for bot status
+                        state.users.forEach((user, userId) => {
+                            if (user.username && user.username.toLowerCase() === state.configuredBotUsername) {
+                                user.isBot = true;
+                                state.knownBots.add(userId);
+                            }
+                        });
+                        renderBuddyList();
+                    }
+                }).catch(err => {
+                    console.error('[BuddyList] Error getting Twitch config:', err);
+                });
+            } else {
+                console.log('[BuddyList] No getTwitchConfig API available');
+            }
+            
+            if (window.electronAPI && window.electronAPI.getActiveUsers) {
+                console.log('[BuddyList] Fetching active users...');
+                window.electronAPI.getActiveUsers().then(users => {
+                    console.log('[BuddyList] Received', users ? users.length : 0, 'active users');
+                    if (users && Array.isArray(users)) {
+                        users.forEach(user => {
+                            console.log('[BuddyList] Adding user:', user.username, 'userId:', user.userId);
+                            addOrUpdateUser(user);
+                        });
+                        renderBuddyList();
+                    }
+                }).catch(err => {
+                    console.error('[BuddyList] Error getting active users:', err);
+                });
+            } else {
+                console.log('[BuddyList] No getActiveUsers API available');
+            }
+            
+            if (window.electronAPI && window.electronAPI.onUserJoin) {
+                window.electronAPI.onUserJoin((user) => {
+                    addOrUpdateUser(user);
+                    renderBuddyList();
+                });
+            }
+            
+            if (window.electronAPI && window.electronAPI.onUserLeave) {
+                window.electronAPI.onUserLeave((data) => {
+                    removeUser(data.userId);
+                    renderBuddyList();
+                });
+            }
+            
+            // PRIMARY STATE CHANGE HANDLER - handles ALL state transitions
+            // This is the single source of truth for state changes
+            if (window.electronAPI && window.electronAPI.onUserStateChanged) {
+                window.electronAPI.onUserStateChanged((data) => {
+                    if (data && data.user && data.user.userId) {
+                        const { user, oldState, newState } = data;
+                        console.log(`[BuddyList] State changed: ${user.username} ${oldState} → ${newState}`);
+                        addOrUpdateUser(user);
+                        renderBuddyList();
+                    }
+                });
+            } else {
+                console.warn('[BuddyList] No onUserStateChanged API available');
+            }
+            
+            // Note: We no longer use onUserAfk/onUserLurk/onUserJoined directly
+            // All state transitions are handled via onUserStateChanged from the main process
+            
+            if (window.electronAPI && window.electronAPI.onChatMessage) {
+                window.electronAPI.onChatMessage((data) => {
+                    if (data && data.userId) {
+                        const user = state.users.get(data.userId);
+                        if (user) {
+                            // Update local activity time for display
+                            user.lastActivity = Date.now();
+                            // State is determined by main process via IPC events
+                            // Just refresh the display
+                            renderBuddyList();
+                        }
+                    }
+                });
+            }
+            
+            // NOTE: In Creator mode, we don't run startStateUpdateLoop()
+            // States are determined solely by IPC events from UserManager
+            // This ensures Buddy List reflects the same state as the widget
+        }
+        
+        // ========================================
+        // STANDALONE MODE (Direct IRC)
+        // ========================================
+        
+        function initStandaloneMode() {
+            console.log('[BuddyList] Initializing Standalone mode...');
+            
+            // Update mode line
+            const modeLine = document.getElementById('buddyModeLine');
+            if (modeLine) modeLine.textContent = 'Camper Mode';
+            
+            const savedToken = localStorage.getItem('twitchOAuthToken');
+            const savedUsername = localStorage.getItem('twitchUsername');
+            
+            if (savedToken && savedUsername) {
+                state.currentUser = { username: savedUsername, oauthToken: savedToken };
+                connectToIRC();
+            } else {
+                showAuthRequired();
+            }
+            
+            startStateUpdateLoop();
+        }
+        
+        function connectToIRC() {
+            if (!state.currentUser || !state.currentUser.oauthToken) {
+                showAuthRequired();
+                return;
+            }
+            
+            console.log('[BuddyList] Connecting to Twitch IRC...');
+            updateConnectionStatus(false, 'Connecting...');
+            
+            setTimeout(() => {
+                state.isConnected = true;
+                state.isConnecting = false;
+                updateConnectionStatus(true, 'Connected');
+                document.getElementById('userInfo').textContent = `Connected as ${state.currentUser.username}`;
+                console.log('[BuddyList] IRC connected (simulated)');
+            }, 2000);
+        }
+        
+        function showAuthRequired() {
+            updateConnectionStatus(false, 'Auth Required');
+            document.getElementById('userInfo').textContent = 'Please authenticate with Twitch';
+        }
+        
+        // ========================================
+        // USER MANAGEMENT
+        // ========================================
+        
+        function addOrUpdateUser(userData) {
+            const userId = userData.userId || userData.id;
+            if (!userId) return;
+            
+            let user = state.users.get(userId);
+            
+            // Check if user is a bot (multiple detection methods)
+            const isBot = userData.isBot || 
+                          userData.roles?.isBot || 
+                          userData.badges?.includes('bot') ||
+                          (userData.tags?.badges?.bot === '1') ||
+                          (userData.tags?.badges?.verified === '1') ||
+                          // Also check against configured bot username
+                          (state.configuredBotUsername && 
+                           userData.username && 
+                           userData.username.toLowerCase() === state.configuredBotUsername);
+            
+            if (isBot) {
+                state.knownBots.add(userId);
+            }
+            
+            if (!user) {
+                user = {
+                    userId: userId,
+                    username: userData.username || userData.displayName || 'Unknown',
+                    displayName: userData.displayName || userData.username || 'Unknown',
+                    state: USER_STATES.ACTIVE,
+                    lastActivity: Date.now(),
+                    isAfk: false,
+                    isLurking: false,
+                    isBot: isBot,
+                    badges: userData.badges || [],
+                    color: userData.color || '#9147ff',
+                    // Track if user has ever joined (for offline list)
+                    hasJoinedCampfire: true,
+                    lastSeen: Date.now()
+                };
+                state.users.set(userId, user);
+                state.userOrder.push(userId);
+                
+                // Also track in knownUsers for offline list
+                state.knownUsers.set(userId, { ...user });
+                saveKnownUsers();
+            } else {
+                user.username = userData.username || user.username;
+                user.displayName = userData.displayName || user.displayName;
+                user.badges = userData.badges || user.badges;
+                user.color = userData.color || user.color;
+                user.isBot = user.isBot || isBot;
+                if (userData.state) {
+                    // Use explicit state from main process - don't override with auto-calculation
+                    user.state = userData.state;
+                }
+                if (userData.lastActivity) user.lastActivity = userData.lastActivity;
+                if (userData.isAfk !== undefined) user.isAfk = userData.isAfk;
+                if (userData.isLurking !== undefined) user.isLurking = userData.isLurking;
+                user.hasJoinedCampfire = true;
+                user.lastSeen = Date.now();
+                
+                // Update knownUsers
+                state.knownUsers.set(userId, { ...user });
+                saveKnownUsers();
+            }
+            
+            // Only auto-calculate state if no explicit state was provided from main process
+            // This prevents overriding AFK/LURK/SLEEPY states with auto-calculated ones
+            if (!userData.state) {
+                updateUserState(userId);
+            }
+        }
+        
+        function removeUser(userId) {
+            // Move to knownUsers with OFFLINE state instead of completely removing
+            const user = state.users.get(userId);
+            if (user) {
+                // Preserve original state when moving to knownUsers
+                // Only mark as offline if they weren't already offline
+                const previousState = user.state;
+                user.state = USER_STATES.OFFLINE;
+                user.lastSeen = Date.now();
+                state.knownUsers.set(userId, { ...user, state: previousState }); // Preserve previous state
+                saveKnownUsers();
+                
+                // Keep bot status in knownBots
+                if (user.isBot) {
+                    state.knownBots.add(userId);
+                }
+                
+                // Remove from active users
+                state.users.delete(userId);
+                state.userOrder = state.userOrder.filter(id => id !== userId);
+                
+                console.log(`[BuddyList] User ${user.username} moved to offline list`);
+            }
+        }
+        
+        function updateUserState(userId) {
+            const user = state.users.get(userId);
+            if (!user) return;
+            
+            if (user.isLurking) {
+                user.state = USER_STATES.LURK;
+                return;
+            }
+            if (user.isAfk) {
+                user.state = USER_STATES.AFK;
+                return;
+            }
+            
+            const timeSinceActivity = Date.now() - user.lastActivity;
+            
+            if (timeSinceActivity < CONFIG.ACTIVE_THRESHOLD) {
+                user.state = USER_STATES.ACTIVE;
+            } else if (timeSinceActivity < CONFIG.SLEEPY_THRESHOLD) {
+                user.state = USER_STATES.SLEEPY;
+            } else {
+                user.state = USER_STATES.AFK;
+            }
+        }
+        
+        function getGroupedUsers() {
+            const groups = {
+                [USER_STATES.ACTIVE]: [],
+                [USER_STATES.SLEEPY]: [],
+                [USER_STATES.LURK]: [],
+                [USER_STATES.AFK]: [],
+                [USER_STATES.OFFLINE]: []
+            };
+            
+            // Track seen user IDs and usernames (case-insensitive) to prevent duplicates
+            const seenUserIds = new Set();
+            const seenUsernames = new Set();
+            
+            // Get all users (active + known offline users)
+            const allUsers = [];
+            
+            // First pass: mark all active user IDs and usernames (use lowercase for consistency)
+            for (const user of state.users.values()) {
+                const userIdStr = String(user.userId).toLowerCase();
+                const usernameStr = String(user.username || user.displayName || '').toLowerCase();
+                seenUserIds.add(userIdStr);
+                if (usernameStr) seenUsernames.add(usernameStr);
+            }
+            
+            // Second pass: add all users (active + known offline) to allUsers array
+            // Active users first
+            for (const user of state.users.values()) {
+                allUsers.push(user);
+            }
+            
+            // Add known offline users (deduplicated by userId AND username, case-insensitive)
+            for (const user of state.knownUsers.values()) {
+                const userIdStr = String(user.userId).toLowerCase();
+                const usernameStr = String(user.username || user.displayName || '').toLowerCase();
+                
+                // Skip if already seen (either by userId or username)
+                if (seenUserIds.has(userIdStr) || seenUsernames.has(usernameStr)) {
+                    continue;
+                }
+                
+                // Only add if has joined campfire
+                if (user.hasJoinedCampfire) {
+                    allUsers.push(user);
+                    seenUserIds.add(userIdStr);
+                    seenUsernames.add(usernameStr);
+                }
+            }
+            
+            // Sort alphabetically within each group (case-insensitive sort)
+            const sortedUsers = allUsers.sort((a, b) => 
+                a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' })
+            );
+            
+            for (const user of sortedUsers) {
+                // Determine effective state (normalize to handle uppercase from main process)
+                let effectiveState = normalizeState(user.state);
+                
+                // Offline users stay in OFFLINE group
+                if (effectiveState === USER_STATES.OFFLINE) {
+                    groups[USER_STATES.OFFLINE].push(user);
+                    continue;
+                }
+                
+                // Lurking users in LURK group
+                if (user.isLurking || effectiveState === USER_STATES.LURK) {
+                    groups[USER_STATES.LURK].push(user);
+                    continue;
+                }
+                
+                // AFK users in AFK group
+                if (user.isAfk || effectiveState === USER_STATES.AFK) {
+                    groups[USER_STATES.AFK].push(user);
+                    continue;
+                }
+                
+                // Sleepy users in SLEEPY group
+                if (effectiveState === USER_STATES.SLEEPY) {
+                    groups[USER_STATES.SLEEPY].push(user);
+                    continue;
+                }
+                
+                // All other users (ACTIVE, JOINED) go to ACTIVE group
+                // Bots are also in ACTIVE group (with bot icon)
+                groups[USER_STATES.ACTIVE].push(user);
+            }
+            
+            return groups;
+        }
+        
+        // ========================================
+        // UI RENDERING
+        // ========================================
+        
+        function toggleGroup(groupName) {
+            const header = document.getElementById(`header-${groupName}`);
+            const list = document.getElementById(`list-${groupName}`);
+            const arrow = document.getElementById(`arrow-${groupName}`);
+            
+            if (!header || !list) return;
+            
+            const isCollapsed = list.classList.contains('buddy-list-collapsed');
+            
+            if (isCollapsed) {
+                list.classList.remove('buddy-list-collapsed');
+                header.classList.remove('collapsed');
+                list.style.display = 'block';
+            } else {
+                list.classList.add('buddy-list-collapsed');
+                header.classList.add('collapsed');
+                list.style.display = 'none';
+            }
+            
+            // Save preference
+            if (isCollapsed) {
+                state.collapsedGroups.delete(groupName);
+            } else {
+                state.collapsedGroups.add(groupName);
+            }
+            savePreferences();
+        }
+        
+        function renderBuddyList() {
+            const groups = getGroupedUsers();
+            
+            // Calculate online count (active + lurk + afk)
+            const onlineCount = groups.active.length + groups.lurk.length + groups.afk.length;
+            
+            // Update online group count
+            const onlineCountEl = document.getElementById('count-online');
+            if (onlineCountEl) onlineCountEl.textContent = onlineCount;
+            
+            // Render all users in single online list (sorted by state: active, sleepy, lurk, afk)
+            const onlineListEl = document.getElementById('list-online');
+            if (onlineListEl) {
+                onlineListEl.innerHTML = '';
+                
+                // Combine and sort online users: active → sleepy → lurk → afk
+                const onlineUsers = [
+                    ...groups.active,
+                    ...groups.sleepy,
+                    ...groups.lurk,
+                    ...groups.afk
+                ];
+                
+                for (const user of onlineUsers) {
+                    onlineListEl.appendChild(createUserElement(user));
+                }
+            }
+            
+            // Update offline group
+            const offlineCountEl = document.getElementById('count-offline');
+            const offlineListEl = document.getElementById('list-offline');
+            if (offlineCountEl) offlineCountEl.textContent = groups.offline.length;
+            if (offlineListEl) {
+                offlineListEl.innerHTML = '';
+                for (const user of groups.offline) {
+                    offlineListEl.appendChild(createUserElement(user));
+                }
+            }
+            
+            // Apply collapsed state to groups
+            applyCollapsedState();
+            
+            // Update title
+            const titleEl = document.querySelector('.buddy-title');
+            if (titleEl) {
+                titleEl.textContent = 'Buddy List';
+            }
+            
+            // Update user count in campfire dropdown (only non-offline users)
+            const activeUsers = state.users.size;
+            console.log(`[BuddyList] Updating user count: ${activeUsers} users`);
+            const countSpan = document.getElementById('campfireUserCount');
+            if (countSpan) {
+                countSpan.textContent = `(${activeUsers})`;
+                console.log(`[BuddyList] Updated count via span: (${activeUsers})`);
+            } else {
+                // Fallback: update the option text directly (for span inside option)
+                const select = document.getElementById('campfireSelect');
+                if (select && select.options.length > 0) {
+                    const option = select.options[0];
+                    const text = option.textContent;
+                    // Replace the (X) at the end with the new count
+                    const updatedText = text.replace(/\(\d+\)$/, `(${activeUsers})`);
+                    option.textContent = updatedText;
+                    console.log(`[BuddyList] Updated count via fallback: (${activeUsers})`);
+                } else {
+                    console.log(`[BuddyList] Could not find select or options`);
+                }
+            }
+        }
+        
+        function applyCollapsedState() {
+            // Apply collapsed state from state.collapsedGroups
+            const groups = ['online', 'offline'];
+            for (const groupName of groups) {
+                const header = document.getElementById(`header-${groupName}`);
+                const list = document.getElementById(`list-${groupName}`);
+                
+                if (header && list) {
+                    if (state.collapsedGroups.has(groupName)) {
+                        list.classList.add('buddy-list-collapsed');
+                        header.classList.add('collapsed');
+                        list.style.display = 'none';
+                    } else {
+                        list.classList.remove('buddy-list-collapsed');
+                        header.classList.remove('collapsed');
+                        list.style.display = 'block';
+                    }
+                }
+            }
+        }
+        
+        function createUserElement(user) {
+            const li = document.createElement('li');
+            li.className = 'buddy-item';
+            li.dataset.userId = user.userId;
+            
+            // Check if user is a bot
+            const isBot = user.isBot || state.knownBots.has(user.userId);
+            
+            // Normalize state for comparison (handles uppercase from main process)
+            const userState = normalizeState(user.state);
+            
+            // Check if user is offline
+            const isOffline = userState === USER_STATES.OFFLINE;
+            if (isOffline) {
+                li.classList.add('offline');
+            } else if (userState === USER_STATES.LURK) {
+                li.classList.add('lurk');
+            } else if (userState === USER_STATES.AFK) {
+                li.classList.add('afk');
+            }
+            if (isBot) {
+                li.classList.add('bot');
+            }
+            
+            // State icon (left side)
+            // Shows the state icon based on user.state from main process
+            const icon = document.createElement('span');
+            icon.className = 'buddy-icon';
+            
+            if (isBot) {
+                icon.textContent = BOT_ICON;
+            } else if (isOffline) {
+                icon.textContent = STATE_ICONS[USER_STATES.OFFLINE];
+            } else if (userState === USER_STATES.SLEEPY) {
+                // Sleepy users show blue fire on left (replaces regular fire)
+                icon.textContent = STATE_ICONS[USER_STATES.ACTIVE];
+                icon.classList.add('sleepy-fire');
+            } else {
+                // Show the actual state icon based on normalized state
+                icon.textContent = STATE_ICONS[userState] || STATE_ICONS[USER_STATES.ACTIVE];
+            }
+            li.appendChild(icon);
+            
+            // Username
+            const name = document.createElement('span');
+            name.className = 'buddy-name';
+            name.textContent = user.displayName;
+            li.appendChild(name);
+            
+            // Badges
+            if (user.badges && user.badges.length > 0) {
+                for (const badge of user.badges) {
+                    const badgeEl = document.createElement('span');
+                    badgeEl.className = `user-badge ${badge}`;
+                    badgeEl.textContent = badge.charAt(0).toUpperCase();
+                    li.appendChild(badgeEl);
+                }
+            }
+            
+            // Right-side icon - only show zzz if normalized state is SLEEPY
+            // NO time-based calculation - just display what app sends
+            if (userState === USER_STATES.SLEEPY && !isBot && !isOffline) {
+                const rightIcon = document.createElement('span');
+                rightIcon.className = 'buddy-right-icon';
+                rightIcon.textContent = STATE_ICONS[USER_STATES.SLEEPY];
+                li.appendChild(rightIcon);
+            }
+            
+            li.addEventListener('click', () => selectUser(user));
+            
+            return li;
+        }
+        
+        function selectUser(user) {
+            const prevSelected = document.querySelector('.buddy-item.selected');
+            if (prevSelected) prevSelected.classList.remove('selected');
+            
+            const el = document.querySelector(`[data-user-id="${user.userId}"]`);
+            if (el) el.classList.add('selected');
+            
+            state.selectedUser = user;
+        }
+        
+        function updateConnectionStatus(connected, text) {
+            const dot = document.getElementById('statusDot');
+            const textEl = document.getElementById('statusText');
+            
+            state.isConnected = connected;
+            
+            if (dot) {
+                dot.className = `status-dot ${connected ? 'connected' : 'disconnected'}`;
+            }
+            if (textEl) {
+                textEl.textContent = text;
+            }
+        }
+        
+        function startStateUpdateLoop() {
+            setInterval(() => {
+                let needsRender = false;
+                
+                state.users.forEach((user, userId) => {
+                    if (user.isLurking || user.isAfk) return;
+                    
+                    const oldState = user.state;
+                    updateUserState(userId);
+                    
+                    if (user.state !== oldState) needsRender = true;
+                });
+                
+                if (needsRender) renderBuddyList();
+            }, CONFIG.STATE_UPDATE_INTERVAL);
+        }
+        
+        // ========================================
+        // SETTINGS
+        // ========================================
+        
+        function toggleSettings() {
+            document.getElementById('settingsDropdown').classList.toggle('show');
+        }
+        
+        function changeStyleMode(mode) {
+            document.body.classList.remove('mode-modern', 'mode-nostalgia');
+            document.body.classList.add(`mode-${mode}`);
+            localStorage.setItem('buddyListStyleMode', mode);
+            localStorage.setItem('styleModeSync', `${Date.now()}`);
+        }
+        
+        function changeFont(font) {
+            document.body.classList.remove('font-tahoma', 'font-w95fa');
+            document.body.classList.add(`font-${font}`);
+            localStorage.setItem('buddyListFont', font);
+        }
+        
+        function changeCampfire(campfireId) {
+            state.currentCampfire = campfireId;
+            localStorage.setItem('lastCampfire', campfireId);
+            console.log(`[BuddyList] Changed to campfire: ${campfireId}`);
+            
+            if (state.isCreatorMode && window.electronAPI && window.electronAPI.onCampfireChange) {
+                window.electronAPI.onCampfireChange(campfireId);
+            }
+        }
+        
+        function savePreferences() {
+            localStorage.setItem('buddyListCollapsedGroups', JSON.stringify([...state.collapsedGroups]));
+            localStorage.setItem('lastCampfire', state.currentCampfire);
+        }
+        
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'styleModeSync') {
+                const savedMode = localStorage.getItem('buddyListStyleMode') || 'modern';
+                document.body.classList.remove('mode-modern', 'mode-nostalgia');
+                document.body.classList.add(`mode-${savedMode}`);
+                const styleSelect = document.getElementById('styleMode');
+                if (styleSelect) styleSelect.value = savedMode;
+            }
+        });
+        
+        // ========================================
+        // INITIALIZE
+        // ========================================
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>

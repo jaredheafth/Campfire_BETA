@@ -355,6 +355,14 @@ class UserIPCHandlers {
     if (this.windows.chatPopout && !this.windows.chatPopout.isDestroyed()) {
       this.windows.chatPopout.webContents.send(channel, data);
     }
+    
+    // Send to buddy list window
+    if (this.windows.buddyList && !this.windows.buddyList.isDestroyed()) {
+      this.windows.buddyList.webContents.send(channel, data);
+      console.log(`[UserIPCHandlers] Broadcasted ${channel} to buddyListWindow`);
+    } else {
+      console.log(`[UserIPCHandlers] buddyListWindow not available for ${channel} - buddyList exists: ${!!this.windows.buddyList}`);
+    }
   }
   
   /**

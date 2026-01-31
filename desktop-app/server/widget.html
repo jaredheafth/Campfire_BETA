@@ -115,7 +115,7 @@
             max-width: 800px; /* Maximum size for glow effect */
             max-height: 800px; /* Maximum size for glow effect */
             object-fit: contain;
-            z-index: 10;
+            z-index: 500; /* Changed from 10 to 500 - allows children to layer above sprites */
             position: relative;
             overflow: visible; /* Allow glow to extend beyond container */
             background: transparent; /* No background */
@@ -243,7 +243,7 @@
             font-size: 14px;
             animation: sleepyFloat 2s ease-in-out infinite;
             pointer-events: none;
-            z-index: 10;
+            z-index: 600; /* Above sprite, below username (700+) */
         }
         
         @keyframes sleepyFloat {
@@ -283,7 +283,7 @@
             color: #888;
             animation: afkPulse 3s ease-in-out infinite;
             pointer-events: none;
-            z-index: 10;
+            z-index: 600; /* Above sprite, below username (700+) */
             white-space: nowrap;
             text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
         }
@@ -339,7 +339,7 @@
             height: 16px;
             animation: lurkPulse 3s ease-in-out infinite;
             pointer-events: none;
-            z-index: 10;
+            z-index: 600; /* Above sprite, below username (700+) */
         }
         
         .user-shape.state-lurk .lurk-indicator svg {
@@ -440,7 +440,7 @@
             font-weight: 600;
             font-family: 'UsernameFont', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             pointer-events: none;
-            z-index: 100; /* Always above sprites - use high z-index so usernames layer correctly relative to each other */
+            /* Z-index is set dynamically in JavaScript based on sprite position (700-799 range) */
             /* Outside stroke effect using text-shadow (no -webkit-text-stroke to avoid covering font) */
             /* Multiple shadows positioned around text create an outside-only outline */
             text-shadow: 
@@ -475,7 +475,7 @@
             font-size: var(--chat-bubble-font-size, 11px);
             font-weight: 500;
             pointer-events: none;
-            z-index: 25;
+            z-index: 950; /* Above all usernames (max 949), below UI menus (1000+) */
             min-width: 0;
             max-width: 150px;
             width: max-content;
@@ -758,7 +758,7 @@
             left: 50%;
             transform: translateX(-50%);
             display: none; /* Hidden by default, shown only in desktop app */
-            z-index: 999999 !important; /* Very high z-index to ensure it's on top */
+            z-index: 1000 !important; /* Above all widget content, below effects if needed */
             flex-direction: row;
             align-items: center;
             gap: 8px;
@@ -798,6 +798,7 @@
             top: -22px;
             left: 50%;
             transform: translateX(-50%);
+            z-index: 999; /* Just under the menu bar's 1000 to prevent blocking clicks */
         }
 
         .menu-drag-strip:hover {
@@ -834,6 +835,11 @@
 
         .desktop-menu-bar.desktop-app {
             display: flex !important; /* Force display */
+        }
+
+        /* Fix for transparent window hit-test issues - ensure menu receives pointer events */
+        .desktop-menu-bar {
+            pointer-events: auto !important;
         }
 
         .desktop-menu-bar.hidden {
@@ -1258,11 +1264,11 @@
         <!-- Drag strip for frameless/transparent mode - keeps buttons clickable -->
         <div class="menu-drag-strip" title="Drag to move window">⋮⋮⋮</div>
         <button class="menu-button" id="btnSettings">⚙️</button>
-        <button class="menu-button" id="btnMembers">👥</button>
         <button class="menu-button-square success" id="btnShowAll">✓</button>
         <button class="menu-button-square danger" id="btnHideAll">✕</button>
         <button class="menu-button" id="btnDashboard">📟</button>
         <button class="menu-button" id="btnChatPopout">💬</button>
+        <button class="menu-button" id="btnBuddyList" title="Buddy List">👥</button>
         <div class="menu-spacer"></div>
         <div class="menu-status">
             <div class="status-indicator" id="statusIndicator"></div>
@@ -1581,9 +1587,16 @@
                 console.log('Settings loaded:', this.settings);
                 this.circleRadius = 120;
                 this.circleAngle = this.settings.circleAngle || 0; // 0 = top-down, 90 = side-view
+
+                // Soft collision settings - TWEAK THESE VALUES
+                // Controls how sprites push away from each other when too close
+                // INCREASED to 15 degrees for more noticeable spacing (~30px at radius 120)
+                this.softCollisionMinGapDegrees = 15; // Degrees between sprites (was 7)
+                this.softCollisionRepulsionFactor = 0.7; // Push back strength (0.0-1.0) - increased for stronger effect
                 this.maxUsers = this.settings.maxUsers || 20;
                 this.animationFrame = null;
-                
+                this.botUsername = null; // Will be set during init
+
                 console.log('Calling init()...');
                 (async () => {
                     await this.init();
@@ -2100,6 +2113,13 @@
 
             async init() {
                 console.log('Init() called');
+
+                // Get bot username to exclude from auto-state transitions
+                this.botUsername = await this.getBotUsername();
+                if (this.botUsername) {
+                    console.log('[Init] Bot username set to:', this.botUsername);
+                }
+
                 // Always reload sprite data and campfire graphic from localStorage on init
                 const defaultSprite = localStorage.getItem('defaultSpriteData');
                 const customSprite = localStorage.getItem('customSpriteData');
@@ -2271,8 +2291,7 @@
                     this.setupMockUsers();
                 }
                 
-                // NOTE: simulateJoinForConnectedUsers() is now called from onTwitchConnected handler
-                // to ensure Twitch is connected before trying to fetch user data
+                // Auto-join is handled by main process (see main.js connectTwitch)
                 
                 // Start random movement for ALL users (NPC movement)
                 // Users with their dashboard open (activeViewer) won't move - they control their sprite manually
@@ -2292,40 +2311,6 @@
                 // Persistence disabled - users are not saved across app restarts
                 // This provides a clean slate each time the app starts
                 console.log('User persistence disabled - not saving users to localStorage');
-            }
-            
-            async simulateJoinForConnectedUsers() {
-                try {
-                    // Get Twitch config with real IDs
-                    const config = await this.getTwitchConfig();
-                    if (!config) {
-                        console.log('[simulateJoinForConnectedUsers] No Twitch config available');
-                        return;
-                    }
-                    
-                    const streamerUsername = (config.channelName || '').replace(/^#/, '').toLowerCase();
-                    const streamerUserId = config.streamerUserId;
-                    const botUsername = (config.chatBotUsername || '').toLowerCase();
-                    const botUserId = config.botUserId;
-                    
-                    // Simulate !join command for streamer - ONLY if we have a real Twitch ID
-                    if (streamerUsername && streamerUserId) {
-                        console.log(`Simulating !join command for streamer: ${streamerUsername} (ID: ${streamerUserId})`);
-                        await this.simulateJoinCommand(streamerUsername, streamerUserId);
-                    } else if (streamerUsername) {
-                        console.warn(`[simulateJoinForConnectedUsers] Streamer ${streamerUsername} has no real Twitch ID - cannot join`);
-                    }
-                    
-                    // Simulate !join command for bot (if different from streamer) - ONLY if we have a real Twitch ID
-                    if (botUsername && botUsername !== streamerUsername && botUserId) {
-                        console.log(`Simulating !join command for bot: ${botUsername} (ID: ${botUserId})`);
-                        await this.simulateJoinCommand(botUsername, botUserId);
-                    } else if (botUsername && botUsername !== streamerUsername) {
-                        console.warn(`[simulateJoinForConnectedUsers] Bot ${botUsername} has no real Twitch ID - cannot join`);
-                    }
-                } catch (e) {
-                    console.error('Error simulating join commands for connected users:', e);
-                }
             }
             
             async getTwitchConfig() {
@@ -2496,15 +2481,15 @@
                     // Default placeholder with natural transparent glow (no borders, follows angle)
                     console.log('Creating default campfire glow...');
                     container.innerHTML = `
-                        <div id="campfireGlow" style="position: absolute; width: ${glowSize}px; height: ${glowSize}px; left: 50%; top: 50%; transform: translate(-50%, -50%) scaleY(${scaleY}); 
-                                    background: ${glowGradient}; 
-                                    pointer-events: none; border: none; outline: none; box-shadow: none; transition: background 0.3s ease;">
+                        <div id="campfireGlow" style="position: absolute; width: ${glowSize}px; height: ${glowSize}px; left: 50%; top: 50%; transform: translate(-50%, -50%) scaleY(${scaleY});
+                                    background: ${glowGradient};
+                                    pointer-events: none; border: none; outline: none; box-shadow: none; transition: background 0.3s ease; z-index: 300;">
                         </div>
                         <div id="campfireFlicker" style="position: absolute; width: ${flickerSize}px; height: ${flickerSize}px; left: 50%; top: 50%; transform: translate(-50%, -50%) scaleY(${scaleY});
                                     background: ${flickerGradient};
-                                    pointer-events: none; border: none; outline: none; box-shadow: none; transition: background 0.3s ease; z-index: 12;">
+                                    pointer-events: none; border: none; outline: none; box-shadow: none; transition: background 0.3s ease; z-index: 400;">
                         </div>
-                        <div id="campfireEmoji" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 11; font-size: ${this.settings.fireSize || 48}px; filter: none; pointer-events: none;">🔥</div>
+                        <div id="campfireEmoji" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 350; font-size: ${this.settings.fireSize || 48}px; filter: none; pointer-events: none;">🔥</div>
                     `;
                     console.log('Campfire graphic HTML set, container.innerHTML length:', container.innerHTML.length);
                     
@@ -2562,32 +2547,32 @@
                 let graphicHTML = '';
                 
                 // Always create glow element first (behind the graphic)
-                graphicHTML = `<div id="campfireGlow" style="position: absolute; width: ${glowSize}px; height: ${glowSize}px; left: 50%; top: 50%; transform: translate(-50%, -50%) scaleY(${scaleY}); 
-                            background: ${glowGradient}; 
-                            pointer-events: none; border: none; outline: none; box-shadow: none; transition: background 0.3s ease; z-index: 10;">
+                graphicHTML = `<div id="campfireGlow" style="position: absolute; width: ${glowSize}px; height: ${glowSize}px; left: 50%; top: 50%; transform: translate(-50%, -50%) scaleY(${scaleY});
+                            background: ${glowGradient};
+                            pointer-events: none; border: none; outline: none; box-shadow: none; transition: background 0.3s ease; z-index: 300;">
                         </div>`;
                 
                 if (uploadedData) {
                     // Check if it's a video or image based on data URL
                     if (uploadedData.startsWith('data:video/')) {
-                        graphicHTML += `<video autoplay loop muted playsinline style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 11; filter: none;"><source src="${uploadedData}"></video>`;
+                        graphicHTML += `<video autoplay loop muted playsinline style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 350; filter: none;"><source src="${uploadedData}"></video>`;
                     } else {
-                        graphicHTML += `<img src="${uploadedData}" alt="Campfire" style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 11; filter: none;">`;
+                        graphicHTML += `<img src="${uploadedData}" alt="Campfire" style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 350; filter: none;">`;
                     }
                 } else if (url) {
                     // Check if it's a video or image
                     const extension = url.split('.').pop().toLowerCase();
                     if (['mp4', 'webm', 'mov'].includes(extension)) {
-                        graphicHTML += `<video autoplay loop muted playsinline style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 11; filter: none;"><source src="${url}" type="video/${extension}"></video>`;
+                        graphicHTML += `<video autoplay loop muted playsinline style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 350; filter: none;"><source src="${url}" type="video/${extension}"></video>`;
                     } else {
-                        graphicHTML += `<img src="${url}" alt="Campfire" style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 11; filter: none;">`;
+                        graphicHTML += `<img src="${url}" alt="Campfire" style="width: ${fireSize}px; height: ${fireSize}px; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 350; filter: none;">`;
                     }
                 }
 
                 // Front-of-campfire flicker layer (above the campfire image)
                 graphicHTML += `<div id="campfireFlicker" style="position: absolute; width: ${flickerSize}px; height: ${flickerSize}px; left: 50%; top: 50%; transform: translate(-50%, -50%) scaleY(${scaleY});
                             background: ${flickerGradient};
-                            pointer-events: none; border: none; outline: none; box-shadow: none; transition: background 0.3s ease; z-index: 12;">
+                            pointer-events: none; border: none; outline: none; box-shadow: none; transition: background 0.3s ease; z-index: 400;">
                         </div>`;
                 
                 container.innerHTML = graphicHTML;
@@ -3224,6 +3209,13 @@
                 const prevOpacity = usernameLabel.style.opacity;
                 usernameLabel.style.opacity = '0';
 
+                // Soft stacking configuration - TWEAK THESE VALUES
+                // Controls how chat bubbles offset when multiple users chat near each other
+                // REDUCED by 40%: was 35, now 21 pixels between bubbles
+                const BUBBLE_BASE_OFFSET = 21; // Base vertical offset in pixels (reduced from 35)
+                const BUBBLE_PROXIMITY_THRESHOLD = 60; // Angle threshold to consider bubbles "nearby" (degrees)
+                const BUBBLE_HORIZONTAL_NUDGE = 12; // Horizontal nudge for very close bubbles (pixels) (reduced from 20)
+
                 const chatMessage = document.createElement('div');
                 chatMessage.className = 'chat-message';
                 if (isAction) chatMessage.classList.add('action-message');
@@ -3233,12 +3225,72 @@
                 chatMessage.innerHTML = isAction
                     ? `<span class="chat-text"><em>${messageContent}</em></span>`
                     : `<span class="chat-text">${messageContent}</span>`;
+
+                // Soft stacking: detect nearby chat bubbles and apply gentle offset
+                let verticalOffset = 0;
+                let horizontalOffset = 0;
+                let nearbyBubbleCount = 0;
+
+                // Dynamic threshold based on perspective angle
+                // Higher perspective = more compression = lower threshold = more aggressive offset
+                const perspectiveFactor = Math.cos((this.circleAngle * Math.PI) / 180);
+                const adjustedThreshold = BUBBLE_PROXIMITY_THRESHOLD * Math.max(0.3, perspectiveFactor);
+
+                this.users.forEach(otherUser => {
+                    if (otherUser.id !== user.id && otherUser.currentBubble) {
+                        // Calculate angular distance between users
+                        let angleDiff = user.angle - otherUser.angle;
+                        while (angleDiff > 180) angleDiff -= 360;
+                        while (angleDiff < -180) angleDiff += 360;
+                        const absAngleDiff = Math.abs(angleDiff);
+
+                        if (absAngleDiff < adjustedThreshold) {
+                            nearbyBubbleCount++;
+                            // Closer bubbles = more offset (organic feel)
+                            const proximityFactor = 1 - (absAngleDiff / adjustedThreshold);
+                            verticalOffset += BUBBLE_BASE_OFFSET * proximityFactor;
+
+                            // Very close bubbles get a subtle horizontal nudge
+                            if (absAngleDiff < adjustedThreshold / 2) {
+                                const nudgeDirection = angleDiff > 0 ? 1 : -1;
+                                horizontalOffset += BUBBLE_HORIZONTAL_NUDGE * proximityFactor * nudgeDirection;
+                            }
+
+                            // Log for debugging
+                            if (Math.random() < 0.1) { // Only log 10% to avoid spam
+                                console.log(`[SoftStacking] ${user.username} bubble offset by ${verticalOffset.toFixed(0)}px (nearby: ${otherUser.username}, ${absAngleDiff.toFixed(1)}°)`);
+                            }
+                        }
+                    }
+                });
+
+                // Store reference to this bubble for other sprites to detect
+                user.currentBubble = chatMessage;
+                // Clear reference when bubble disappears
+                chatMessage._clearBubbleRef = () => {
+                    if (user.currentBubble === chatMessage) {
+                        user.currentBubble = null;
+                    }
+                };
+
                 // Align the bubble to the username position (username top varies by sprite mode)
+                // CRITICAL: Chat bubbles must ALWAYS be on top of everything in the campfire scene
                 try {
                     const t = window.getComputedStyle(usernameLabel).top;
-                    if (t) chatMessage.style.top = t;
-                    const z = window.getComputedStyle(usernameLabel).zIndex;
-                    if (z) chatMessage.style.zIndex = z;
+                    if (t) {
+                        const baseTop = parseInt(t);
+                        chatMessage.style.top = `${baseTop - verticalOffset}px`;
+                    }
+                    // Apply horizontal nudge if any
+                    if (horizontalOffset !== 0) {
+                        chatMessage.style.transform = `translateX(calc(-50% + ${horizontalOffset}px))`;
+                    } else {
+                        chatMessage.style.transform = 'translateX(-50%)';
+                    }
+                    // FORCE z-index to be higher than any possible sprite/username
+                    // Parent sprite might have z-index 100-999, usernames 700-949
+                    // Chat bubbles must be higher than all of them
+                    chatMessage.style.zIndex = 950;
                 } catch (e) { /* ignore */ }
                 element.appendChild(chatMessage);
 
@@ -3255,13 +3307,86 @@
                     chatMessage._restoreId = setTimeout(() => {
                         chatMessage.remove();
                         usernameLabel.style.opacity = prevOpacity || '';
+                        // Clear the bubble reference when removed
+                        if (chatMessage._clearBubbleRef) chatMessage._clearBubbleRef();
+                        
+                        // COLLAPSE: Recalculate positions for remaining nearby bubbles
+                        this.recalculateBubblePositions(user.angle);
                     }, 250);
                 }, bubbleDuration);
             }
             
+            // Recalculate bubble positions when one disappears (collapse effect)
+            recalculateBubblePositions(removedAngle) {
+                const BUBBLE_PROXIMITY_THRESHOLD = 60; // Base value from showChatMessage
+                
+                // Apply same perspective adjustment as in showChatMessage
+                const perspectiveFactor = Math.cos((this.circleAngle * Math.PI) / 180);
+                const adjustedThreshold = BUBBLE_PROXIMITY_THRESHOLD * Math.max(0.3, perspectiveFactor);
+                const BUBBLE_BASE_OFFSET = 21; // Must match the value in showChatMessage (reduced from 35)
+                const BUBBLE_HORIZONTAL_NUDGE = 12; // Must match the value in showChatMessage (reduced from 20)
+                
+                // Find all users with active bubbles near the removed angle
+                this.users.forEach(user => {
+                    if (!user.currentBubble) return;
+                    
+                    // Calculate distance from removed bubble
+                    let angleDiff = user.angle - removedAngle;
+                    while (angleDiff > 180) angleDiff -= 360;
+                    while (angleDiff < -180) angleDiff += 360;
+                    const absAngleDiff = Math.abs(angleDiff);
+                    
+                    // Only recalculate for nearby bubbles
+                    if (absAngleDiff < adjustedThreshold) {
+                        // Recalculate offset based on remaining nearby bubbles
+                        let verticalOffset = 0;
+                        let horizontalOffset = 0;
+
+                        this.users.forEach(otherUser => {
+                            if (otherUser.id !== user.id && otherUser.currentBubble) {
+                                let otherAngleDiff = user.angle - otherUser.angle;
+                                while (otherAngleDiff > 180) otherAngleDiff -= 360;
+                                while (otherAngleDiff < -180) otherAngleDiff += 360;
+                                const otherAbsAngleDiff = Math.abs(otherAngleDiff);
+
+                                if (otherAbsAngleDiff < adjustedThreshold) {
+                                    const proximityFactor = 1 - (otherAbsAngleDiff / adjustedThreshold);
+                                    verticalOffset += BUBBLE_BASE_OFFSET * proximityFactor;
+
+                                    if (otherAbsAngleDiff < adjustedThreshold / 2) {
+                                        const nudgeDirection = otherAngleDiff > 0 ? 1 : -1;
+                                        horizontalOffset += BUBBLE_HORIZONTAL_NUDGE * proximityFactor * nudgeDirection;
+                                    }
+                                }
+                            }
+                        });
+                        
+                        // Apply new position with smooth transition
+                        const bubble = user.currentBubble;
+                        const usernameLabel = document.getElementById(user.id)?.querySelector('.username');
+                        if (bubble && usernameLabel) {
+                            try {
+                                const t = window.getComputedStyle(usernameLabel).top;
+                                if (t) {
+                                    const baseTop = parseInt(t);
+                                    bubble.style.transition = 'top 0.3s ease-out';
+                                    bubble.style.top = `${baseTop - verticalOffset}px`;
+                                }
+                                if (horizontalOffset !== 0) {
+                                    bubble.style.transition = 'transform 0.3s ease-out';
+                                    bubble.style.transform = `translateX(${horizontalOffset}px)`;
+                                } else {
+                                    bubble.style.transform = '';
+                                }
+                            } catch (e) { /* ignore */ }
+                        }
+                    }
+                });
+            }
+            
             // Update user activity without showing a chat bubble (for commands)
             // This ensures commands count as "active" for state tracking
-            updateUserActivity(username, userId = null) {
+            updateUserActivity(username, userId = null, fromRemote = false) {
                 const u = username ? String(username).toLowerCase() : '';
                 const uid = userId ? String(userId).toLowerCase() : '';
                 const user = this.users.find(uu =>
@@ -3275,6 +3400,18 @@
                 
                 // Update user activity for state tracking
                 user.lastActivity = Date.now();
+                
+                // Sync activity update to main process (single source of truth)
+                // Only sync if this is a LOCAL activity update (not from remote broadcast)
+                // This prevents infinite sync loops between widget and main process
+                if (!fromRemote && window.electronAPI && window.electronAPI.syncUserActivity && user.userId) {
+                    try {
+                        window.electronAPI.syncUserActivity(user.userId);
+                    } catch (error) {
+                        console.error(`[updateUserActivity] Failed to sync activity to main process:`, error);
+                    }
+                }
+                
                 if (this.settings.userStates && this.settings.userStates.enabled) {
                     // Clear AFK/SLEEPY when user uses a command (but NOT lurk - lurk requires join command)
                     if (user.state === 'afk' || user.state === 'sleepy') {
@@ -3381,12 +3518,17 @@
                 this.users.forEach(user => {
                     const element = document.getElementById(user.id);
                     if (!element) return;
-                    
+
+                    // Skip bot user - bot stays active permanently to avoid announcement loop
+                    if (this.botUsername && user.username && user.username.toLowerCase() === this.botUsername) {
+                        return;
+                    }
+
                     // Skip LURK users - they must manually exit via join command
                     if (user.state === 'lurk') {
                         return;
                     }
-                    
+
                     // Skip manual AFK users - they clear on any chat
                     if (user.manualAfk) {
                         return;
@@ -3395,13 +3537,18 @@
                     const timeSinceActivity = now - (user.lastActivity || now);
                     let newState = 'active';
                     
-                    // Check for auto-leave first (longest threshold)
-                    if (autoLeaveThreshold && timeSinceActivity >= autoLeaveThreshold) {
+                    // Stacking timers: each threshold is ADDED to the previous one
+                    // Example: 7min sleepy + 11min afk = 18min total to become AFK
+                    const sleepyToAfkThreshold = sleepyThreshold + afkThreshold;
+                    const afkToLeaveThreshold = autoLeaveThreshold ? sleepyToAfkThreshold + autoLeaveThreshold : null;
+                    
+                    // Check for auto-leave first (longest stacked threshold)
+                    if (afkToLeaveThreshold && timeSinceActivity >= afkToLeaveThreshold) {
                         // Auto-leave: remove user from campfire
                         console.log(`[AutoLeave] Removing ${user.username} after ${Math.round(timeSinceActivity / 60000)} minutes of inactivity`);
                         this.removeUser(user.username);
                         return;
-                    } else if (timeSinceActivity >= afkThreshold) {
+                    } else if (timeSinceActivity >= sleepyToAfkThreshold) {
                         newState = 'afk';
                     } else if (timeSinceActivity >= sleepyThreshold) {
                         newState = 'sleepy';
@@ -3410,7 +3557,7 @@
                     // Only update if state changed
                     if (user.state !== newState && user.state !== 'joined') {
                         const oldState = user.state;
-                        
+
                         // Track if user was sleepy before going AFK (for combined visual state)
                         if (newState === 'afk' && oldState === 'sleepy') {
                             user.wasSleepy = true;
@@ -3420,26 +3567,31 @@
                             user.wasSleepy = false;
                             element.classList.remove('was-sleepy');
                         }
-                        
+
                         user.state = newState;
                         element.classList.remove('state-active', 'state-sleepy', 'state-afk', 'state-lurk');
                         element.classList.add(`state-${newState}`);
-                        
+
                         // Add/remove sleepy indicator (keep it for AFK if was sleepy)
                         this.updateStateIndicator(element, oldState, newState, user.wasSleepy);
-                        
+
                         // SLEEPY users should be STILL (not roaming)
                         if (newState === 'sleepy') {
                             this.setUserStillMode(user, element, true);
                         }
-                        
+
                         // Move to outer ring if AFK, back to inner if active
                         // Also sets STILL mode for AFK users
                         this.updateUserRingPosition(user, element, newState);
-                        
+
                         // Play AFK sound if transitioning to AFK
                         if (newState === 'afk' && oldState !== 'afk') {
                             audioManager.playSound('afk');
+                        }
+
+                        // Sync state change to main process for !who command and announcements
+                        if (window.electronAPI && window.electronAPI.updateUserState) {
+                            window.electronAPI.updateUserState(user.userId || user.id, newState, oldState);
                         }
                     }
                 });
@@ -4630,7 +4782,7 @@
                     if (chatMessage) {
                         try {
                             chatMessage.style.top = window.getComputedStyle(usernameLabel).top;
-                            chatMessage.style.zIndex = window.getComputedStyle(usernameLabel).zIndex;
+                            // DO NOT override z-index - CSS sets it to 800 for consistent layering
                         } catch (e) { /* ignore */ }
                     }
                 }
@@ -4895,12 +5047,12 @@
                 element.style.top = `${centerY + perspectiveY - spriteOffset + verticalAdjustment}px`;
                 
                 // Set z-index based on Y position around the circle
-                // Top of circle (baseY = -circleRadius) = furthest back = lowest z-index (5)
-                // Bottom of circle (baseY = +circleRadius) = closest/front = highest z-index (24)
+                // Top of circle (baseY = -circleRadius) = furthest back = lowest z-index (100)
+                // Bottom of circle (baseY = +circleRadius) = closest/front = highest z-index (599)
                 // Z-index increases continuously as you go from top to bottom around the circle
                 // This ensures correct layering: sprites closer to bottom are always in front
-                const minZIndex = 5; // Furthest back (top of circle)
-                const maxZIndex = 24; // Closest/front (bottom of circle)
+                const minZIndex = 100; // Furthest back (top of circle) - back sprites range
+                const maxZIndex = 599; // Closest/front (bottom of circle) - front sprites range
                 const zIndexRange = maxZIndex - minZIndex;
                 
                 // Normalize baseY from -circleRadius (top) to +circleRadius (bottom) to 0-1
@@ -4910,20 +5062,18 @@
                 const normalizedY = (baseY + radiusForNormalization) / (2 * radiusForNormalization); // 0 to 1
                 let zIndex = minZIndex + Math.floor(normalizedY * zIndexRange);
                 
-                // CRITICAL FIX: Outer ring sprites at the top need higher z-index to appear above menu bar
-                // Menu bar has z-index 999999, so we need to boost outer ring sprites at top
-                // Only boost when sprite is in the "danger zone" (top 30% of outer ring, angles ~240-300°)
-                if (user.outerRing && normalizedY < 0.3) {
-                    // Boost z-index to be above menu bar (which is 999999)
-                    // Use 1000000 + original z-index to maintain relative ordering
-                    zIndex = 1000000 + zIndex;
+                // CRITICAL FIX: Outer ring sprites must ALWAYS be behind inner ring sprites
+                // Outer ring is physically further away, so it should never appear in front
+                // Subtract 200 from outer ring z-index to ensure they stay behind all inner ring sprites
+                if (user.outerRing) {
+                    zIndex = Math.max(100, zIndex - 200); // Keep minimum of 100, but push behind inner ring
                 }
                 
                 element.style.zIndex = zIndex;
                 
                 // Also set class for campfire layering (sprites behind campfire need lower z-index than fire)
-                // Campfire is at z-index 10-11, so sprites with z-index < 10 are behind it
-                if (zIndex < 10) {
+                // Campfire glow is at z-index 300, flicker at 400, so sprites with z-index < 300 are behind it
+                if (zIndex < 300) {
                     element.classList.remove('front-layer');
                     element.classList.add('back-layer');
                 } else {
@@ -4966,8 +5116,10 @@
                 // Update username z-index and opacity to match sprite layering
                 const usernameLabel = element.querySelector('.username');
                 if (usernameLabel) {
-                    // Username z-index should match sprite z-index (so they layer together)
-                    usernameLabel.style.zIndex = zIndex.toString();
+                    // Username z-index is offset from sprite z-index to ensure proper layering
+                    // Sprites: 100-599, Usernames: 700-949 (maintains relative ordering, max below chat bubbles at 950)
+                    const usernameZIndex = 700 + Math.floor((zIndex - minZIndex) * 0.87); // Scale to max 949
+                    usernameLabel.style.zIndex = usernameZIndex.toString();
 
                     const chatMessage = element.querySelector('.chat-message');
                     const hasChatBubble = !!chatMessage;
@@ -4987,8 +5139,9 @@
                     }
 
                     // Keep chat bubble aligned with username if visible
+                    // Chat bubbles have fixed z-index: 800 in CSS - no need to override
                     if (chatMessage) {
-                        chatMessage.style.zIndex = zIndex.toString();
+                        // z-index is set in CSS to 800 - always above usernames
                         try {
                             chatMessage.style.top = window.getComputedStyle(usernameLabel).top;
                         } catch (e) { /* ignore */ }
@@ -5815,27 +5968,72 @@
                                     }
                                 }
 
-                                // Check for collisions with other users
-                                const minDistance = 25; // Minimum angle distance between users (in degrees)
-                                let canMove = true;
+                                // Soft collision detection - gently push sprites apart instead of blocking
+                                const minGap = this.softCollisionMinGapDegrees || 7; // Minimum gap in degrees
+                                const repulsionFactor = this.softCollisionRepulsionFactor || 0.5;
+                                let adjustedAngle = newAngle;
+                                let totalRepulsion = 0;
 
                                 this.users.forEach(otherUser => {
-                                    if (otherUser.id !== user.id) {
+                                    if (otherUser.id !== user.id && otherUser.ring === user.ring) {
                                         // Calculate shortest angular distance
-                                        const angleDiff = Math.abs(newAngle - otherUser.angle);
-                                        const minAngleDiff = Math.min(angleDiff, 360 - angleDiff);
+                                        let angleDiff = newAngle - otherUser.angle;
+                                        // Normalize to -180 to 180
+                                        while (angleDiff > 180) angleDiff -= 360;
+                                        while (angleDiff < -180) angleDiff += 360;
+                                        const absAngleDiff = Math.abs(angleDiff);
 
-                                        if (minAngleDiff < minDistance) {
-                                            canMove = false;
+                                        // Apply soft repulsion when sprites are too close
+                                        if (absAngleDiff < minGap && absAngleDiff > 0.1) {
+                                            // Determine direction to push (away from other sprite)
+                                            const pushDirection = angleDiff > 0 ? 1 : -1;
+                                            // Calculate how much to push (stronger when closer)
+                                            const overlap = minGap - absAngleDiff;
+                                            const repulsion = overlap * repulsionFactor * pushDirection;
+                                            totalRepulsion += repulsion;
+
+                                            // Log collision for debugging
+                                            if (Math.random() < 0.05) { // Only log 5% of collisions to avoid spam
+                                                console.log(`[SoftCollision] ${user.username} pushed ${repulsion.toFixed(2)}° away from ${otherUser.username} (overlap: ${overlap.toFixed(2)}°)`);
+                                            }
                                         }
                                     }
                                 });
 
-                                if (canMove) {
-                                    user.angle = newAngle;
+                                // Apply the repulsion to the angle
+                                adjustedAngle = newAngle + totalRepulsion;
 
-                                    // Flip sprite based on movement direction
-                                    this.flipSprite(user.id, direction);
+                                // Keep angle within 0-360 bounds
+                                while (adjustedAngle < 0) adjustedAngle += 360;
+                                while (adjustedAngle >= 360) adjustedAngle -= 360;
+
+                                // Check if the adjusted position is still valid (not pushed too far)
+                                let canMove = true;
+                                if (user.ring === 'outer') {
+                                    // For outer ring, check bounds
+                                    const outerRingStartAngle = 200;
+                                    const outerRingEndAngle = 340;
+                                    if (adjustedAngle < outerRingStartAngle - 5 || adjustedAngle > outerRingEndAngle + 5) {
+                                        canMove = false; // Would push outside outer ring bounds
+                                    }
+                                }
+
+                                if (canMove) {
+                                    user.angle = adjustedAngle;
+
+                                    // Flip sprite based on visual movement direction
+                                    // Calculate if sprite is moving visually left or right on screen
+                                    const angleRad = (adjustedAngle * Math.PI) / 180;
+                                    const baseY = Math.sin(angleRad) * this.circleRadius;
+                                    const angleRadTransform = (this.circleAngle * Math.PI) / 180;
+                                    const perspectiveY = baseY * Math.cos(angleRadTransform);
+                                    const isInFront = perspectiveY > 0;
+                                    
+                                    // direction: -1 = CCW (decreasing angle), 1 = CW (increasing angle)
+                                    // When in front: CCW = visually right, CW = visually left
+                                    // When in back: CCW = visually left, CW = visually right
+                                    const visualMovingRight = isInFront ? (direction < 0) : (direction > 0);
+                                    this.flipSprite(user.id, visualMovingRight ? 1 : -1);
 
                                     // Set moving animation
                                     this.setUserMoving(user.id, true);
@@ -6245,10 +6443,12 @@
             }
             
             // User activity update (for commands that don't show chat bubbles)
+            // fromRemote=true prevents infinite sync loops - activity from main process
+            // doesn't need to be synced back to main process
             if (window.electronAPI.onUserActivity) {
                 window.electronAPI.onUserActivity((data) => {
                     if (widget && widget.updateUserActivity) {
-                        widget.updateUserActivity(data?.username, data?.userId);
+                        widget.updateUserActivity(data?.username, data?.userId, true);
                     }
                 });
             }
@@ -6633,8 +6833,9 @@
                 }
             } else if (e.data.type === 'userActivity') {
                 // Update user activity (for commands that don't show chat bubbles)
+                // fromRemote=true prevents infinite sync loops
                 if (widget && widget.updateUserActivity) {
-                    widget.updateUserActivity(e.data.username, e.data.userId);
+                    widget.updateUserActivity(e.data.username, e.data.userId, true);
                 }
             } else if (e.data.type === 'memberMovement' && e.data.userId) {
                 // Handle movement state changes from commands (still/roam/wander)
@@ -6879,7 +7080,6 @@
         // ============================================
         
         let menuBarInitialized = false;
-        let hasSimulatedJoins = false; // Track if we've already simulated joins to prevent duplicates
 
         function initDesktopMenuBar() {
             console.log('[Menu Bar] initDesktopMenuBar() called');
@@ -7014,6 +7214,23 @@
                     });
                 }
                 
+                // Buddy List button
+                const btnBuddyList = document.getElementById('btnBuddyList');
+                if (btnBuddyList) {
+                    btnBuddyList.addEventListener('click', async () => {
+                        console.log('[Widget] Buddy List button clicked');
+                        if (window.electronAPI && window.electronAPI.openBuddyList) {
+                            try {
+                                await window.electronAPI.openBuddyList();
+                            } catch (err) {
+                                console.error('[Widget] Error opening buddy list:', err);
+                            }
+                        } else {
+                            console.error('[Widget] electronAPI or openBuddyList not available');
+                        }
+                    });
+                }
+                
                 // Show All and Hide All test users buttons
                 const btnShowAll = document.getElementById('btnShowAll');
                 const btnHideAll = document.getElementById('btnHideAll');
@@ -7092,13 +7309,10 @@
                         if (statusIndicator) statusIndicator.classList.add('connected');
                         if (statusText) statusText.textContent = 'Connected';
                         
-                        // Now that Twitch is connected, simulate !join for streamer and bot
-                        // Only do this once to prevent duplicate joins
-                        if (!hasSimulatedJoins && widget && widget.simulateJoinForConnectedUsers) {
-                            hasSimulatedJoins = true;
-                            console.log('[Twitch Connected] Simulating join for streamer and bot...');
-                            await widget.simulateJoinForConnectedUsers();
-                        }
+                        // Auto-join is now handled by the main process (see main.js connectTwitch)
+                        // This ensures reliable auto-join even if the widget fails to fully initialize
+                        // due to GPU crashes or other rendering issues.
+                        console.log('[Twitch Connected] Main process will auto-join streamer and bot');
                     });
                     
                     window.electronAPI.onTwitchDisconnected(() => {

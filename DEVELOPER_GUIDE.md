@@ -262,6 +262,90 @@ extractUserId(data) {
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Dual-Mode Architecture
+
+The Campfire Widget supports two modes of operation:
+
+#### Creator Mode (Full Application)
+- Runs as a full Electron application
+- Uses IPC to communicate with the main process
+- All windows (widget, dashboard, chat, buddy list) share state via UserManager
+- Streamer has full control over all features
+
+#### Standalone Mode (Viewer Chat App)
+- Independent windows that can run separately from the main widget
+- Direct Twitch IRC connection (no main process required)
+- Users authenticate with their own Twitch OAuth
+- Useful for viewers who want chat/buddy list in a separate window
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DUAL-MODE ARCHITECTURE                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  CREATOR MODE                       STANDALONE MODE          │
+│  ┌─────────────────────┐           ┌─────────────────────┐  │
+│  │ Main Process        │           │ Direct IRC          │  │
+│  │ • UserManager       │           │ • Connect to        │  │
+│  │ • IPC Handlers      │           │   irc.chat.twitch.tv│  │
+│  │ • State Broadcast   │           │ • Handle PRIVMSG    │  │
+│  └─────────┬───────────┘           │ • Handle JOIN/LEAVE │  │
+│            │ IPC                       └──────────┬────────┘  │
+│            ▼                                          │         │
+│  ┌─────────────────────┐                            │         │
+│  │ Renderer Windows    │                            │         │
+│  │ • Widget            │                            │         │
+│  │ • Dashboard         │                            │         │
+│  │ • Chat Popout       │                            │         │
+│  │ • Buddy List        │                            │         │
+│  └─────────────────────┘                            │         │
+│                                                   ▼         │
+│  STANDALONE WINDOWS                                 │         │
+│  ┌─────────────────────┐                           │         │
+│  │ • Chat Popout       │◄──────────────────────────┘         │
+│  │ • Buddy List        │                                  │
+│  └─────────────────────┘                                  │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Mode Detection
+
+Windows can detect their mode using `window.electronAPI`:
+
+```javascript
+function detectMode() {
+    if (window.electronAPI && window.electronAPI.isCreatorMode) {
+        return 'creator';
+    }
+    // Check if running in standalone mode (no IPC, direct IRC)
+    if (window.electronAPI && window.electronAPI.sendChatMessage) {
+        return 'standalone';
+    }
+    return 'unknown';
+}
+```
+
+#### Shared Components
+
+The chat popout and buddy list are designed to work in both modes:
+
+- **Shared Styles** (`server/styles/shared-styles.css`): CSS variables and common styles
+- **Style Modes**: Modern (dark theme) and Nostalgia (Windows 95 style)
+- **Settings Sync**: Uses localStorage to sync settings between windows
+
+#### User State Mapping
+
+When running in Standalone mode, the buddy list tracks user states differently:
+
+| Creator Mode State | Standalone Mode | Buddy List Group |
+|-------------------|-----------------|------------------|
+| JOINED, ACTIVE    | ACTIVE          | 🔥 Active        |
+| SLEEPY            | SLEEPY          | 😴 Sleepy        |
+| AFK               | AFK             | 💤 AFK           |
+| LURK              | LURKING         | 👁️ Lurking       |
+| Removed           | OFFLINE         | (not shown)      |
+
 ### Data Flow
 
 1. **User Action** → Dashboard button click

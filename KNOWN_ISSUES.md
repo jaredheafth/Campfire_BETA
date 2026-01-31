@@ -214,6 +214,77 @@ mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) 
 
 ---
 
+### 6. Chat Bubbles Hidden by Other Sprites (Z-Index Stacking Context)
+
+**Issue Description:**
+When multiple users on the same side of the campfire chat simultaneously, chat bubbles from "back" sprites can be hidden behind "front" sprites and their usernames. This occurs because chat bubbles are child elements of their parent sprite containers.
+
+**Root Cause:**
+CSS z-index works within stacking contexts. Chat bubbles are child elements of `.user-shape` containers. Even with a high z-index (950), a child element cannot escape its parent's stacking context. If Sprite A (z-index: 500) has a chat bubble (z-index: 950), and Sprite B (z-index: 600) is in front, Sprite B will cover the bubble because the bubble is trapped within Sprite A's stacking context.
+
+```
+Stacking Context Hierarchy:
+- Sprite A (z-index: 500)
+  └── Chat Bubble (z-index: 950) ← Still behind Sprite B!
+- Sprite B (z-index: 600) ← Covers Sprite A AND its children
+```
+
+**Affected Files:**
+- [`desktop-app/server/widget.html`](desktop-app/server/widget.html) - `showChatMessage()` method (~line 3188)
+- [`desktop-app/server/widget.html`](desktop-app/server/widget.html) - `.chat-message` CSS (~line 464)
+
+**Why Simple Fixes Don't Work:**
+1. Higher z-index on bubble: ❌ Trapped in parent's context
+2. `!important`: ❌ Still trapped in parent's context
+3. Changing parent z-index: ❌ Would break the 3D depth effect of the campfire circle
+
+**Suggested Fix (Architectural Change):**
+Move chat bubbles to a global container outside the sprite hierarchy:
+
+1. Create a global `#chat-bubbles-container` at the widget level (sibling to `.campfire-area`)
+2. Calculate absolute positioning based on sprite screen positions
+3. Manage bubble lifecycle separately from sprites
+4. Update bubble positions when sprites move
+
+```javascript
+// Conceptual implementation:
+class ChatBubbleManager {
+    constructor(container) {
+        this.container = container; // Global container, not inside sprites
+        this.bubbles = new Map();
+    }
+    
+    createBubble(user, message) {
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-message';
+        bubble.style.position = 'absolute';
+        bubble.style.zIndex = 900; // Above all sprites
+        // Position based on user's screen coordinates
+        this.updatePosition(user, bubble);
+        this.container.appendChild(bubble);
+    }
+    
+    updatePosition(user, bubble) {
+        const element = document.getElementById(user.id);
+        const rect = element.getBoundingClientRect();
+        bubble.style.left = `${rect.left + rect.width/2}px`;
+        bubble.style.top = `${rect.top - 30}px`;
+    }
+}
+```
+
+**Workaround:**
+This is currently a known limitation. Chat bubbles work correctly for:
+- Single users chatting
+- Users on different sides of the fire
+- Most normal usage scenarios
+
+The issue only appears when multiple users on the same side chat simultaneously.
+
+**Priority:** Low - Does not affect core functionality, cosmetic issue only
+
+---
+
 ## Recently Fixed Issues
 
 ### ✅ Duplicate Join Simulation on Startup (Fixed 2026-01-26)

@@ -6534,7 +6534,11 @@
             // APPEARANCE
             'changesprite', 'changecolor', 'next', 'back', 'random', 'reset',
             // ANIMATION
-            'spin', 'dance', 'sparkle'
+            'spin', 'dance', 'sparkle',
+            // AUTO STATE
+            'sleepy', 'auto-afk', 'auto-return', 'auto-leave',
+            // APP
+            'who', 'duel', 'roll'
         ];
 
         // Command category IDs
@@ -6543,20 +6547,22 @@
         const APPEARANCE_COMMAND_IDS = ['changesprite', 'changecolor', 'next', 'back', 'random', 'reset'];
         const ANIMATION_COMMAND_IDS = ['spin', 'dance', 'sparkle'];
         const AUTO_STATE_COMMAND_IDS = ['sleepy', 'auto-afk', 'auto-return', 'auto-leave'];
-        const APP_COMMAND_IDS = ['who'];
+        const APP_COMMAND_IDS = ['who', 'duel', 'roll'];
 
         // Default state commands (with cooldown properties)
         const defaultStateCommands = [
             { id: 'join', name: 'Join Command', commands: ['!join'], command: '!join', message: '{username} joined the campfire!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
             { id: 'leave', name: 'Leave Command', commands: ['!leave', '!exit'], command: '!leave', message: '{username} left the campfire.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
             { id: 'afk', name: 'AFK Command', commands: ['!afk'], command: '!afk', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
-            { id: 'lurk', name: 'Lurk Command', commands: ['!lurk'], command: '!lurk', message: '{username} is now lurking 👁️', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' },
-            { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' }
+            { id: 'lurk', name: 'Lurk Command', commands: ['!lurk'], command: '!lurk', message: '{username} is now lurking 👁️', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'STATE', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user' }
         ];
 
         // Default APP commands (special app-specific features)
         const defaultAppCommands = [
-            { id: 'who', name: 'Who Command', commands: ['!who'], command: '!who', message: '🔥 Around the campfire:', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'APP', cooldown: 30, cooldownEnabled: true, cooldownType: 'global', undeletable: true, action: 'handleWhoCommand', userLineFormat: '{icon} {username}', userSeparator: ' • ', stateIcons: { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' }, stateFilters: { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true } }
+            { id: 'who', name: 'Who Command', commands: ['!who'], command: '!who', message: '🔥 Around the campfire:', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'APP', cooldown: 30, cooldownEnabled: true, cooldownType: 'global', undeletable: true, action: 'handleWhoCommand', userLineFormat: '{icon} {username}', userSeparator: ' • ', stateIcons: { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️', BOT: '🤖' }, stateFilters: { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true } },
+            { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'APP', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user', undeletable: true, action: 'handleReturnCommand', returnFromStates: { AFK: true, SLEEPY: false, LURK: true } },
+            { id: 'duel', name: 'Duel Command', commands: ['!duel'], command: '!duel', message: '{winner} defeats {loser} in a duel! ⚔️', enabled: false, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'APP', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user', undeletable: true, action: 'handleDuelCommand' },
+            { id: 'roll', name: 'Roll Command', commands: ['!roll'], command: '!roll', message: '{username} rolls {roll} (1-{max}) 🎲', enabled: false, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'APP', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user', undeletable: true, action: 'handleRollCommand' }
         ];
 
         // Default movement commands (with cooldown properties)
@@ -7278,6 +7284,12 @@
                                     style="width: 40px; padding: 2px 4px; background: #222; border: 1px solid #555; border-radius: 3px; color: #fff; font-size: 14px; text-align: center;"
                                     onchange="updateWhoStateIcon('${msg.id}', 'LURK', this.value)">
                             </div>
+                            <div style="display: flex; align-items: center; gap: 4px; background: #333; padding: 4px 8px; border-radius: 4px;">
+                                <span style="font-size: 11px; color: #888;">Bot:</span>
+                                <input type="text" id="who-icon-bot-${msg.id}" value="${escapeHtml(stateIcons.BOT || '🤖')}"
+                                    style="width: 40px; padding: 2px 4px; background: #222; border: 1px solid #555; border-radius: 3px; color: #fff; font-size: 14px; text-align: center;"
+                                    onchange="updateWhoStateIcon('${msg.id}', 'BOT', this.value)">
+                            </div>
                         </div>
                     </div>
                     <div style="margin-bottom: 12px;">
@@ -7504,7 +7516,7 @@
                 if (msgIndex !== -1) {
                     // Initialize stateIcons if not present
                     if (!messages[msgIndex].stateIcons) {
-                        messages[msgIndex].stateIcons = { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' };
+                        messages[msgIndex].stateIcons = { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️', BOT: '🤖' };
                     }
                     // Update the specific state icon
                     messages[msgIndex].stateIcons[state] = icon;
@@ -7723,7 +7735,16 @@
                     { id: 'leave', name: 'Leave Announcement', commands: [], command: '', message: '{username} left the campfire.', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true },
                     { id: 'afk', name: 'AFK Announcement', commands: [], command: '', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true },
                     { id: 'lurk', name: 'Lurk Announcement', commands: [], command: '', message: '{username} is now lurking 👁️', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true },
-                    { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true }
+                    { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'APP', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user', undeletable: true, action: 'handleReturnCommand', returnFromStates: { AFK: true, SLEEPY: false, LURK: true } },
+                    // Auto-state commands
+                    { id: 'sleepy', name: 'Sleepy State', commands: [], command: '', message: '{username} is now sleepy 😴', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
+                    { id: 'auto-afk', name: 'Auto AFK', commands: [], command: '', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
+                    { id: 'auto-return', name: 'Auto Return', commands: [], command: '', message: '{username} is back! 👋', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
+                    { id: 'auto-leave', name: 'Auto Leave', commands: [], command: '', message: '{username} has left due to inactivity', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
+                    // APP commands
+                    { id: 'who', name: 'Who Command', commands: ['!who'], command: '!who', message: '🔥 Around the campfire:', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'APP', cooldown: 30, cooldownEnabled: true, cooldownType: 'global', undeletable: true, userLineFormat: '{icon} {username}', userSeparator: ' • ', stateIcons: { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️', BOT: '🤖' }, stateFilters: { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true } },
+                    { id: 'duel', name: 'Duel Command', commands: ['!duel'], command: '!duel', message: '{winner} defeats {loser} in a duel! ⚔️', enabled: false, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'APP', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user', undeletable: true, action: 'handleDuelCommand' },
+                    { id: 'roll', name: 'Roll Command', commands: ['!roll'], command: '!roll', message: '{username} rolls {roll} (1-{max}) 🎲', enabled: false, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'APP', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user', undeletable: true, action: 'handleRollCommand' }
                 ];
                 
                 // Merge defaults with saved settings (saved settings override defaults)
@@ -7750,18 +7771,88 @@
                 title.style.cssText = 'margin-top: 0; color: #fff;';
                 title.textContent = `Edit Command: ${msg.name}`;
 
+                const isAutoStateCommand = AUTO_STATE_COMMAND_IDS.includes(msg.id);
+                const isAppCommand = APP_COMMAND_IDS.includes(msg.id);
+
+                // For APP commands, show primary command as read-only and allow aliases
+                // For other commands, show editable command triggers
+                const primaryCommand = Array.isArray(msg.commands) && msg.commands.length > 0 ? msg.commands[0] : (msg.command || '');
+                const existingAliases = Array.isArray(msg.commands) && msg.commands.length > 1
+                    ? msg.commands.slice(1).join(', ')
+                    : '';
+
                 const commandDiv = document.createElement('div');
-                commandDiv.style.cssText = 'margin-bottom: 15px;';
+                commandDiv.style.cssText = isAutoStateCommand ? 'display: none;' : 'margin-bottom: 15px;';
 
                 const commandLabel = document.createElement('label');
                 commandLabel.style.cssText = 'display: block; color: #ccc; font-size: 12px; margin-bottom: 5px;';
-                commandLabel.textContent = 'Command Triggers (comma-separated):';
+                commandLabel.textContent = isAppCommand ? 'Primary Command:' : 'Command Triggers (comma-separated):';
 
                 const commandInput = document.createElement('input');
                 commandInput.type = 'text';
-                commandInput.value = Array.isArray(msg.commands) ? msg.commands.join(', ') : (msg.command || '');
-                commandInput.placeholder = 'e.g., !help, !commands, !howto';
-                commandInput.style.cssText = 'width: 100%; padding: 8px; background: #1f1f1f; border: 1px solid #444; border-radius: 4px; color: #fff; font-family: monospace;';
+                if (isAppCommand) {
+                    // For APP commands, primary command is read-only
+                    commandInput.value = primaryCommand;
+                    commandInput.readOnly = true;
+                    commandInput.style.cssText = 'width: 100%; padding: 8px; background: #333; border: 1px solid #555; border-radius: 4px; color: #888; font-family: monospace; cursor: not-allowed;';
+                } else {
+                    commandInput.value = Array.isArray(msg.commands) ? msg.commands.join(', ') : (msg.command || '');
+                    commandInput.placeholder = 'e.g., !help, !commands, !howto';
+                    commandInput.style.cssText = 'width: 100%; padding: 8px; background: #1f1f1f; border: 1px solid #444; border-radius: 4px; color: #fff; font-family: monospace;';
+                }
+
+                // Aliases input for APP commands
+                let aliasesInput = null;
+                let aliasesLabel = null;
+                if (isAppCommand) {
+                    aliasesLabel = document.createElement('label');
+                    aliasesLabel.style.cssText = 'display: block; color: #ccc; font-size: 12px; margin-bottom: 5px; margin-top: 10px;';
+                    aliasesLabel.textContent = 'Aliases (comma-separated, optional):';
+
+                    aliasesInput = document.createElement('input');
+                    aliasesInput.type = 'text';
+                    aliasesInput.value = existingAliases;
+                    aliasesInput.placeholder = 'e.g., !campers, !list';
+                    aliasesInput.style.cssText = 'width: 100%; padding: 8px; background: #1f1f1f; border: 1px solid #444; border-radius: 4px; color: #fff; font-family: monospace;';
+                }
+
+                // Add info text for auto-state commands
+                const infoDiv = document.createElement('div');
+                if (isAutoStateCommand) {
+                    infoDiv.style.cssText = 'margin-bottom: 15px; padding: 10px; background: #1a3a1a; border: 1px solid #2a5a2a; border-radius: 4px;';
+                    infoDiv.innerHTML = '<span style="color: #7f7;">ℹ️ This is an auto-triggered announcement. It fires automatically when a user\'s state changes due to inactivity.</span>';
+                } else if (isAppCommand) {
+                    infoDiv.style.cssText = 'margin-bottom: 15px; padding: 10px; background: #1a1a3a; border: 1px solid #2a2a5a; border-radius: 4px;';
+                    infoDiv.innerHTML = '<span style="color: #77f;">ℹ️ This is an app-integrated command. The primary command cannot be changed, but you can add aliases.</span>';
+                }
+
+                // State filters for RETURN command
+                let stateFiltersDiv = null;
+                if (msg.id === 'return') {
+                    stateFiltersDiv = document.createElement('div');
+                    stateFiltersDiv.style.cssText = 'margin-bottom: 15px; padding: 10px; background: #1f1f1f; border: 1px solid #444; border-radius: 4px;';
+                    
+                    const returnFromStates = msg.returnFromStates || { AFK: true, SLEEPY: false, LURK: true };
+                    
+                    stateFiltersDiv.innerHTML = `
+                        <div style="color: #ccc; font-size: 12px; margin-bottom: 8px;">Announce return from:</div>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: #fff; font-size: 13px;">
+                                <input type="checkbox" id="returnFilterAFK" ${returnFromStates.AFK !== false ? 'checked' : ''} style="cursor: pointer;">
+                                <span>AFK</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: #fff; font-size: 13px;">
+                                <input type="checkbox" id="returnFilterSLEEPY" ${returnFromStates.SLEEPY !== false ? 'checked' : ''} style="cursor: pointer;">
+                                <span>SLEEPY</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: #fff; font-size: 13px;">
+                                <input type="checkbox" id="returnFilterLURK" ${returnFromStates.LURK !== false ? 'checked' : ''} style="cursor: pointer;">
+                                <span>LURK</span>
+                            </label>
+                        </div>
+                        <div style="color: #888; font-size: 11px; margin-top: 5px;">Only checked states will trigger the return announcement</div>
+                    `;
+                }
 
                 const messageDiv = document.createElement('div');
                 messageDiv.style.cssText = 'margin-bottom: 20px;';
@@ -7788,6 +7879,10 @@
                 // Assemble the modal
                 commandDiv.appendChild(commandLabel);
                 commandDiv.appendChild(commandInput);
+                if (isAppCommand && aliasesLabel && aliasesInput) {
+                    commandDiv.appendChild(aliasesLabel);
+                    commandDiv.appendChild(aliasesInput);
+                }
 
                 messageDiv.appendChild(messageLabel);
                 messageDiv.appendChild(messageInput);
@@ -7796,15 +7891,29 @@
                 buttonDiv.appendChild(saveBtn);
 
                 modalContent.appendChild(title);
+                if (isAutoStateCommand || isAppCommand) {
+                    modalContent.appendChild(infoDiv);
+                }
                 modalContent.appendChild(commandDiv);
+                if (stateFiltersDiv) {
+                    modalContent.appendChild(stateFiltersDiv);
+                }
                 modalContent.appendChild(messageDiv);
                 modalContent.appendChild(buttonDiv);
 
                 modal.appendChild(modalContent);
                 document.body.appendChild(modal);
 
-                // Focus on command input
-                setTimeout(() => commandInput.focus(), 100);
+                // Focus on appropriate input
+                setTimeout(() => {
+                    if (isAutoStateCommand) {
+                        messageInput.focus();
+                    } else if (isAppCommand && aliasesInput) {
+                        aliasesInput.focus();
+                    } else {
+                        commandInput.focus();
+                    }
+                }, 100);
 
                 // Event handlers
                 cancelBtn.onclick = () => modal.remove();
@@ -7813,24 +7922,56 @@
                     const commandText = commandInput.value.trim();
                     const newMessage = messageInput.value.trim();
 
-                    if (commandText && newMessage) {
-                        // Parse comma-separated commands
-                        const commands = commandText.split(',').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd.length > 0);
-                        if (commands.length === 0) {
+                    if (newMessage) {
+                        // For auto-state commands, commands array is empty (not user-triggered)
+                        // For other commands, parse comma-separated commands
+                        const isAutoStateCmd = AUTO_STATE_COMMAND_IDS.includes(msg.id);
+                        const isAppCmd = APP_COMMAND_IDS.includes(msg.id);
+
+                        if (!isAutoStateCmd && !isAppCmd && !commandText) {
                             alert('At least one command is required.');
                             return;
                         }
 
-                        // Update message with commands array
-                        msg.commands = commands;
-                        msg.command = commands[0]; // Keep backward compatibility
+                        if (!isAutoStateCmd && !isAppCmd) {
+                            // Parse comma-separated commands for regular commands
+                            const commands = commandText.split(',').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd.length > 0);
+                            if (commands.length === 0) {
+                                alert('At least one command is required.');
+                                return;
+                            }
+                            msg.commands = commands;
+                            msg.command = commands[0]; // Keep backward compatibility
+                        } else if (isAppCmd) {
+                            // For APP commands, keep primary command and add aliases
+                            const aliasesText = aliasesInput ? aliasesInput.value.trim() : '';
+                            const aliases = aliasesText
+                                ? aliasesText.split(',').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd.length > 0)
+                                : [];
+                            // Combine primary command with aliases
+                            msg.commands = [primaryCommand, ...aliases];
+                            msg.command = primaryCommand;
+                        }
+
+                        // Save state filters for RETURN command
+                        if (msg.id === 'return') {
+                            const afkCheckbox = document.getElementById('returnFilterAFK');
+                            const sleepyCheckbox = document.getElementById('returnFilterSLEEPY');
+                            const lurkCheckbox = document.getElementById('returnFilterLURK');
+                            msg.returnFromStates = {
+                                AFK: afkCheckbox ? afkCheckbox.checked : true,
+                                SLEEPY: sleepyCheckbox ? sleepyCheckbox.checked : false,
+                                LURK: lurkCheckbox ? lurkCheckbox.checked : true
+                            };
+                        }
+
                         msg.message = newMessage;
 
                         await window.electronAPI.saveBotMessages(messages);
                         modal.remove();
                         await reloadCurrentCommandSubTab();
                     } else {
-                        alert('Both commands and message are required.');
+                        alert('Message is required.');
                     }
                 };
 

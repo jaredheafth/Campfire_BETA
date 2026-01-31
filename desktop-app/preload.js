@@ -7,9 +7,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openDashboard: (tab) => ipcRenderer.invoke('open-dashboard', tab),
     openMembersWindow: () => ipcRenderer.invoke('open-members-window'),
     openChatPopout: () => ipcRenderer.invoke('open-chat-popout'),
+    openBuddyList: () => ipcRenderer.invoke('open-buddy-list'),
     getChatHistory: () => ipcRenderer.invoke('get-chat-history'),
     bringChatPopoutToFront: () => ipcRenderer.invoke('bring-chat-popout-to-front'),
     bringWidgetToFront: () => ipcRenderer.invoke('bring-widget-to-front'),
+    
+    // Window snap controls
+    getWindowSnapStatus: () => ipcRenderer.invoke('get-window-snap-status'),
+    setSnapEnabled: (enabled) => ipcRenderer.invoke('set-snap-enabled', enabled),
+    unsnapAllWindows: () => ipcRenderer.invoke('unsnap-all-windows'),
+    detachBuddyList: () => ipcRenderer.invoke('detach-buddy-list'),
+    syncWindowDimensions: (targetWindow, height) => ipcRenderer.invoke('sync-window-dimensions', { targetWindow, height }),
+    bringBuddyListToFront: () => ipcRenderer.invoke('bring-buddy-list-to-front'),
+    minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
+    maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
+    closeWindow: () => ipcRenderer.invoke('close-window'),
+    onWindowSnapChanged: (callback) => ipcRenderer.on('window-snap-changed', (event, data) => callback(data)),
     openSettingsModal: () => ipcRenderer.invoke('open-settings-modal'),
     openMemberDashboard: (userId, username, mode = 'streamer') => ipcRenderer.invoke('open-member-dashboard', userId, username, mode),
     joinAllTestUsers: () => ipcRenderer.invoke('join-all-test-users'),
@@ -68,6 +81,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onUserLurk: (callback) => ipcRenderer.on('userLurk', (event, data) => callback(data)),
     onUserReturnFromLurk: (callback) => ipcRenderer.on('userReturnFromLurk', (event, data) => callback(data)),
     onUserUpdate: (callback) => ipcRenderer.on('userUpdate', (event, data) => callback(data)),
+    
+    // UserManager events (for buddy list - real-time WHO)
+    onUserStateChanged: (callback) => ipcRenderer.on('users:state-changed', (event, data) => callback(data)),
+    onUserJoined: (callback) => ipcRenderer.on('users:added', (event, data) => callback(data)),
     onUserIdMigrated: (callback) => ipcRenderer.on('userIdMigrated', (event, data) => callback(data)),
     onChatMessage: (callback) => ipcRenderer.on('chatMessage', (event, data) => callback(data)),
     onUserActivity: (callback) => ipcRenderer.on('userActivity', (event, data) => callback(data)),
@@ -115,5 +132,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getBotMessages: () => ipcRenderer.invoke('get-bot-messages'),
     saveBotMessages: (messages) => ipcRenderer.invoke('save-bot-messages', messages),
     initializeBotMessages: (messages) => ipcRenderer.send('initialize-bot-messages', messages),
-    onBotMessagesUpdate: (callback) => ipcRenderer.on('bot-messages-update', (event, data) => callback(data))
+    onBotMessagesUpdate: (callback) => ipcRenderer.on('bot-messages-update', (event, data) => callback(data)),
+
+    // Buddy List specific
+    onCampfireChange: (callback) => ipcRenderer.on('campfire-change', (event, channelId) => callback(channelId)),
+
+    // User state updates from widget to main process
+    updateUserState: (userId, newState, oldState) => ipcRenderer.send('widget-user-state-update', { userId, newState, oldState }),
+    
+    // Sync user activity from widget to main process (bidirectional activity tracking)
+    syncUserActivity: (userId) => ipcRenderer.invoke('sync-user-activity', userId)
 });

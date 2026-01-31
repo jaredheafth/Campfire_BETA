@@ -1,0 +1,585 @@
+/* ========================================
+   CAMPFIRE SHARED STYLES
+   Modern + Nostalgia (Windows 95) Mode Support
+   
+   Usage: Add class "mode-modern" or "mode-nostalgia" to <body>
+   ======================================== */
+
+/* ========================================
+   CSS CUSTOM PROPERTIES (Theming)
+   ======================================== */
+
+:root {
+    /* Modern Mode (Default) */
+    --window-bg: rgba(30, 30, 30, 0.95);
+    --window-border: 1px solid rgba(255, 255, 255, 0.1);
+    --window-radius: 12px;
+    --window-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    
+    /* Menu Bar */
+    --menubar-bg: rgba(18, 18, 18, 0.92);
+    --menubar-border: 1px solid rgba(255, 255, 255, 0.14);
+    --menu-button-bg: rgba(28, 28, 28, 0.95);
+    --menu-button-hover: rgba(255, 255, 255, 0.2);
+    --menu-button-active: rgba(255, 255, 255, 0.15);
+    --menu-button-border: 1px solid rgba(255, 255, 255, 0.15);
+    --close-button-bg: rgba(255, 59, 48, 0.3);
+    --close-button-hover: rgba(255, 59, 48, 0.5);
+    
+    /* Text */
+    --text-primary: #efeff1;
+    --text-secondary: #adadb8;
+    --text-muted: #888;
+    
+    /* Chat Messages */
+    --message-bg: rgba(255, 255, 255, 0.03);
+    --message-hover: rgba(255, 255, 255, 0.08);
+    --message-non-camper-opacity: 0.5;
+    
+    /* Inputs */
+    --input-bg: rgba(28, 28, 28, 0.95);
+    --input-border: 1px solid rgba(255, 255, 255, 0.15);
+    --input-focus-border: rgba(145, 71, 255, 0.5);
+    
+    /* Accent */
+    --accent-color: rgba(145, 71, 255, 0.3);
+    --accent-border: rgba(145, 71, 255, 0.5);
+    --accent-hover: rgba(145, 71, 255, 0.5);
+    
+    /* Scrollbar */
+    --scrollbar-track: rgba(255, 255, 255, 0.05);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+    
+    /* Font */
+    --font-primary: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-retro: 'W95FA', 'MS Sans Serif', Tahoma, sans-serif;
+}
+
+/* ========================================
+   NOSTALGIA MODE (Windows 95/98 Style)
+   ======================================== */
+
+body.mode-nostalgia,
+.mode-nostalgia {
+    /* Colors */
+    --window-bg: #ECE9D8;
+    --window-border: 2px solid;
+    --window-border-color: #FFFFFF #808080 #808080 #FFFFFF;
+    --window-radius: 0;
+    --window-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    
+    /* Menu Bar */
+    --menubar-bg: linear-gradient(to bottom, #0A246A 0%, #0A246A 8%, #A6CAF0 92%, #A6CAF0 100%);
+    --menubar-border: none;
+    --menu-button-bg: #C0C0C0;
+    --menu-button-hover: linear-gradient(to bottom, #E0DCD0, #C8C4BC);
+    --menu-button-active: none;
+    --menu-button-border: 1px solid;
+    --menu-button-border-color: #FFFFFF #808080 #808080 #FFFFFF;
+    --close-button-bg: #C0C0C0;
+    --close-button-hover: #B0B0B0;
+    
+    /* Text */
+    --text-primary: #000;
+    --text-secondary: #666;
+    --text-muted: #999;
+    
+    /* Chat Messages */
+    --message-bg: #FFFFFF;
+    --message-hover: #E8F4FF;
+    --message-non-camper-opacity: 0.7;
+    
+    /* Inputs */
+    --input-bg: #FFFFFF;
+    --input-border: 1px solid #808080;
+    --input-focus-border: #0A246A;
+    
+    /* Accent */
+    --accent-color: #0A246A;
+    --accent-border: #0A246A;
+    --accent-hover: #1A449A;
+    
+    /* Scrollbar */
+    --scrollbar-track: #D4D0C8;
+    --scrollbar-thumb: #C0C0C0;
+    
+    /* Font */
+    --font-primary: 'MS Sans Serif', 'Tahoma', Arial, sans-serif;
+}
+
+/* ========================================
+   NOSTALGIA TITLE BAR (Windows 95 Style)
+   ======================================== */
+
+.mode-nostalgia .title-bar-style {
+    background: linear-gradient(to bottom, #0A246A 0%, #0A246A 8%, #A6CAF0 92%, #A6CAF0 100%);
+    color: white;
+    padding: 3px 5px;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: move;
+    user-select: none;
+    border-bottom: 1px solid #808080;
+}
+
+.mode-nostalgia .title-icon {
+    width: 16px;
+    height: 16px;
+    background: #ff6600;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    margin-right: 5px;
+}
+
+.mode-nostalgia .window-controls {
+    display: flex;
+    gap: 2px;
+}
+
+.mode-nostalgia .window-btn {
+    width: 16px;
+    height: 14px;
+    background: #C0C0C0;
+    border: 1px solid;
+    border-color: #FFFFFF #808080 #808080 #FFFFFF;
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: sans-serif;
+}
+
+.mode-nostalgia .window-btn:active {
+    border-color: #808080 #FFFFFF #FFFFFF #808080;
+}
+
+/* ========================================
+   NOSTALGIA GROUP HEADERS (Buddy List)
+   ======================================== */
+
+.mode-nostalgia .group-header {
+    background: linear-gradient(to bottom, #D4D0C8, #C0C0C0);
+    border-bottom: 1px solid #808080;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #000;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+
+.mode-nostalgia .group-header:hover {
+    background: linear-gradient(to bottom, #E0DCD0, #C8C4BC);
+}
+
+/* ========================================
+   NOSTALGIA BUDDY ITEMS
+   ======================================== */
+
+.mode-nostalgia .buddy-item {
+    padding: 4px 8px 4px 28px;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    border-bottom: 1px solid #F0F0F0;
+    background: #FFFFFF;
+}
+
+.mode-nostalgia .buddy-item:hover {
+    background: #E8F4FF;
+}
+
+.mode-nostalgia .buddy-item.selected {
+    background: #316AC5;
+    color: white;
+}
+
+/* ========================================
+   NOSTALGIA SCROLLBAR
+   ======================================== */
+
+.mode-nostalgia ::-webkit-scrollbar {
+    width: 16px;
+}
+
+.mode-nostalgia ::-webkit-scrollbar-track {
+    background: #D4D0C8;
+    border-left: 1px solid #808080;
+}
+
+.mode-nostalgia ::-webkit-scrollbar-thumb {
+    background: #C0C0C0;
+    border: 1px solid;
+    border-color: #FFFFFF #808080 #808080 #FFFFFF;
+}
+
+.mode-nostalgia ::-webkit-scrollbar-thumb:hover {
+    background: #B0B0B0;
+}
+
+/* ========================================
+   MODERN MODE (Default - Already in base styles)
+   ======================================== */
+
+/* These override any defaults when mode-modern is active */
+.mode-modern .chat-window,
+.mode-modern .aim-window {
+    background: rgba(30, 30, 30, 0.95);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mode-modern .menu-bar {
+    background: rgba(18, 18, 18, 0.92);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px 12px 0 0;
+}
+
+/* ========================================
+   SHARED SETTINGS DROPDOWN
+   ======================================== */
+
+.settings-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--window-bg);
+    border: var(--window-border);
+    border-radius: var(--window-radius);
+    padding: 12px;
+    display: none;
+    z-index: 100;
+    min-width: 220px;
+    box-shadow: var(--window-shadow);
+}
+
+.settings-dropdown.show {
+    display: block;
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mode-nostalgia .settings-row {
+    border-bottom: 1px solid #E0E0E0;
+}
+
+.settings-row:last-child {
+    border-bottom: none;
+}
+
+.settings-row label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.mode-nostalgia .settings-row label {
+    color: #000;
+}
+
+.settings-row select {
+    background: var(--input-bg);
+    border: var(--input-border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: var(--font-primary);
+    cursor: pointer;
+}
+
+.settings-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* ========================================
+   CONNECTION STATUS INDICATOR
+   ======================================== */
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    font-size: 10px;
+}
+
+.mode-nostalgia .connection-status {
+    background: transparent;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-dot.connected {
+    background: #00FF00;
+    box-shadow: 0 0 4px #00FF00;
+}
+
+.status-dot.disconnected {
+    background: #FF0000;
+    box-shadow: 0 0 4px #FF0000;
+}
+
+.status-dot.connecting {
+    background: #FFA500;
+    animation: statusPulse 1s infinite;
+}
+
+@keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ========================================
+   EMPTY STATE
+   ======================================== */
+
+.empty-state {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 13px;
+}
+
+.mode-nostalgia .empty-state {
+    color: #999;
+}
+
+/* ========================================
+   BUTTON STYLES
+   ======================================== */
+
+.menu-button {
+    padding: 6px 12px;
+    min-height: 28px;
+    background: var(--menu-button-bg);
+    border: var(--menu-button-border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 12px;
+    font-family: var(--font-primary);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.mode-nostalgia .menu-button {
+    border-radius: 0;
+}
+
+.menu-button:hover {
+    background: var(--menu-button-hover);
+}
+
+.menu-button:active {
+    background: var(--menu-button-active);
+}
+
+.close-button {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 6px 12px;
+    min-height: 28px;
+    background: var(--close-button-bg);
+    border: var(--menu-button-border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.mode-nostalgia .close-button {
+    border-radius: 0;
+    background: #C0C0C0;
+    border-color: #FFFFFF #808080 #808080 #FFFFFF;
+}
+
+.close-button:hover {
+    background: var(--close-button-hover);
+}
+
+/* ========================================
+   CHAT SPECIFIC (MODERN DEFAULT)
+   ======================================== */
+
+.chat-window {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--window-bg);
+    border: var(--window-border);
+    border-radius: var(--window-radius);
+    overflow: hidden;
+}
+
+.mode-nostalgia .chat-window {
+    border-color: #FFFFFF #808080 #808080 #FFFFFF;
+}
+
+.chat-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.chat-message {
+    padding: 6px 10px;
+    border-radius: 6px;
+    line-height: 1.4;
+    word-wrap: break-word;
+    background: var(--message-bg);
+}
+
+.chat-message:hover {
+    background: var(--message-hover);
+}
+
+.chat-message.non-camper {
+    opacity: var(--message-non-camper-opacity);
+}
+
+.chat-username {
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.chat-username:hover {
+    text-decoration: underline;
+}
+
+.chat-text {
+    color: var(--text-primary);
+}
+
+.chat-input-area {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--menubar-bg);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0 0 var(--window-radius) var(--window-radius);
+}
+
+.mode-nostalgia .chat-input-area {
+    border-top: 1px solid #808080;
+    border-radius: 0;
+}
+
+.chat-input {
+    flex: 1;
+    background: var(--input-bg);
+    border: var(--input-border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    padding: 8px 12px;
+    font-size: 13px;
+    outline: none;
+}
+
+.mode-nostalgia .chat-input {
+    border-radius: 0;
+}
+
+.chat-input:focus {
+    border-color: var(--input-focus-border);
+}
+
+.chat-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.mode-nostalgia .chat-input::placeholder {
+    color: #999;
+}
+
+.send-button {
+    padding: 8px 16px;
+    background: var(--accent-color);
+    border: 1px solid var(--accent-border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.mode-nostalgia .send-button {
+    border-radius: 0;
+    background: #C0C0C0;
+    border-color: #FFFFFF #808080 #808080 #FFFFFF;
+    color: #000;
+}
+
+.send-button:hover {
+    background: var(--accent-hover);
+}
+
+.mode-nostalgia .send-button:hover {
+    background: linear-gradient(to bottom, #E0DCD0, #C8C4BC);
+}
+
+/* ========================================
+   SCROLLBARS (MODERN DEFAULT)
+   ======================================== */
+
+.chat-container::-webkit-scrollbar,
+.buddy-list-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-container::-webkit-scrollbar-track,
+.buddy-list-container::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 3px;
+}
+
+.chat-container::-webkit-scrollbar-thumb,
+.buddy-list-container::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+}
+
+.chat-container::-webkit-scrollbar-thumb:hover,
+.buddy-list-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}

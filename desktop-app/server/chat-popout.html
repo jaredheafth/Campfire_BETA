@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Twitch Chat - Campfire Widget</title>
+    <link rel="stylesheet" href="styles/shared-styles.css">
     <style>
         @font-face {
             font-family: 'W95FA';
@@ -95,6 +96,12 @@
             border-color: rgba(145, 71, 255, 0.5);
         }
         
+        /* Icon-only button style */
+        .menu-button-icon {
+            padding: 6px 8px;
+            min-width: 28px;
+        }
+        
         /* Close button - styled like END button on widget menu */
         .close-button {
             position: absolute;
@@ -156,6 +163,29 @@
         .settings-row label {
             font-size: 12px;
             color: #adadb8;
+        }
+        
+        .settings-action-btn {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(28, 28, 28, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        
+        .settings-action-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .settings-action-btn:active {
+            background: rgba(145, 71, 255, 0.3);
         }
         
         .settings-row select {
@@ -483,6 +513,100 @@
             font-size: 13px;
         }
         
+        /* @ Mention Autocomplete Dropdown */
+        .mention-dropdown {
+            position: absolute;
+            bottom: 100%;
+            left: 110px; /* Align with chat input, accounting for speaker select */
+            right: 90px; /* Account for buttons on right */
+            background: rgba(18, 18, 18, 0.98);
+            border: 1px solid rgba(145, 71, 255, 0.5);
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            z-index: 200;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            margin-bottom: 8px;
+        }
+        
+        .mention-dropdown.show {
+            display: block;
+        }
+        
+        .mention-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .mention-item:last-child {
+            border-bottom: none;
+        }
+        
+        .mention-item:hover,
+        .mention-item.selected {
+            background: rgba(145, 71, 255, 0.3);
+        }
+        
+        .mention-item.selected {
+            border-left: 3px solid rgba(145, 71, 255, 0.8);
+        }
+        
+        .mention-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(145, 71, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+            text-transform: uppercase;
+        }
+        
+        .mention-username {
+            flex: 1;
+            font-size: 13px;
+            color: #fff;
+        }
+        
+        .mention-badge {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #adadb8;
+        }
+        
+        .mention-badge.broadcaster {
+            background: rgba(255, 0, 0, 0.3);
+            color: #ff6b6b;
+        }
+        
+        .mention-badge.mod {
+            background: rgba(0, 255, 0, 0.2);
+            color: #51cf66;
+        }
+        
+        .mention-badge.vip {
+            background: rgba(255, 0, 255, 0.2);
+            color: #e599f7;
+        }
+        
+        .mention-empty {
+            padding: 12px;
+            text-align: center;
+            color: #888;
+            font-size: 12px;
+        }
+        
         /* Connection status indicator */
         .connection-status {
             display: flex;
@@ -541,15 +665,306 @@
             border-right: 2px solid rgba(255, 255, 255, 0.5);
             border-bottom: 2px solid rgba(255, 255, 255, 0.5);
         }
+        
+        /* ========================================
+           NOSTALGIA MODE - ORIGINAL WINDOWS 95 STYLE
+           ======================================== */
+        
+        body.mode-nostalgia {
+            background: #ECE9D8 !important;
+        }
+        
+        body.mode-nostalgia .chat-window {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #DFDFDF #808080 #808080 #DFDFDF;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        
+        body.mode-nostalgia .menu-bar {
+            background: linear-gradient(to bottom, #0A246A 0%, #0A246A 8%, #A6CAF0 92%, #A6CAF0 100%);
+            color: white;
+            padding: 3px 5px;
+            font-size: 11px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            -webkit-app-region: drag;
+            cursor: move;
+        }
+        
+        body.mode-nostalgia .menu-button {
+            background: #C0C0C0;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+            font-size: 11px;
+            padding: 4px 8px;
+            box-shadow: none;
+            border-radius: 0;
+            min-height: auto;
+        }
+        
+        body.mode-nostalgia .menu-button:hover {
+            background: #E8E8E8;
+        }
+        
+        body.mode-nostalgia .menu-button:active {
+            border-color: #808080 #FFFFFF #FFFFFF #808080;
+            background: #A0A0A0;
+        }
+        
+        body.mode-nostalgia .menu-button.active {
+            background: #A0A0A0;
+            border-color: #808080 #FFFFFF #FFFFFF #808080;
+        }
+        
+        body.mode-nostalgia .menu-button-icon {
+            padding: 2px 4px;
+            min-width: 20px;
+        }
+        
+        body.mode-nostalgia .settings-action-btn {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+            font-size: 11px;
+        }
+        
+        body.mode-nostalgia .settings-action-btn:hover {
+            background: #E8E8E8;
+        }
+        
+        body.mode-nostalgia .settings-action-btn:active {
+            border-color: #808080 #FFFFFF #FFFFFF #808080;
+            background: #C0C0C0;
+        }
+        
+        body.mode-nostalgia .connection-status {
+            background: #0A246A;
+            color: white;
+            padding: 2px 8px;
+            font-size: 11px;
+            border: 1px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+        }
+        
+        body.mode-nostalgia .chat-container {
+            background: #FFFFFF;
+            border: 2px solid;
+            border-color: #808080 #FFFFFF #FFFFFF #808080;
+            margin: 4px;
+            margin-top: 0;
+            margin-bottom: 4px;
+            padding: 8px;
+        }
+        
+        body.mode-nostalgia .chat-message {
+            background: transparent;
+            color: #000;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-family: 'W95FA', sans-serif;
+            border: none;
+        }
+        
+        body.mode-nostalgia .chat-message:hover {
+            background: #E8F4FF;
+        }
+        
+        body.mode-nostalgia .chat-username {
+            color: #0000CC;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        
+        body.mode-nostalgia .chat-username:hover {
+            text-decoration: underline;
+        }
+        
+        body.mode-nostalgia .chat-text {
+            color: #000;
+        }
+        
+        body.mode-nostalgia .chat-message.non-camper .chat-username,
+        body.mode-nostalgia .chat-message.non-camper .chat-text {
+            color: #888;
+        }
+        
+        body.mode-nostalgia .chat-message.bot-response {
+            color: #666;
+            font-style: italic;
+        }
+        
+        body.mode-nostalgia .chat-badge {
+            height: 14px;
+        }
+        
+        body.mode-nostalgia .chat-emote {
+            height: 22px;
+        }
+        
+        body.mode-nostalgia .chat-input-area {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #808080 #FFFFFF #FFFFFF #808080;
+            margin: 4px;
+            padding: 8px;
+            border-radius: 0;
+        }
+        
+        body.mode-nostalgia .chat-input {
+            background: #FFFFFF;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 0;
+        }
+        
+        body.mode-nostalgia .chat-input:focus {
+            border-color: #000080;
+        }
+        
+        body.mode-nostalgia .chat-input::placeholder {
+            color: #888;
+        }
+        
+        body.mode-nostalgia .send-button {
+            background: #C0C0C0;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+            font-size: 11px;
+            padding: 4px 12px;
+            border-radius: 0;
+        }
+        
+        body.mode-nostalgia .send-button:hover {
+            background: #E8E8E8;
+        }
+        
+        body.mode-nostalgia .send-button:active {
+            border-color: #808080 #FFFFFF #FFFFFF #808080;
+        }
+        
+        body.mode-nostalgia .settings-dropdown {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            font-family: 'W95FA', sans-serif;
+        }
+        
+        body.mode-nostalgia .settings-row {
+            border-bottom: 1px solid #808080;
+        }
+        
+        body.mode-nostalgia .settings-label {
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+        }
+        
+        body.mode-nostalgia .settings-select {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+            font-size: 11px;
+        }
+        
+        body.mode-nostalgia .settings-select:focus {
+            outline: none;
+            border-color: #000080;
+        }
+        
+        body.mode-nostalgia .picker-dropdown {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            font-family: 'W95FA', sans-serif;
+        }
+        
+        body.mode-nostalgia .picker-tab {
+            background: #C0C0C0;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            color: #000;
+            font-family: 'W95FA', sans-serif;
+            font-size: 11px;
+        }
+        
+        body.mode-nostalgia .picker-tab.active {
+            background: #E8E8E8;
+            border-bottom-color: #808080;
+        }
+        
+        body.mode-nostalgia .picker-item {
+            font-family: 'W95FA', sans-serif;
+        }
+        
+        body.mode-nostalgia .mention-dropdown {
+            background: #ECE9D8;
+            border: 2px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+            font-family: 'W95FA', sans-serif;
+        }
+        
+        body.mode-nostalgia .mention-item {
+            font-size: 11px;
+            font-family: 'W95FA', sans-serif;
+        }
+        
+        body.mode-nostalgia .mention-item.selected {
+            background: #0A246A;
+            color: white;
+        }
+        
+        body.mode-nostalgia .chat-container::-webkit-scrollbar-track {
+            background: #D4D0C8;
+            border-left: 1px solid #808080;
+        }
+        
+        body.mode-nostalgia .chat-container::-webkit-scrollbar-thumb {
+            background: #C0C0C0;
+            border: 1px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+        }
+        
+        body.mode-nostalgia .picker-content::-webkit-scrollbar-track,
+        body.mode-nostalgia .mention-dropdown::-webkit-scrollbar-track {
+            background: #D4D0C8;
+        }
+        
+        body.mode-nostalgia .picker-content::-webkit-scrollbar-thumb,
+        body.mode-nostalgia .mention-dropdown::-webkit-scrollbar-thumb {
+            background: #C0C0C0;
+            border: 1px solid;
+            border-color: #FFFFFF #808080 #808080 #FFFFFF;
+        }
+        
+        body.mode-nostalgia .empty-state {
+            color: #666;
+            font-family: 'W95FA', sans-serif;
+        }
     </style>
 </head>
 <body class="font-tahoma">
     <div class="chat-window">
         <!-- Top menu bar -->
         <div class="menu-bar">
-            <button class="menu-button" id="btnSettings" onclick="toggleSettings()">⚙️ Settings</button>
-            <button class="menu-button" id="btnClear" onclick="clearChat()">🗑️ Clear</button>
-            <button class="menu-button" id="btnBringToFront" onclick="bringToFront()" title="Bring this window to front of all windows">📌 Front</button>
+            <!-- Settings button (gear icon, far left) -->
+            <button class="menu-button menu-button-icon" id="btnSettings" onclick="toggleSettings()" title="Settings">⚙️</button>
+            <!-- Front button (pin icon, beside settings) -->
+            <button class="menu-button menu-button-icon" id="btnBringToFront" onclick="bringToFront()" title="Bring to Front">📌</button>
             <div class="connection-status">
                 <span class="status-dot" id="statusDot"></span>
                 <span id="statusText">Disconnected</span>
@@ -558,6 +973,16 @@
             
             <!-- Settings dropdown -->
             <div class="settings-dropdown" id="settingsDropdown">
+                <div class="settings-row">
+                    <button class="settings-action-btn" onclick="clearChat()">🗑️ Clear Chat</button>
+                </div>
+                <div class="settings-row">
+                    <label for="styleMode">Style Mode:</label>
+                    <select id="styleMode" onchange="changeStyleMode(this.value)">
+                        <option value="modern">Modern</option>
+                        <option value="nostalgia">Nostalgia</option>
+                    </select>
+                </div>
                 <div class="settings-row">
                     <label for="fontSelect">Font:</label>
                     <select id="fontSelect" onchange="changeFont(this.value)">
@@ -603,10 +1028,103 @@
                     <!-- Content loaded dynamically -->
                 </div>
             </div>
+            
+            <!-- @ Mention Autocomplete Dropdown -->
+            <div class="mention-dropdown" id="mentionDropdown">
+                <!-- Populated dynamically -->
+            </div>
         </div>
     </div>
     
     <script>
+        // ========================================
+        // MODE DETECTION
+        // ========================================
+        
+        // Detect if running in standalone mode (no Electron API)
+        // or in Creator mode (with Electron IPC)
+        const IS_STANDALONE = !window.electronAPI;
+        const IS_CREATOR_MODE = !IS_STANDALONE;
+        
+        console.log('[ChatPopout] Mode detection:', { 
+            isStandalone: IS_STANDALONE, 
+            isCreatorMode: IS_CREATOR_MODE 
+        });
+        
+        // ========================================
+        // UNIFIED API (works in both modes)
+        // ========================================
+        
+        const ChatAPI = {
+            // Send a chat message
+            async sendMessage(message, speaker = 'main') {
+                if (IS_STANDALONE) {
+                    // Standalone: use direct IRC (tmi.js should be loaded)
+                    if (window.ircClient && window.ircClient.connected) {
+                        return await window.ircClient.say(`#${window.currentChannel}`, message);
+                    }
+                    return { ok: false, error: 'Not connected to IRC' };
+                } else {
+                    // Creator mode: use IPC
+                    return await window.electronAPI.sendChatMessage(message, speaker);
+                }
+            },
+            
+            // Get connection status
+            async getStatus() {
+                if (IS_STANDALONE) {
+                    return {
+                        connected: window.ircClient?.connected || false,
+                        channel: window.currentChannel || null
+                    };
+                } else {
+                    return await window.electronAPI.getTwitchStatus();
+                }
+            },
+            
+            // Listen for chat messages
+            onMessage(callback) {
+                if (IS_STANDALONE) {
+                    // Standalone: listen to IRC events
+                    if (window.ircClient) {
+                        window.ircClient.on('message', (channel, tags, message, self) => {
+                            if (self) return;
+                            callback({ channel, tags, message });
+                        });
+                    }
+                } else {
+                    // Creator mode: listen to IPC events
+                    window.electronAPI.onChatMessage(callback);
+                }
+            },
+            
+            // Get chat history
+            async getHistory() {
+                if (IS_STANDALONE) {
+                    // Standalone: get from localStorage
+                    const history = localStorage.getItem('campfireChatHistory');
+                    return history ? JSON.parse(history) : [];
+                } else {
+                    // Creator mode: get from IPC
+                    return await window.electronAPI.getChatHistory();
+                }
+            },
+            
+            // Save chat history
+            async saveHistory(messages) {
+                if (IS_STANDALONE) {
+                    // Standalone: save to localStorage
+                    localStorage.setItem('campfireChatHistory', JSON.stringify(messages.slice(-200)));
+                } else {
+                    // Creator mode: handled by main process
+                }
+            }
+        };
+        
+        // ========================================
+        // CHAT STATE
+        // ========================================
+        
         // Chat message storage
         let messages = [];
         const maxMessages = 500;
@@ -667,6 +1185,31 @@
             document.body.classList.add(`font-${font}`);
             localStorage.setItem('chatPopoutFont', font);
         }
+        
+        // Change style mode (Modern vs Nostalgia)
+        function changeStyleMode(mode) {
+            document.body.classList.remove('mode-modern', 'mode-nostalgia');
+            document.body.classList.add(`mode-${mode}`);
+            localStorage.setItem('chatPopoutStyleMode', mode);
+            
+            // Notify other windows via localStorage event
+            localStorage.setItem('styleModeSync', `${Date.now()}`);
+        }
+        
+        // Listen for style mode changes from other windows
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'styleModeSync') {
+                const savedMode = localStorage.getItem('chatPopoutStyleMode') || 'modern';
+                document.body.classList.remove('mode-modern', 'mode-nostalgia');
+                document.body.classList.add(`mode-${savedMode}`);
+                document.getElementById('styleMode').value = savedMode;
+            }
+        });
+        
+        // Initialize style mode
+        const savedStyleMode = localStorage.getItem('chatPopoutStyleMode') || 'modern';
+        document.body.classList.add(`mode-${savedStyleMode}`);
+        document.getElementById('styleMode').value = savedStyleMode;
         
         // Load saved font preference
         const savedFont = localStorage.getItem('chatPopoutFont') || 'tahoma';
@@ -1054,13 +1597,206 @@
             }
         }
         
+        // ============================================
+        // @ MENTION AUTOCOMPLETE
+        // ============================================
+        
+        // Mention autocomplete state
+        let mentionState = {
+            active: false,
+            query: '',
+            selectedIndex: 0,
+            filteredUsers: [],
+            allUsers: [],
+            cursorPosition: 0,
+            mentionStartIndex: -1
+        };
+        
+        // Load chatters list for autocomplete
+        async function loadChattersList() {
+            if (!window.electronAPI || !window.electronAPI.getChattersList) return;
+            try {
+                const chatters = await window.electronAPI.getChattersList();
+                mentionState.allUsers = chatters || [];
+                console.log(`[MentionAutocomplete] Loaded ${mentionState.allUsers.length} chatters`);
+            } catch (err) {
+                console.error('[MentionAutocomplete] Error loading chatters:', err);
+            }
+        }
+        
+        // Refresh chatters list periodically
+        setInterval(loadChattersList, 30000); // Refresh every 30 seconds
+        
+        // Show mention dropdown with filtered users
+        function showMentionDropdown(query) {
+            const dropdown = document.getElementById('mentionDropdown');
+            
+            // Filter users based on query
+            const queryLower = query.toLowerCase();
+            mentionState.filteredUsers = mentionState.allUsers.filter(user =>
+                user.username.toLowerCase().includes(queryLower)
+            ).slice(0, 10); // Limit to 10 results
+            
+            if (mentionState.filteredUsers.length === 0) {
+                dropdown.innerHTML = '<div class="mention-empty">No users found</div>';
+            } else {
+                dropdown.innerHTML = mentionState.filteredUsers.map((user, index) => {
+                    const badgeClass = user.isBroadcaster ? 'broadcaster' :
+                                      user.isMod ? 'mod' :
+                                      user.isVip ? 'vip' : '';
+                    const badgeText = user.isBroadcaster ? 'BROADCASTER' :
+                                     user.isMod ? 'MOD' :
+                                     user.isVip ? 'VIP' :
+                                     user.isSubscriber ? 'SUB' : '';
+                    const initial = user.username.charAt(0).toUpperCase();
+                    
+                    return `
+                        <div class="mention-item ${index === mentionState.selectedIndex ? 'selected' : ''}"
+                             data-index="${index}"
+                             onclick="selectMention(${index})">
+                            <div class="mention-avatar">${initial}</div>
+                            <div class="mention-username">${escapeHtml(user.username)}</div>
+                            ${badgeText ? `<div class="mention-badge ${badgeClass}">${badgeText}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            dropdown.classList.add('show');
+            mentionState.active = true;
+        }
+        
+        // Hide mention dropdown
+        function hideMentionDropdown() {
+            const dropdown = document.getElementById('mentionDropdown');
+            dropdown.classList.remove('show');
+            mentionState.active = false;
+            mentionState.query = '';
+            mentionState.selectedIndex = 0;
+            mentionState.filteredUsers = [];
+        }
+        
+        // Select a mention and insert it
+        function selectMention(index) {
+            const user = mentionState.filteredUsers[index];
+            if (!user) return;
+            
+            const input = document.getElementById('chatInput');
+            const text = input.value;
+            const beforeMention = text.substring(0, mentionState.mentionStartIndex);
+            const afterCursor = text.substring(mentionState.cursorPosition);
+            
+            // Insert the mention with a trailing space
+            input.value = beforeMention + '@' + user.username + ' ' + afterCursor;
+            
+            // Set cursor position after the inserted mention
+            const newCursorPos = beforeMention.length + user.username.length + 2; // +2 for @ and space
+            input.setSelectionRange(newCursorPos, newCursorPos);
+            input.focus();
+            
+            hideMentionDropdown();
+        }
+        
+        // Handle input for mention detection
+        function handleMentionInput() {
+            const input = document.getElementById('chatInput');
+            const text = input.value;
+            const cursorPos = input.selectionStart;
+            
+            // Find if we're in a mention context (after @)
+            const textBeforeCursor = text.substring(0, cursorPos);
+            const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+            
+            if (lastAtIndex === -1) {
+                hideMentionDropdown();
+                return;
+            }
+            
+            // Check if there's a space between @ and cursor (which means we're not in a mention)
+            const textBetween = textBeforeCursor.substring(lastAtIndex + 1);
+            if (textBetween.includes(' ')) {
+                hideMentionDropdown();
+                return;
+            }
+            
+            // We're in a mention context
+            mentionState.query = textBetween;
+            mentionState.cursorPosition = cursorPos;
+            mentionState.mentionStartIndex = lastAtIndex;
+            mentionState.selectedIndex = 0;
+            
+            // Show dropdown with filtered results
+            showMentionDropdown(mentionState.query);
+        }
+        
+        // Handle keyboard navigation for mentions
+        function handleMentionKeydown(e) {
+            if (!mentionState.active) return false;
+            
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    mentionState.selectedIndex = (mentionState.selectedIndex + 1) % mentionState.filteredUsers.length;
+                    showMentionDropdown(mentionState.query);
+                    return true;
+                    
+                case 'ArrowUp':
+                    e.preventDefault();
+                    mentionState.selectedIndex = mentionState.selectedIndex <= 0
+                        ? mentionState.filteredUsers.length - 1
+                        : mentionState.selectedIndex - 1;
+                    showMentionDropdown(mentionState.query);
+                    return true;
+                    
+                case 'Enter':
+                case 'Tab':
+                    e.preventDefault();
+                    if (mentionState.filteredUsers.length > 0) {
+                        selectMention(mentionState.selectedIndex);
+                    }
+                    return true;
+                    
+                case 'Escape':
+                    e.preventDefault();
+                    hideMentionDropdown();
+                    return true;
+                    
+                default:
+                    return false;
+            }
+        }
+        
+        // Close mention dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('mentionDropdown');
+            const input = document.getElementById('chatInput');
+            
+            if (mentionState.active &&
+                !dropdown.contains(e.target) &&
+                e.target !== input) {
+                hideMentionDropdown();
+            }
+        });
+        
+        // ============================================
+        // END @ MENTION AUTOCOMPLETE
+        // ============================================
+        
         // Handle Enter key in input
         document.getElementById('chatInput').addEventListener('keydown', (e) => {
+            // Check for mention navigation first
+            if (handleMentionKeydown(e)) {
+                return;
+            }
+            
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
         });
+        
+        // Handle input for mention detection
+        document.getElementById('chatInput').addEventListener('input', handleMentionInput);
         
         // Check if scrolled to bottom
         const container = document.getElementById('chatContainer');
@@ -1158,6 +1894,9 @@
             
             // Load speaker options
             loadSpeakerOptions();
+            
+            // Load chatters list for mention autocomplete
+            loadChattersList();
         }
     </script>
 </body>
