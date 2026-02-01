@@ -326,6 +326,7 @@ class UserManager extends EventEmitter {
           if (user.state === USER_STATES.JOINED) {
             const prevState = user.state;
             user.state = USER_STATES.ACTIVE;
+            console.log(`[UserManager] Transitioned ${user.username} from JOINED to ACTIVE (AFK return)`);
             // Emit with 3 separate arguments to match UserIPCHandlers listener signature
             this.emit('user:stateChanged', user, prevState, USER_STATES.ACTIVE);
           }
@@ -353,6 +354,7 @@ class UserManager extends EventEmitter {
           if (user.state === USER_STATES.JOINED) {
             const prevState = user.state;
             user.state = USER_STATES.ACTIVE;
+            console.log(`[UserManager] Transitioned ${user.username} from JOINED to ACTIVE (IN_CHAT transition)`);
             // Emit with 3 separate arguments to match UserIPCHandlers listener signature
             this.emit('user:stateChanged', user, prevState, USER_STATES.ACTIVE);
           }
@@ -367,12 +369,28 @@ class UserManager extends EventEmitter {
     }
     
     // New user - add with JOINED state
-    return this.addUser(normalizedId, {
+    const newUser = await this.addUser(normalizedId, {
       ...userData,
       state: USER_STATES.JOINED,
       joinedAt: Date.now(),
       lastActivity: Date.now()
     });
+    
+    // Transition to ACTIVE after animation (only if user is still JOINED)
+    if (newUser) {
+      const userRef = newUser; // Capture for closure
+      setTimeout(() => {
+        if (userRef.state === USER_STATES.JOINED) {
+          const prevState = userRef.state;
+          userRef.state = USER_STATES.ACTIVE;
+          console.log(`[UserManager] Transitioned ${userRef.username} from JOINED to ACTIVE`);
+          // Emit with 3 separate arguments to match UserIPCHandlers listener signature
+          this.emit('user:stateChanged', userRef, prevState, USER_STATES.ACTIVE);
+        }
+      }, USER_STATE_TIMINGS.JOINED_ANIMATION_DURATION);
+    }
+    
+    return newUser;
   }
   
   /**

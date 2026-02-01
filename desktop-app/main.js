@@ -984,7 +984,7 @@ function createChatPopoutWindow() {
     // Landscape dimensions (wider than tall)
     chatPopoutWindow = new BrowserWindow({
         width: 650,
-        height: 450,
+        height: 530,
         minWidth: 400,
         minHeight: 300,
         frame: false,
@@ -1015,28 +1015,13 @@ function createChatPopoutWindow() {
     chatPopoutWindow.snappedFrom = null;    // 'buddy-left' or null (who snapped to us)
     chatPopoutWindow.isSnapped = false;     // Are we snapped to anyone?
     
-    // When Chat moves, check if it should unsnap (don't re-snap during movement)
+    // When Chat moves, this fires at the end of the move
+    // Note: Position sync happens in the 'moving' handler
+    // We only unsnap here if the user explicitly detaches via the button
+    // (Detach is handled via IPC, not via drag distance)
     chatPopoutWindow.on('move', () => {
-        if (!buddyListWindow || buddyListWindow.isDestroyed()) return;
-        
-        // Only check for unsnap if already snapped (don't re-snap during movement)
-        if (chatPopoutWindow.snappedTo === 'buddy-right') {
-            const chatBounds = chatPopoutWindow.getBounds();
-            const buddyBounds = buddyListWindow.getBounds();
-            
-            // If user moved Chat vertically while snapped - unsnap
-            // Allow some tolerance for Y position
-            const Y_TOLERANCE = 15;
-            if (Math.abs(chatBounds.y - buddyBounds.y) > Y_TOLERANCE) {
-                chatPopoutWindow.snappedTo = null;
-                chatPopoutWindow.snappedFrom = null;
-                buddyListWindow.snappedFrom = null;
-                chatPopoutWindow.isSnapped = false;
-                buddyListWindow.isSnapped = false;
-                notifySnapStateChanged(null);
-                console.log('[Snap] Chat unsnapped due to vertical movement');
-            }
-        }
+        // No automatic unsnap on move - only explicit detach works
+        // The 'moving' handler handles position sync during drag
     });
     
     // When Chat moves while snapped, move Buddy List too
@@ -1067,7 +1052,7 @@ function createChatPopoutWindow() {
         }
     });
     
-    // When Chat is released (move ended), check if it should snap to Buddy List
+    // When Chat is released (move ended), check if it should snap or unsnap from Buddy List
     chatPopoutWindow.on('moved', () => {
         if (!buddyListWindow || buddyListWindow.isDestroyed()) return;
         
@@ -1080,14 +1065,28 @@ function createChatPopoutWindow() {
         
         // Snap threshold (pixels)
         const SNAP_THRESHOLD = 30;
-        const Y_TOLERANCE = 10; // Allow 10 pixels Y difference for snapping
+        const Y_TOLERANCE = 50; // Allow 50 pixels Y difference for snapping (more forgiving)
         
-        // Only snap if not already snapped
+        // If already snapped, check if user dragged it far enough to unsnap
         if (chatPopoutWindow.snappedTo === 'buddy-right') {
-            console.log('[Snap] Chat already snapped to Buddy List');
+            // Check if dragged beyond snap threshold
+            if (Math.abs(distance) > SNAP_THRESHOLD * 2 || Math.abs(chatBounds.y - buddyBounds.y) > Y_TOLERANCE) {
+                // User dragged far enough - unsnap
+                chatPopoutWindow.snappedTo = null;
+                chatPopoutWindow.snappedFrom = null;
+                buddyListWindow.snappedTo = null;
+                buddyListWindow.snappedFrom = null;
+                chatPopoutWindow.isSnapped = false;
+                buddyListWindow.isSnapped = false;
+                notifySnapStateChanged(null);
+                console.log('[Snap] Chat unsnapped from Buddy List (dragged away)');
+            } else {
+                console.log('[Snap] Chat already snapped to Buddy List');
+            }
             return;
         }
         
+        // Try to snap if not already snapped
         if (Math.abs(distance) < SNAP_THRESHOLD && Math.abs(chatBounds.y - buddyBounds.y) <= Y_TOLERANCE) {
             // Snap Chat to the right edge of Buddy List
             chatPopoutWindow.setPosition(buddyRight, buddyBounds.y);
@@ -1110,6 +1109,48 @@ function createChatPopoutWindow() {
             console.log('[Snap] Chat snapped to Buddy List (released)');
         } else {
             console.log('[Snap] Chat released - distance:', distance, 'yDiff:', Math.abs(chatBounds.y - buddyBounds.y));
+        }
+    });
+    
+    // ============================================
+    // SYNCHRONIZED RESIZE HANDLERS
+    // ============================================
+    
+    // When Chat resizes while snapped, sync Buddy List height
+    chatPopoutWindow.on('resize', () => {
+        if (!buddyListWindow || buddyListWindow.isDestroyed()) return;
+        
+        const isSnappedToBuddy = (chatPopoutWindow.snappedTo === 'buddy-right');
+        const buddySnappedToChat = (buddyListWindow?.snappedTo === 'chat-left');
+        const isSnapped = isSnappedToBuddy || buddySnappedToChat;
+        
+        if (isSnapped) {
+            const chatBounds = chatPopoutWindow.getBounds();
+            const buddyBounds = buddyListWindow.getBounds();
+            
+            // Sync Buddy List height to match Chat
+            if (buddyBounds.height !== chatBounds.height) {
+                buddyListWindow.setSize(buddyBounds.width, chatBounds.height);
+                console.log(`[Snap] Synced Buddy List height to Chat: ${chatBounds.height}px`);
+            }
+        }
+    });
+    
+    // When Chat is released after resize, ensure Buddy List is synced
+    chatPopoutWindow.on('resized', () => {
+        if (!buddyListWindow || buddyListWindow.isDestroyed()) return;
+        
+        const isSnappedToBuddy = (chatPopoutWindow.snappedTo === 'buddy-right');
+        const buddySnappedToChat = (buddyListWindow?.snappedTo === 'chat-left');
+        const isSnapped = isSnappedToBuddy || buddySnappedToChat;
+        
+        if (isSnapped) {
+            const chatBounds = chatPopoutWindow.getBounds();
+            const buddyBounds = buddyListWindow.getBounds();
+            
+            // Final sync of Buddy List height
+            buddyListWindow.setSize(buddyBounds.width, chatBounds.height);
+            console.log(`[Snap] Final sync of Buddy List height after Chat resize: ${chatBounds.height}px`);
         }
     });
     
@@ -1137,7 +1178,7 @@ function createBuddyListWindow() {
     // Portrait dimensions (taller than wide) - AIM style buddy list
     buddyListWindow = new BrowserWindow({
         width: 280,
-        height: 500,
+        height: 530,
         minWidth: 220,
         minHeight: 350,
         frame: false,
@@ -1184,28 +1225,13 @@ function createBuddyListWindow() {
     buddyListWindow.snappedFrom = null;    // 'widget-right' or null
     buddyListWindow.isSnapped = false;
     
-    // When Buddy List moves, check if it should unsnap (don't re-snap during movement)
+    // When Buddy List moves, this fires at the end of the move
+    // Note: Position sync happens in the 'moving' handler
+    // We only unsnap here if the user explicitly detaches via the button
+    // (Detach is handled via IPC, not via drag distance)
     buddyListWindow.on('move', () => {
-        if (!chatPopoutWindow || chatPopoutWindow.isDestroyed()) return;
-        
-        // Only check for unsnap if already snapped (don't re-snap during movement)
-        if (buddyListWindow.snappedTo === 'chat-left') {
-            const buddyBounds = buddyListWindow.getBounds();
-            const chatBounds = chatPopoutWindow.getBounds();
-            
-            // If user moved Buddy List vertically while snapped - unsnap
-            // Allow some tolerance for Y position
-            const Y_TOLERANCE = 15;
-            if (Math.abs(buddyBounds.y - chatBounds.y) > Y_TOLERANCE) {
-                buddyListWindow.snappedTo = null;
-                buddyListWindow.snappedFrom = null;
-                chatPopoutWindow.snappedFrom = null;
-                buddyListWindow.isSnapped = false;
-                chatPopoutWindow.isSnapped = false;
-                notifySnapStateChanged(null);
-                console.log('[Snap] Buddy List unsnapped due to vertical movement');
-            }
-        }
+        // No automatic unsnap on move - only explicit detach works
+        // The 'moving' handler handles position sync during drag
     });
     
     // When Buddy List moves while snapped, move Chat too
@@ -1236,7 +1262,7 @@ function createBuddyListWindow() {
         }
     });
     
-    // When Buddy List is released (move ended), check if it should snap to Chat
+    // When Buddy List is released (move ended), check if it should snap or unsnap from Chat
     buddyListWindow.on('moved', () => {
         if (!chatPopoutWindow || chatPopoutWindow.isDestroyed()) return;
         
@@ -1249,14 +1275,28 @@ function createBuddyListWindow() {
         
         // Snap threshold (pixels)
         const SNAP_THRESHOLD = 30;
-        const Y_TOLERANCE = 10; // Allow 10 pixels Y difference for snapping
+        const Y_TOLERANCE = 50; // Allow 50 pixels Y difference for snapping (more forgiving)
         
-        // Only snap if not already snapped
+        // If already snapped, check if user dragged it far enough to unsnap
         if (buddyListWindow.snappedTo === 'chat-left') {
-            console.log('[Snap] Buddy List already snapped to Chat');
+            // Check if dragged beyond snap threshold
+            if (Math.abs(distance) > SNAP_THRESHOLD * 2 || Math.abs(buddyBounds.y - chatBounds.y) > Y_TOLERANCE) {
+                // User dragged far enough - unsnap
+                buddyListWindow.snappedTo = null;
+                buddyListWindow.snappedFrom = null;
+                chatPopoutWindow.snappedTo = null;
+                chatPopoutWindow.snappedFrom = null;
+                buddyListWindow.isSnapped = false;
+                chatPopoutWindow.isSnapped = false;
+                notifySnapStateChanged(null);
+                console.log('[Snap] Buddy List unsnapped from Chat (dragged away)');
+            } else {
+                console.log('[Snap] Buddy List already snapped to Chat');
+            }
             return;
         }
         
+        // Try to snap if not already snapped
         if (Math.abs(distance) < SNAP_THRESHOLD && Math.abs(buddyBounds.y - chatBounds.y) <= Y_TOLERANCE) {
             // Snap Buddy List to the left edge of Chat
             buddyListWindow.setPosition(chatBounds.x - buddyBounds.width, chatBounds.y);
@@ -1278,6 +1318,48 @@ function createBuddyListWindow() {
             console.log('[Snap] Buddy List snapped to Chat (released)');
         } else {
             console.log('[Snap] Buddy List released - distance:', distance, 'yDiff:', Math.abs(buddyBounds.y - chatBounds.y));
+        }
+    });
+    
+    // ============================================
+    // SYNCHRONIZED RESIZE HANDLERS (Buddy List)
+    // ============================================
+    
+    // When Buddy List resizes while snapped, sync Chat height
+    buddyListWindow.on('resize', () => {
+        if (!chatPopoutWindow || chatPopoutWindow.isDestroyed()) return;
+        
+        const isSnappedToChat = (buddyListWindow.snappedTo === 'chat-left');
+        const chatSnappedToBuddy = (chatPopoutWindow?.snappedTo === 'buddy-right');
+        const isSnapped = isSnappedToChat || chatSnappedToBuddy;
+        
+        if (isSnapped) {
+            const buddyBounds = buddyListWindow.getBounds();
+            const chatBounds = chatPopoutWindow.getBounds();
+            
+            // Sync Chat height to match Buddy List
+            if (chatBounds.height !== buddyBounds.height) {
+                chatPopoutWindow.setSize(chatBounds.width, buddyBounds.height);
+                console.log(`[Snap] Synced Chat height to Buddy List: ${buddyBounds.height}px`);
+            }
+        }
+    });
+    
+    // When Buddy List is released after resize, ensure Chat is synced
+    buddyListWindow.on('resized', () => {
+        if (!chatPopoutWindow || chatPopoutWindow.isDestroyed()) return;
+        
+        const isSnappedToChat = (buddyListWindow.snappedTo === 'chat-left');
+        const chatSnappedToBuddy = (chatPopoutWindow?.snappedTo === 'buddy-right');
+        const isSnapped = isSnappedToChat || chatSnappedToBuddy;
+        
+        if (isSnapped) {
+            const buddyBounds = buddyListWindow.getBounds();
+            const chatBounds = chatPopoutWindow.getBounds();
+            
+            // Final sync of Chat height
+            chatPopoutWindow.setSize(chatBounds.width, buddyBounds.height);
+            console.log(`[Snap] Final sync of Chat height after Buddy List resize: ${buddyBounds.height}px`);
         }
     });
     
@@ -1359,6 +1441,7 @@ function initializeStreamerBotChatters() {
                     userId: userId,
                     isBroadcaster: true,
                     isMod: true,
+                    isBot: false,
                     joinedAt: existing?.joinedAt || Date.now(),
                     pendingRealUserId: !userId // Only pending if we don't have a real userId
                 });
@@ -1385,6 +1468,7 @@ function initializeStreamerBotChatters() {
                     userId: userId,
                     isBroadcaster: false,
                     isMod: true,
+                    isBot: true, // This IS the configured bot account
                     joinedAt: existing?.joinedAt || Date.now(),
                     pendingRealUserId: !userId
                 });
@@ -1962,6 +2046,16 @@ function connectTwitch() {
             await refreshChattersFromAPI().catch(e => {
                 console.warn('[Twitch] Could not fetch chatters from API:', e.message);
             });
+            
+            // Periodic chatters refresh to detect users who are in chat without typing
+            // Runs every 60 seconds (Twitch API rate limit is 1 request/minute)
+            setInterval(() => {
+                if (twitchConfig.channelName) {
+                    refreshChattersFromAPI().catch(e => {
+                        // Silent fail for periodic updates
+                    });
+                }
+            }, 60000);
             
             // Auto-join streamer and bot accounts (main process - works even if widget fails to initialize)
             // This is the primary auto-join, independent of widget state
@@ -2986,6 +3080,18 @@ async function handleJoinCommand(username, userId, tags) {
     // Use userManager if available, fall back to activeUsers for backward compatibility
     let existingUser = userManager ? userManager.getUser(normalizedUserId) : activeUsers.get(normalizedUserId);
     
+    // Extract user roles from Twitch tags (do this first, needed for both AFK return and new join)
+    const badges = parseBadges(tags);
+    const roles = {
+        isBroadcaster: badges.broadcaster === '1',
+        isMod: (tags && (tags.mod === true || tags.mod === '1')) || badges.moderator === '1',
+        isVip: badges.vip === '1',
+        isSubscriber: tags && (tags.subscriber === true || tags.subscriber === '1'),
+        subTier: parseInt(badges.subscriber, 10) || 0, // 1, 2, 3 for sub tiers
+        isFollower: false, // Would need API call to check follower status
+        isBot: badges.bot === '1' // Twitch bot badge
+    };
+    
     if (existingUser) {
         // Check if user is in AFK or LURK state
         const isAfk = userManager
@@ -2999,7 +3105,7 @@ async function handleJoinCommand(username, userId, tags) {
         if (isAfkOrLurk) {
             // Return user from AFK/LURK
             if (userManager) {
-                userManager.joinUser(normalizedUserId, { username });
+                userManager.joinUser(normalizedUserId, { username, roles });
             } else {
                 existingUser.userState = 'active';
                 existingUser.state = 'ACTIVE';
@@ -3040,17 +3146,6 @@ async function handleJoinCommand(username, userId, tags) {
         if (/^[0-9A-Fa-f]{6}$/.test(r)) twitchHex = '#' + r;
     }
 
-    // Extract user roles from Twitch tags
-    const badges = parseBadges(tags);
-    const roles = {
-        isBroadcaster: badges.broadcaster === '1',
-        isMod: (tags && (tags.mod === true || tags.mod === '1')) || badges.moderator === '1',
-        isVip: badges.vip === '1',
-        isSubscriber: tags && (tags.subscriber === true || tags.subscriber === '1'),
-        subTier: parseInt(badges.subscriber, 10) || 0, // 1, 2, 3 for sub tiers
-        isFollower: false // Would need API call to check follower status
-    };
-
     // Create user data object
     const userData = {
         username,
@@ -3061,7 +3156,8 @@ async function handleJoinCommand(username, userId, tags) {
         joinedAt: Date.now(),
         angle: Math.random() * 360,
         source: 'chat-command',
-        roles: roles
+        roles: roles,
+        state: USER_STATES.JOINED  // Include state for buddy list
     };
     
     // Add to UserManager if available
@@ -4814,6 +4910,9 @@ function updatePotentialMembersListNow() {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
         widgetWindow.webContents.send('potentialMembersUpdate', chatters);
     }
+    if (buddyListWindow && !buddyListWindow.isDestroyed()) {
+        buddyListWindow.webContents.send('potentialMembersUpdate', chatters);
+    }
 }
 
 // ============================================
@@ -5835,7 +5934,8 @@ ipcMain.handle('get-chatters-list', () => {
             isBroadcaster: c.isBroadcaster || false,
             isMod: c.isMod || false,
             isVip: c.isVip || false,
-            isSubscriber: c.isSubscriber || false
+            isSubscriber: c.isSubscriber || false,
+            isBot: c.isBot || false
         }))
         .sort((a, b) => a.username.localeCompare(b.username));
 });
@@ -5874,6 +5974,7 @@ ipcMain.handle('add-to-chatters', (event, username, userData) => {
         userId: userData.userId || key,
         isBroadcaster: userData.isBroadcaster || false,
         isMod: userData.isMod || false,
+        isBot: userData.isBot || false,
         joinedAt: userData.joinedAt || Date.now()
     });
     updatePotentialMembersList();
@@ -6237,7 +6338,8 @@ async function bulkJoinUsers({ mode = 'controlled', delayMs = 80 } = {}) {
             twitchColor: c.color || null,
             joinedAt: Date.now(),
             angle,
-            source: enforceRules ? 'bulk-controlled' : 'bulk-chaos'
+            source: enforceRules ? 'bulk-controlled' : 'bulk-chaos',
+            state: USER_STATES.JOINED  // Include state for buddy list
         };
 
         // Use UserManager as primary (single source of truth)
@@ -6324,7 +6426,8 @@ ipcMain.handle('join-member', async (event, userId, username, options = {}) => {
         isBroadcaster: (chatter && chatter.isBroadcaster) || (options && options.isBroadcaster) || false,
         isMod: (chatter && chatter.isMod) || (options && options.isMod) || false,
         isVip: (chatter && chatter.isVip) || false,
-        isSubscriber: (chatter && chatter.isSubscriber) || false
+        isSubscriber: (chatter && chatter.isSubscriber) || false,
+        isBot: (chatter && chatter.isBot) || (options && options.isBot) || false
     };
     
     const user = {
@@ -6336,7 +6439,8 @@ ipcMain.handle('join-member', async (event, userId, username, options = {}) => {
         joinedAt: Date.now(),
         angle: Math.random() * 360,
         source: (options && options.source) || 'manual',
-        roles: roles
+        roles: roles,
+        state: USER_STATES.JOINED  // Include state for buddy list
     };
     activeUsers.set(normalizedUserId, user);
     addEvent('userJoin', user);
@@ -6568,7 +6672,8 @@ ipcMain.handle('add-test-user-to-widget', async (event, userId, username) => {
                 selectedSprite: null,
                 joinedAt: Date.now(),
                 angle: Math.random() * 360,
-                source: 'test-users-toggle'
+                source: 'test-users-toggle',
+                state: USER_STATES.JOINED  // Include state for buddy list
             };
             activeUsers.set(userId, user);
             addEvent('userJoin', user);

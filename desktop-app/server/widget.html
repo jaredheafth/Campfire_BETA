@@ -201,6 +201,21 @@
             animation: joinedPulse 1.5s ease-in-out 3;
         }
         
+        /* JOINED glow effect - works for ALL modes (not just circles) */
+        .user-shape.state-joined .shape {
+            filter: drop-shadow(0 0 8px rgba(255, 200, 0, 0.8));
+            animation: joinedGlow 1.5s ease-in-out 3;
+        }
+        
+        @keyframes joinedGlow {
+            0%, 100% {
+                filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.6));
+            }
+            50% {
+                filter: drop-shadow(0 0 16px rgba(255, 200, 0, 0.9));
+            }
+        }
+        
         @keyframes joinedPulse {
             0%, 100% {
                 border-color: #ffff00;
@@ -355,6 +370,27 @@
             50% {
                 opacity: 1;
             }
+        }
+        
+        /* JOINED indicator - sparkling ✨ animation */
+        .user-shape.state-joined .joined-indicator {
+            position: absolute;
+            top: var(--status-icon-top, -30px);
+            right: var(--status-icon-right, -5px);
+            font-size: 18px;
+            animation: sparkle 0.8s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 600;
+        }
+        
+        /* Hide joined indicator when NOT in JOINED state (prevents orphaned indicators from being visible) */
+        .user-shape:not(.state-joined) .joined-indicator {
+            display: none !important;
+        }
+        
+        @keyframes sparkle {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
         }
         
         /* Outer ring positioning for AFK/LURK users */
@@ -1021,12 +1057,13 @@
         .dashboard-panel {
             background: #1f1f1f;
             border: 1px solid #3a3a3a;
-            border-radius: 12px;
-            width: 600px;
-            height: 500px;
+            border-radius: 8px;
+            width: 320px;
+            height: auto;
+            max-height: 180px;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
             overflow: hidden;
         }
         
@@ -1068,42 +1105,18 @@
         }
         
         .dashboard-tabs {
-            display: flex;
-            gap: 0;
-            padding: 0 20px;
-            background: #1a1a1a;
-            border-bottom: 1px solid #3a3a3a;
-            overflow-x: auto;
-            flex-shrink: 0;
+            display: none; /* No tabs in simplified Quick Settings */
         }
         
-        .dashboard-tab {
-            padding: 12px 16px;
-            background: none;
-            border: none;
-            color: #888;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-            white-space: nowrap;
-        }
-        
-        .dashboard-tab:hover {
-            color: #fff;
-            background: #252525;
-        }
-        
-        .dashboard-tab.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
+        /* Tabs - hidden since we only have Quick Settings */
+        .dashboard-tab,
+        .dashboard-section {
+            display: none;
         }
         
         .dashboard-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
+            padding: 15px;
+            overflow: visible;
         }
         
         .dashboard-section {
@@ -1263,12 +1276,12 @@
     <div class="desktop-menu-bar" id="desktopMenuBar">
         <!-- Drag strip for frameless/transparent mode - keeps buttons clickable -->
         <div class="menu-drag-strip" title="Drag to move window">⋮⋮⋮</div>
-        <button class="menu-button" id="btnSettings">⚙️</button>
+        <button class="menu-button" id="btnSettings" title="Quick Settings">🔧</button>
         <button class="menu-button-square success" id="btnShowAll">✓</button>
         <button class="menu-button-square danger" id="btnHideAll">✕</button>
-        <button class="menu-button" id="btnDashboard">📟</button>
-        <button class="menu-button" id="btnChatPopout">💬</button>
+        <button class="menu-button" id="btnDashboard">⚙️</button>
         <button class="menu-button" id="btnBuddyList" title="Buddy List">👥</button>
+        <button class="menu-button" id="btnChatPopout">💬</button>
         <div class="menu-spacer"></div>
         <div class="menu-status">
             <div class="status-indicator" id="statusIndicator"></div>
@@ -1279,102 +1292,19 @@
         <button class="menu-button danger" id="btnEnd">End</button>
     </div>
     
-    <!-- Integrated Dashboard Overlay -->
+    <!-- Integrated Dashboard Overlay (Quick Settings Only) -->
     <div class="dashboard-overlay" id="dashboardOverlay">
-        <div class="dashboard-panel">
+        <div class="dashboard-panel" style="width: 280px; height: auto;">
             <div class="dashboard-header">
+                <span class="dashboard-title">🔧 Quick Settings</span>
                 <button class="dashboard-close" onclick="closeDashboard()">×</button>
             </div>
             
-            <div class="dashboard-tabs" id="dashboardTabs">
-                <button class="dashboard-tab active" onclick="switchDashboardTab('quick')">Quick Settings</button>
-                <button class="dashboard-tab" onclick="switchDashboardTab('members')">Members</button>
-            </div>
-            
-            <div class="dashboard-content">
-                <!-- Quick Settings Tab -->
-                <div class="dashboard-section active" id="quickSection">
-                    <h3 style="color: #fff; margin-bottom: 15px;">⚡ Quick Settings</h3>
-                    
-                    <div class="form-group">
-                        <label for="spriteMode">Sprite Mode</label>
-                        <select id="spriteMode" onchange="updateSpriteMode()">
-                            <option value="circles">CIRCLES</option>
-                            <option value="circle">SHADOWS</option>
-                            <option value="rpg-characters">ADVENTURERS (pixel characters)</option>
-                            <option value="pixel-morphs">MORPHS (animated morphs)</option>
-                            <option value="custom">CUSTOM (upload your own)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="maxUsers">Maximum Users</label>
-                        <input type="number" id="maxUsers" value="20" min="1" max="50" onchange="updateMaxUsers()">
-                        <span class="form-hint">Maximum number of users around the campfire</span>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="joinMethod">Join Method</label>
-                        <select id="joinMethod" onchange="updateJoinMethod()">
-                            <option value="command">Chat Command (!join)</option>
-                            <option value="emote">Emote</option>
-                            <option value="cheer">Cheer/Bits</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="quickCommandSettings">
-                        <label for="quickJoinCommand">Join Command</label>
-                        <input type="text" id="quickJoinCommand" value="!join" placeholder="!join" oninput="updateJoinMethod()">
-                        <span class="form-hint">Users must type this command to join</span>
-                    </div>
-
-                    <div class="form-group" id="quickEmoteSettings" style="display: none;">
-                        <label for="quickJoinEmote">Join Emote Name</label>
-                        <input type="text" id="quickJoinEmote" value="" placeholder="heafthCamp" oninput="updateJoinMethod()">
-                        <span class="form-hint">Users can type this emote/code to join</span>
-                    </div>
-                    
-                    <div class="form-group" id="quickCheerSettings" style="display: none;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: start;">
-                            <div>
-                                <label for="quickCheerType" style="display: block; margin-bottom: 8px;">Payment Type</label>
-                                <select id="quickCheerType">
-                                    <option value="bits">Bits</option>
-                                    <option value="channel-points">Channel Points</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="quickCheerAmount" style="display: block; margin-bottom: 8px;">Amount</label>
-                                <input type="number" id="quickCheerAmount" value="100" min="1">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-group" style="margin-top: 10px;">
-                        <label style="display:flex; align-items:center; gap:10px;">
-                            <input type="checkbox" id="muteChatBubbles" onchange="updateMuteChatBubbles()">
-                            <span>Mute chat bubbles</span>
-                        </label>
-                        <div id="muteChatBubblesOptions" style="display:none; margin-top:10px; padding:10px; border:1px solid #333; border-radius:8px; background:#1f1f1f;">
-                            <div style="font-size: 12px; color:#aaa; margin-bottom:8px;">Allow chat bubbles only for:</div>
-                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-                                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="muteAllowVip" onchange="updateMuteChatBubbles()"> VIP</label>
-                                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="muteAllowMod" onchange="updateMuteChatBubbles()"> MOD</label>
-                                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="muteAllowTier1" onchange="updateMuteChatBubbles()"> TIER 1</label>
-                                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="muteAllowTier2" onchange="updateMuteChatBubbles()"> TIER 2</label>
-                                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="muteAllowTier3" onchange="updateMuteChatBubbles()"> TIER 3</label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Members Tab -->
-                <div class="dashboard-section" id="membersSection">
-                    <h3 style="color: #fff; margin-bottom: 15px;">👥 Campfire Members</h3>
-                    <div class="members-list" id="membersList">
-                        <p style="color: #888;">No members yet. Users will appear here when they join.</p>
-                    </div>
-                </div>
+            <div class="dashboard-content" style="padding: 20px; display: flex; justify-content: center; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 10px 15px; background: #2a2a2a; border-radius: 6px;">
+                    <input type="checkbox" id="muteChatBubbles" onchange="updateMuteChatBubbles()" style="width: 18px; height: 18px; cursor: pointer;">
+                    <span style="color: #eee; font-size: 14px;">Mute chat bubbles</span>
+                </label>
             </div>
         </div>
     </div>
@@ -2717,7 +2647,9 @@
                 
                 if (existingUser) {
                     // Update existing user - preserve original username casing but update other data
-                    const wasAfkOrLurk = existingUser.state === 'afk' || existingUser.state === 'lurk' || existingUser.outerRing;
+                    // Use case-insensitive comparison for states (main process sends uppercase: 'AFK', 'LURK')
+                    const existingStateLower = existingUser.state ? existingUser.state.toLowerCase() : '';
+                    const wasAfkOrLurk = existingStateLower === 'afk' || existingStateLower === 'lurk' || existingUser.outerRing;
                     Object.assign(existingUser, userData);
                     // Keep the original username if it exists, otherwise use the new one
                     if (!existingUser.username && username) {
@@ -2740,13 +2672,9 @@
                             this.updateStateIndicator(element, oldState, 'joined');
                             this.updateUserRingPosition(existingUser, element, 'joined');
                             
-                            // Transition to active after joined animation
+                            // Transition to active after joined animation using centralized function
                             setTimeout(() => {
-                                if (existingUser.state === 'joined') {
-                                    existingUser.state = 'active';
-                                    element.classList.remove('state-joined');
-                                    element.classList.add('state-active');
-                                }
+                                this.transitionUserFromJoinedToActive(existingUser, element, existingUser.username);
                             }, 4500);
                             
                             console.log(`[addUser] Returned existing user from AFK/LURK: ${existingUser.username}`);
@@ -3193,6 +3121,10 @@
                         user.state = 'active';
                         element.classList.remove('state-joined', 'state-sleepy', 'state-afk');
                         element.classList.add('state-active');
+                        
+                        // Clean up joined indicator if present (safety check)
+                        const joinedIndicator = element.querySelector('.joined-indicator');
+                        if (joinedIndicator) joinedIndicator.remove();
                     }
                     // Note: LURK users stay in lurk even when chatting - they must use join command
                 }
@@ -3433,6 +3365,10 @@
                         user.state = 'active';
                         element.classList.remove('state-joined', 'state-sleepy', 'state-afk');
                         element.classList.add('state-active');
+                        
+                        // Clean up joined indicator if present (safety check)
+                        const joinedIndicator = element.querySelector('.joined-indicator');
+                        if (joinedIndicator) joinedIndicator.remove();
                     }
                 }
             }
@@ -3554,15 +3490,15 @@
                         newState = 'sleepy';
                     }
                     
-                    // Only update if state changed
-                    if (user.state !== newState && user.state !== 'joined') {
+                    // Only update if state changed (use case-insensitive comparison)
+                    if (user.state?.toLowerCase() !== newState?.toLowerCase() && user.state?.toLowerCase() !== 'joined') {
                         const oldState = user.state;
 
                         // Track if user was sleepy before going AFK (for combined visual state)
-                        if (newState === 'afk' && oldState === 'sleepy') {
+                        if (newState?.toLowerCase() === 'afk' && oldState?.toLowerCase() === 'sleepy') {
                             user.wasSleepy = true;
                             element.classList.add('was-sleepy');
-                        } else if (newState === 'active') {
+                        } else if (newState?.toLowerCase() === 'active') {
                             // Clear wasSleepy when returning to active
                             user.wasSleepy = false;
                             element.classList.remove('was-sleepy');
@@ -3615,13 +3551,20 @@
                 }
             }
             
-            // Add/remove state indicators (💤 for sleepy, <AFK> for afk, SVG eye for lurk)
+            // Add/remove state indicators (✨ for joined, 💤 for sleepy, <AFK> for afk, SVG eye for lurk)
             // wasSleepy: if true, keep sleepy indicator even when transitioning to AFK
             updateStateIndicator(element, oldState, newState, wasSleepy = false) {
                 // Remove old indicators (but keep sleepy if transitioning to AFK and wasSleepy)
+                const oldJoined = element.querySelector('.joined-indicator');
                 const oldSleepy = element.querySelector('.sleepy-indicator');
                 const oldLurk = element.querySelector('.lurk-indicator');
                 const oldAfk = element.querySelector('.afk-indicator');
+                
+                // Remove joined indicator when leaving JOINED state
+                // Use case-insensitive comparison (states come from UserManager as uppercase)
+                if (oldJoined && newState?.toLowerCase() !== 'joined') {
+                    oldJoined.remove();
+                }
                 
                 // Only remove sleepy indicator if NOT going to AFK with wasSleepy flag
                 if (oldSleepy && !(newState === 'afk' && wasSleepy)) {
@@ -3631,7 +3574,16 @@
                 if (oldAfk) oldAfk.remove();
                 
                 // Add new indicator if needed
-                if (newState === 'sleepy') {
+                // Use case-insensitive comparison (states come from UserManager as uppercase)
+                if (newState?.toLowerCase() === 'joined') {
+                    // Show sparkle indicator for newly joined users
+                    if (!element.querySelector('.joined-indicator')) {
+                        const indicator = document.createElement('div');
+                        indicator.className = 'joined-indicator';
+                        indicator.textContent = '✨';
+                        element.appendChild(indicator);
+                    }
+                } else if (newState?.toLowerCase() === 'sleepy') {
                     // Only add if not already present
                     if (!element.querySelector('.sleepy-indicator')) {
                         const indicator = document.createElement('div');
@@ -3639,7 +3591,7 @@
                         indicator.textContent = '💤';
                         element.appendChild(indicator);
                     }
-                } else if (newState === 'afk' && wasSleepy) {
+                } else if (newState?.toLowerCase() === 'afk' && wasSleepy) {
                     // Keep sleepy indicator for AFK users who were sleepy (sleepy overrides AFK indicator)
                     if (!element.querySelector('.sleepy-indicator')) {
                         const indicator = document.createElement('div');
@@ -3647,7 +3599,7 @@
                         indicator.textContent = '💤';
                         element.appendChild(indicator);
                     }
-                } else if (newState === 'afk' && !wasSleepy) {
+                } else if (newState?.toLowerCase() === 'afk' && !wasSleepy) {
                     // Show <AFK> text indicator for AFK users who weren't sleepy
                     if (!element.querySelector('.afk-indicator')) {
                         const indicator = document.createElement('div');
@@ -3655,7 +3607,7 @@
                         indicator.textContent = '<AFK>';
                         element.appendChild(indicator);
                     }
-                } else if (newState === 'lurk') {
+                } else if (newState?.toLowerCase() === 'lurk') {
                     const indicator = document.createElement('div');
                     indicator.className = 'lurk-indicator';
                     // SVG eye icon instead of emoji
@@ -3664,6 +3616,47 @@
                     </svg>`;
                     element.appendChild(indicator);
                 }
+            }
+            
+            // ========================================
+            // JOINED STATE TRANSITION
+            // ========================================
+            
+            /**
+             * Centralized function to transition user from JOINED to ACTIVE state
+             * Handles all cleanup and visual updates
+             * Single source of truth for JOINED → ACTIVE transition
+             * @param {Object} user - User object with state property
+             * @param {HTMLElement} element - DOM element for the user
+             * @param {string} username - Username for logging
+             */
+            transitionUserFromJoinedToActive(user, element, username) {
+                // Validate inputs at decision point (Fail Loudly, Not Silently)
+                if (!user || !element) {
+                    console.warn('[transitionUserFromJoinedToActive] Invalid user or element');
+                    return;
+                }
+                
+                // Only transition if still in JOINED state
+                if (user.state !== 'joined') {
+                    console.log(`[transitionUserFromJoinedToActive] User ${username} no longer in JOINED state, skipping transition`);
+                    return;
+                }
+                
+                // Update indicator FIRST (before removing state class - preserves CSS styling)
+                this.updateStateIndicator(element, 'joined', 'active', false);
+                
+                // Transition state (settings only control visual class, not state)
+                user.state = 'active';
+                
+                // Update visual classes
+                element.classList.remove('state-joined');
+                if (this.settings.userStates && this.settings.userStates.enabled) {
+                    element.classList.add('state-active');
+                }
+                
+                // Log the transition (Fail Loudly)
+                console.log(`[transitionUserFromJoinedToActive] User ${username} transitioned from JOINED to ACTIVE`);
             }
             
             // Move user to outer ring (AFK/LURK) or inner ring (active)
@@ -3889,13 +3882,9 @@
                 this.updateStateIndicator(element, oldState, 'joined');
                 this.updateUserRingPosition(user, element, 'joined');
                 
-                // Transition to active after joined animation
+                // Transition to active after joined animation using centralized function
                 setTimeout(() => {
-                    if (user.state === 'joined') {
-                        user.state = 'active';
-                        element.classList.remove('state-joined');
-                        element.classList.add('state-active');
-                    }
+                    this.transitionUserFromJoinedToActive(user, element, user.username);
                 }, 4500);
                 
                 return true;
@@ -4349,14 +4338,12 @@
                 user.state = 'joined'; // Initial state
                 element.classList.add('state-joined');
                 
-                // Remove joined state after animation completes (4.5s = 3 pulses at 1.5s each)
+                // Add JOINED sparkle indicator
+                this.updateStateIndicator(element, 'joined', 'joined', false);
+                
+                // Transition to active after joined animation using centralized function
                 setTimeout(() => {
-                    element.classList.remove('state-joined');
-                    // Transition to active state if user states are enabled
-                    if (this.settings.userStates && this.settings.userStates.enabled) {
-                        user.state = 'active';
-                        element.classList.add('state-active');
-                    }
+                    this.transitionUserFromJoinedToActive(user, element, user.username);
                 }, 4500);
                 
                 // Hide element initially - will be shown after sprite loads (if sprite exists)
@@ -5331,6 +5318,10 @@
                                 const element = document.getElementById(user.id);
                                 if (element) {
                                     element.classList.remove('state-active', 'state-joined', 'state-sleepy', 'state-afk');
+                                    
+                                    // Clean up joined indicator if present (safety check)
+                                    const joinedIndicator = element.querySelector('.joined-indicator');
+                                    if (joinedIndicator) joinedIndicator.remove();
                                 }
                             });
                         }
@@ -7185,7 +7176,7 @@
                 
                 if (btnSettings) {
                     btnSettings.addEventListener('click', () => {
-                        console.log('[Widget] Settings button (gear) clicked');
+                        console.log('[Widget] Settings button (wrench) clicked');
                         // Open Quick Settings overlay
                         openDashboard('quick');
                     });
@@ -7423,8 +7414,6 @@
             const overlay = document.getElementById('dashboardOverlay');
             if (overlay) {
                 overlay.classList.add('active');
-                switchDashboardTab(tab);
-                loadDashboardData();
             }
         }
         
@@ -7432,41 +7421,6 @@
             const overlay = document.getElementById('dashboardOverlay');
             if (overlay) {
                 overlay.classList.remove('active');
-            }
-        }
-        
-        function switchDashboardTab(tabName) {
-            console.log('[Dashboard] Switching to tab:', tabName);
-            
-            // Update tab buttons
-            document.querySelectorAll('.dashboard-tab').forEach(tab => {
-                tab.classList.remove('active');
-                if (tab.onclick && tab.onclick.toString().includes(tabName)) {
-                    tab.classList.add('active');
-                }
-            });
-            
-            // Update sections
-            document.querySelectorAll('.dashboard-section').forEach(section => {
-                section.classList.remove('active');
-            });
-            
-            const sectionMap = {
-                'quick': 'quickSection',
-                'members': 'membersSection'
-            };
-            
-            const targetSection = document.getElementById(sectionMap[tabName]);
-            if (targetSection) {
-                targetSection.classList.add('active');
-                console.log('[Dashboard] Activated section:', sectionMap[tabName]);
-                
-                // Load members when switching to members tab
-                if (tabName === 'members') {
-                    loadWidgetMembers();
-                }
-            } else {
-                console.error('[Dashboard] Section not found:', sectionMap[tabName]);
             }
         }
         

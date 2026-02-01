@@ -78,7 +78,8 @@ class User {
       isVip: data.roles?.isVip || false,
       isSubscriber: data.roles?.isSubscriber || false,
       subTier: data.roles?.subTier || 0,
-      isFollower: data.roles?.isFollower || false
+      isFollower: data.roles?.isFollower || false,
+      isBot: data.roles?.isBot || false
     };
     
     // ============================================

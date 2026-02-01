@@ -568,6 +568,25 @@
             color: #888;
         }
         
+        /* In Chat users - white, no italics, at top of offline group */
+        .buddy-item.in-chat {
+            color: #efeff1;
+            font-style: normal;
+        }
+        
+        .buddy-item.in-chat .buddy-name {
+            font-style: normal;
+            color: #efeff1;
+        }
+        
+        body.mode-nostalgia .buddy-item.in-chat {
+            color: #000;
+        }
+        
+        body.mode-nostalgia .buddy-item.in-chat .buddy-name {
+            color: #000;
+        }
+        
         /* LURK usernames - purple like widget */
         .buddy-item.lurk .buddy-name {
             color: #9b59b6;
@@ -576,6 +595,29 @@
         /* AFK usernames - blue color */
         .buddy-item.afk .buddy-name {
             color: #3498db;
+        }
+        
+        /* JOINED usernames - bold white */
+        .buddy-item.joined .buddy-name {
+            color: #ffffff;
+            font-weight: bold;
+        }
+        
+        /* JOINED icon - orange pulsing sparkle */
+        .buddy-item.joined .joined-icon {
+            color: #ff9900;
+            animation: pulse-orange 1s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-orange {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 0.7;
+                transform: scale(1.2);
+            }
         }
         
         /* Bot user styling */
@@ -850,6 +892,35 @@
         body.mode-nostalgia .header-settings-btn:active {
             border-color: #808080 #FFFFFF #FFFFFF #808080;
         }
+        
+        /* ========================================
+           SNAP STATE VISUAL FEEDBACK
+           ======================================== */
+        
+        /* When snapped to chat, add a subtle glow effect */
+        body.snapped-to-chat .buddy-window {
+            border-color: rgba(145, 71, 255, 0.5);
+            box-shadow: 0 8px 32px rgba(145, 71, 255, 0.3), 0 0 20px rgba(145, 71, 255, 0.1);
+        }
+        
+        body.snapped-to-chat .buddy-header {
+            background: rgba(145, 71, 255, 0.15);
+            border-bottom-color: rgba(145, 71, 255, 0.3);
+        }
+        
+        body.snapped-to-chat .buddy-title {
+            color: #b388ff;
+        }
+        
+        /* Nostalgia mode snap feedback */
+        body.mode-nostalgia.snapped-to-chat .buddy-window {
+            border-color: #9147ff;
+            border-right-width: 3px;
+        }
+        
+        body.mode-nostalgia.snapped-to-chat .buddy-header {
+            background: linear-gradient(to bottom, #4b2d99 0%, #4b2d99 8%, #A6CAF0 92%, #A6CAF0 100%);
+        }
     </style>
 </head>
 <body class="mode-modern">
@@ -974,7 +1045,9 @@
             // Known bot usernames
             knownBots: new Set(),
             // Configured bot username from Twitch settings
-            configuredBotUsername: null
+            configuredBotUsername: null,
+            // In-chat users (potential members who haven't joined campfire)
+            inChatUsers: new Map()
         };
         
         // ========================================
@@ -983,6 +1056,7 @@
         
         const USER_STATES = {
             ACTIVE: 'active',
+            JOINED: 'joined',  // Newly joined users
             SLEEPY: 'sleepy',
             AFK: 'afk',
             LURK: 'lurk',
@@ -991,6 +1065,7 @@
         
         const STATE_ICONS = {
             [USER_STATES.ACTIVE]: '🔥',
+            [USER_STATES.JOINED]: '✨',  // Sparkle for newly joined users
             [USER_STATES.SLEEPY]: '💤',
             [USER_STATES.AFK]: '🌌',
             [USER_STATES.LURK]: '🌲',
@@ -1018,7 +1093,7 @@
             // Map main process states to buddy list states
             const STATE_MAP = {
                 'in_chat': USER_STATES.OFFLINE,
-                'joined': USER_STATES.ACTIVE,
+                'joined': USER_STATES.JOINED,  // Preserve JOINED as distinct state
                 'active': USER_STATES.ACTIVE,
                 'sleepy': USER_STATES.SLEEPY,
                 'afk': USER_STATES.AFK,
@@ -1041,6 +1116,7 @@
             loadPreferences();
             setupEventListeners();
             updateWindowControls();
+            initSnapStateListener();
             
             if (state.isStandalone) {
                 initStandaloneMode();
@@ -1213,6 +1289,7 @@
                 window.electronAPI.getWindowSnapStatus().then(status => {
                     state.isAttached = status.bothSnapped;
                     updateWindowControls();
+                    updateSnapVisualFeedback(status.bothSnapped);
                 });
             }
             
@@ -1221,7 +1298,25 @@
                 window.electronAPI.onWindowSnapChanged((data) => {
                     state.isAttached = data.bothSnapped;
                     updateWindowControls();
+                    updateSnapVisualFeedback(data.bothSnapped);
                 });
+            }
+        }
+        
+        // ========================================
+        // WINDOW SNAP VISUAL FEEDBACK
+        // ========================================
+        
+        function initSnapStateListener() {
+            // Already initialized in setupEventListeners
+            console.log('[BuddyList] Snap state listener already initialized');
+        }
+        
+        function updateSnapVisualFeedback(isSnapped) {
+            if (isSnapped) {
+                document.body.classList.add('snapped-to-chat');
+            } else {
+                document.body.classList.remove('snapped-to-chat');
             }
         }
         
@@ -1370,6 +1465,62 @@
                 console.log('[BuddyList] No getActiveUsers API available');
             }
             
+            // Fetch in-chat users (potential members)
+            if (window.electronAPI && window.electronAPI.getPotentialMembers) {
+                console.log('[BuddyList] Fetching potential members (in-chat users)...');
+                window.electronAPI.getPotentialMembers().then(potentialUsers => {
+                    console.log('[BuddyList] Received', potentialUsers ? potentialUsers.length : 0, 'potential members');
+                    if (potentialUsers && Array.isArray(potentialUsers)) {
+                        // Build inChatUsers map (keyed by username lowercase)
+                        const inChatMap = new Map();
+                        potentialUsers.forEach(user => {
+                            const key = (user.userId || user.username || '').toLowerCase();
+                            inChatMap.set(key, {
+                                userId: user.userId || user.username,
+                                username: user.username || user.displayName || 'Unknown',
+                                displayName: user.displayName || user.username || 'Unknown',
+                                state: USER_STATES.OFFLINE,
+                                isInChat: true,
+                                hasJoinedCampfire: false,
+                                lastSeen: Date.now()
+                            });
+                        });
+                        state.inChatUsers = inChatMap;
+                        console.log('[BuddyList] Loaded', state.inChatUsers.size, 'in-chat users');
+                        renderBuddyList();
+                    }
+                }).catch(err => {
+                    console.error('[BuddyList] Error getting potential members:', err);
+                });
+            } else {
+                console.log('[BuddyList] No getPotentialMembers API available');
+            }
+            
+            // Listen for potential members updates (chatters in chat)
+            if (window.electronAPI && window.electronAPI.onPotentialMembersUpdate) {
+                window.electronAPI.onPotentialMembersUpdate((potentialUsers) => {
+                    console.log('[BuddyList] Potential members updated:', potentialUsers ? potentialUsers.length : 0);
+                    if (potentialUsers && Array.isArray(potentialUsers)) {
+                        // Build inChatUsers map
+                        const inChatMap = new Map();
+                        potentialUsers.forEach(user => {
+                            const key = (user.userId || user.username || '').toLowerCase();
+                            inChatMap.set(key, {
+                                userId: user.userId || user.username,
+                                username: user.username || user.displayName || 'Unknown',
+                                displayName: user.displayName || user.username || 'Unknown',
+                                state: USER_STATES.OFFLINE,
+                                isInChat: true,
+                                hasJoinedCampfire: false,
+                                lastSeen: Date.now()
+                            });
+                        });
+                        state.inChatUsers = inChatMap;
+                        renderBuddyList();
+                    }
+                });
+            }
+            
             if (window.electronAPI && window.electronAPI.onUserJoin) {
                 window.electronAPI.onUserJoin((user) => {
                     addOrUpdateUser(user);
@@ -1391,7 +1542,9 @@
                     if (data && data.user && data.user.userId) {
                         const { user, oldState, newState } = data;
                         console.log(`[BuddyList] State changed: ${user.username} ${oldState} → ${newState}`);
+                        console.log(`[BuddyList] User state before update: ${user.state}`);
                         addOrUpdateUser(user);
+                        console.log(`[BuddyList] User state after update: ${state.users.get(data.user.userId)?.state}`);
                         renderBuddyList();
                     }
                 });
@@ -1482,7 +1635,8 @@
             // Check if user is a bot (multiple detection methods)
             const isBot = userData.isBot || 
                           userData.roles?.isBot || 
-                          userData.badges?.includes('bot') ||
+                          // Twitch badges are format "bot/1", so check if any badge starts with 'bot'
+                          userData.badges?.some(badge => badge.startsWith('bot')) ||
                           (userData.tags?.badges?.bot === '1') ||
                           (userData.tags?.badges?.verified === '1') ||
                           // Also check against configured bot username
@@ -1491,6 +1645,7 @@
                            userData.username.toLowerCase() === state.configuredBotUsername);
             
             if (isBot) {
+                console.log(`[BuddyList] Detected bot: ${userData.username} (badges: ${userData.badges?.join(', ')}, tags: ${JSON.stringify(userData.tags?.badges)})`);
                 state.knownBots.add(userId);
             }
             
@@ -1499,7 +1654,7 @@
                     userId: userId,
                     username: userData.username || userData.displayName || 'Unknown',
                     displayName: userData.displayName || userData.username || 'Unknown',
-                    state: USER_STATES.ACTIVE,
+                    state: userData.state || USER_STATES.ACTIVE,  // Use provided state (e.g., JOINED)
                     lastActivity: Date.now(),
                     isAfk: false,
                     isLurking: false,
@@ -1595,10 +1750,12 @@
         
         function getGroupedUsers() {
             const groups = {
+                [USER_STATES.JOINED]: [],  // Newly joined users at top
                 [USER_STATES.ACTIVE]: [],
                 [USER_STATES.SLEEPY]: [],
                 [USER_STATES.LURK]: [],
                 [USER_STATES.AFK]: [],
+                bots: [], // Separate array for bot users
                 [USER_STATES.OFFLINE]: []
             };
             
@@ -1617,10 +1774,28 @@
                 if (usernameStr) seenUsernames.add(usernameStr);
             }
             
-            // Second pass: add all users (active + known offline) to allUsers array
+            // Second pass: add all users (active + known offline + in-chat) to allUsers array
             // Active users first
             for (const user of state.users.values()) {
                 allUsers.push(user);
+            }
+            
+            // Add in-chat users (potential members) at top of offline section
+            // These users are in chat but haven't joined the campfire
+            for (const user of state.inChatUsers.values()) {
+                const userIdStr = String(user.userId || user.username || '').toLowerCase();
+                const usernameStr = String(user.username || user.displayName || '').toLowerCase();
+                
+                // Skip if already seen (either by userId or username)
+                if (seenUserIds.has(userIdStr) || seenUsernames.has(usernameStr)) {
+                    continue;
+                }
+                
+                // Mark as in-chat for special styling
+                const inChatUser = { ...user, isInChat: true };
+                allUsers.push(inChatUser);
+                seenUserIds.add(userIdStr);
+                if (usernameStr) seenUsernames.add(usernameStr);
             }
             
             // Add known offline users (deduplicated by userId AND username, case-insensitive)
@@ -1641,18 +1816,38 @@
                 }
             }
             
-            // Sort alphabetically within each group (case-insensitive sort)
-            const sortedUsers = allUsers.sort((a, b) => 
-                a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' })
-            );
+            // Sort: in-chat users first (alphabetically), then other offline users (alphabetically)
+            const sortedUsers = allUsers.sort((a, b) => {
+                // In-chat users always come first
+                if (a.isInChat && !b.isInChat) return -1;
+                if (!a.isInChat && b.isInChat) return 1;
+                
+                // Both in-chat or both not in-chat: sort alphabetically
+                return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' });
+            });
             
             for (const user of sortedUsers) {
                 // Determine effective state (normalize to handle uppercase from main process)
                 let effectiveState = normalizeState(user.state);
                 
+                // Check if user is a bot (use state.knownBots for offline bots too)
+                const isBot = user.isBot || state.knownBots.has(user.userId);
+                
+                // In-chat users go to offline group (at top, handled by sorting)
+                if (user.isInChat) {
+                    groups[USER_STATES.OFFLINE].push(user);
+                    continue;
+                }
+                
                 // Offline users stay in OFFLINE group
                 if (effectiveState === USER_STATES.OFFLINE) {
                     groups[USER_STATES.OFFLINE].push(user);
+                    continue;
+                }
+                
+                // Bots go to bots array (rendered at bottom of online list)
+                if (isBot) {
+                    groups.bots.push(user);
                     continue;
                 }
                 
@@ -1674,8 +1869,13 @@
                     continue;
                 }
                 
-                // All other users (ACTIVE, JOINED) go to ACTIVE group
-                // Bots are also in ACTIVE group (with bot icon)
+                // JOINED users at top of online list
+                if (effectiveState === USER_STATES.JOINED) {
+                    groups[USER_STATES.JOINED].push(user);
+                    continue;
+                }
+                
+                // All other users (ACTIVE) go to ACTIVE group
                 groups[USER_STATES.ACTIVE].push(user);
             }
             
@@ -1717,24 +1917,26 @@
         function renderBuddyList() {
             const groups = getGroupedUsers();
             
-            // Calculate online count (active + lurk + afk)
-            const onlineCount = groups.active.length + groups.lurk.length + groups.afk.length;
+            // Calculate online count (joined + active + lurk + afk + bots)
+            const onlineCount = groups.joined.length + groups.active.length + groups.sleepy.length + groups.lurk.length + groups.afk.length + groups.bots.length;
             
             // Update online group count
             const onlineCountEl = document.getElementById('count-online');
             if (onlineCountEl) onlineCountEl.textContent = onlineCount;
             
-            // Render all users in single online list (sorted by state: active, sleepy, lurk, afk)
+            // Render all users in single online list (sorted by state: joined → active → sleepy → lurk → afk → bots)
             const onlineListEl = document.getElementById('list-online');
             if (onlineListEl) {
                 onlineListEl.innerHTML = '';
                 
-                // Combine and sort online users: active → sleepy → lurk → afk
+                // Combine and sort online users: joined → active → sleepy → lurk → afk → bots
                 const onlineUsers = [
+                    ...groups.joined,  // Newly joined at top
                     ...groups.active,
                     ...groups.sleepy,
                     ...groups.lurk,
-                    ...groups.afk
+                    ...groups.afk,
+                    ...groups.bots
                 ];
                 
                 for (const user of onlineUsers) {
@@ -1817,9 +2019,18 @@
             // Normalize state for comparison (handles uppercase from main process)
             const userState = normalizeState(user.state);
             
+            // Check if user is in-chat (in Twitch chat but hasn't joined campfire)
+            const isInChat = user.isInChat;
+            
             // Check if user is offline
             const isOffline = userState === USER_STATES.OFFLINE;
-            if (isOffline) {
+            
+            // Apply classes in priority order: joined > in-chat > offline > lurk > afk
+            if (userState === USER_STATES.JOINED) {
+                li.classList.add('joined');
+            } else if (isInChat) {
+                li.classList.add('in-chat');
+            } else if (isOffline) {
                 li.classList.add('offline');
             } else if (userState === USER_STATES.LURK) {
                 li.classList.add('lurk');
@@ -1837,12 +2048,17 @@
             
             if (isBot) {
                 icon.textContent = BOT_ICON;
-            } else if (isOffline) {
+            } else if (isInChat || isOffline) {
+                // In-chat users show door icon (same as offline)
                 icon.textContent = STATE_ICONS[USER_STATES.OFFLINE];
             } else if (userState === USER_STATES.SLEEPY) {
                 // Sleepy users show blue fire on left (replaces regular fire)
                 icon.textContent = STATE_ICONS[USER_STATES.ACTIVE];
                 icon.classList.add('sleepy-fire');
+            } else if (userState === USER_STATES.JOINED) {
+                // JOINED users show sparkle icon with pulsing orange
+                icon.textContent = STATE_ICONS[USER_STATES.JOINED];
+                icon.classList.add('joined-icon');
             } else {
                 // Show the actual state icon based on normalized state
                 icon.textContent = STATE_ICONS[userState] || STATE_ICONS[USER_STATES.ACTIVE];
