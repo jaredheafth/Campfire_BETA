@@ -1769,15 +1769,23 @@
         // Switch between command sub-tabs (State, Movement, Appearance, Animation, Auto States, App, Custom)
         function switchCommandSubTab(subTabName, clickedButton) {
             try {
+                // Get all sub-content elements safely
+                const subContents = document.querySelectorAll('.command-sub-content');
+                const subTabs = document.querySelectorAll('.command-sub-tab');
+                
                 // Hide all command sub-content
-                document.querySelectorAll('.command-sub-content').forEach(content => {
-                    content.style.display = 'none';
+                subContents.forEach(content => {
+                    if (content && content.style) {
+                        content.style.display = 'none';
+                    }
                 });
                 
                 // Reset all sub-tab buttons
-                document.querySelectorAll('.command-sub-tab').forEach(tab => {
-                    tab.style.background = '#333';
-                    tab.style.color = '#aaa';
+                subTabs.forEach(tab => {
+                    if (tab) {
+                        tab.style.background = '#333';
+                        tab.style.color = '#aaa';
+                    }
                 });
                 
                 // Show selected sub-content and load data if needed
@@ -1785,17 +1793,17 @@
                     case 'state':
                         const stateTab = document.getElementById('stateSubTab');
                         if (stateTab) stateTab.style.display = 'block';
-                        loadStateCommands();
+                        if (typeof loadStateCommands === 'function') loadStateCommands();
                         break;
                     case 'movement':
                         const movementTab = document.getElementById('movementSubTab');
                         if (movementTab) movementTab.style.display = 'block';
-                        loadMovementCommands();
+                        if (typeof loadMovementCommands === 'function') loadMovementCommands();
                         break;
                     case 'appearance':
                         const appearanceTab = document.getElementById('appearanceSubTab');
                         if (appearanceTab) appearanceTab.style.display = 'block';
-                        loadAppearanceCommands();
+                        if (typeof loadAppearanceCommands === 'function') loadAppearanceCommands();
                         break;
                     case 'animation':
                         const animationTab = document.getElementById('animationSubTab');
@@ -2070,28 +2078,58 @@
         }
         
         // Debounce updateFullPreview to prevent excessive calls while dragging sliders
+        // Stability fix: Clear timeout before setting to prevent overlapping calls
         let previewUpdateTimeout = null;
         let dashboardInitializing = true; // Prevent updates during initialization
 
         function updateFullPreview() {
-            // In desktop app with separate dashboard, preview iframe doesn't exist
-            if (dashboardInitializing) return; // Skip during initialization to prevent widget restarts
+            // Skip during initialization to prevent widget restarts
+            if (dashboardInitializing) {
+                console.log('[Preview] Skipping update during initialization');
+                return;
+            }
 
-            const settings = getSettings();
-            localStorage.setItem('campfireWidgetSettings', JSON.stringify(settings));
-            // Desktop app: also send to main (debounced) so the widget updates live
-            if (window.electronAPI?.saveSettings) {
-                if (previewUpdateTimeout) clearTimeout(previewUpdateTimeout);
-                previewUpdateTimeout = setTimeout(() => {
-                    try { window.electronAPI.saveSettings(settings); } catch (e) {}
-                }, 50);
+            try {
+                const settings = getSettings();
+                if (!settings) {
+                    console.warn('[Preview] No settings available, skipping update');
+                    return;
+                }
+                
+                localStorage.setItem('campfireWidgetSettings', JSON.stringify(settings));
+                console.log('[Preview] Settings saved to localStorage');
+                
+                // Desktop app: also send to main (debounced) so the widget updates live
+                if (window.electronAPI?.saveSettings) {
+                    // Clear any existing timeout before setting a new one
+                    if (previewUpdateTimeout) {
+                        clearTimeout(previewUpdateTimeout);
+                        previewUpdateTimeout = null;
+                    }
+                    
+                    // Use 100ms debounce for better stability (increased from 50ms)
+                    previewUpdateTimeout = setTimeout(() => {
+                        try {
+                            window.electronAPI.saveSettings(settings);
+                            console.log('[Preview] Settings sent to main process');
+                        } catch (error) {
+                            console.error('[Preview] Failed to save settings:', error);
+                        } finally {
+                            previewUpdateTimeout = null;
+                        }
+                    }, 100);
+                }
+            } catch (error) {
+                console.error('[Preview] Error in updateFullPreview:', error);
             }
         }
 
         function updateAngleDisplay() {
             const input = document.getElementById('circleAngle');
+            if (!input) return;
             const angle = input.value;
-            document.getElementById('angleValue').textContent = angle + '°';
+            const valueEl = document.getElementById('angleValue');
+            if (valueEl) valueEl.textContent = angle + '°';
             updateSliderBackground(input);
         }
 
@@ -2109,15 +2147,19 @@
 
         function updateGlowSizeDisplay() {
             const input = document.getElementById('glowSize');
+            if (!input) return;
             const size = input.value;
-            document.getElementById('glowSizeValue').textContent = size + 'px';
+            const valueEl = document.getElementById('glowSizeValue');
+            if (valueEl) valueEl.textContent = size + 'px';
             updateSliderBackground(input);
         }
 
         function updateGlowIntensityDisplay() {
             const input = document.getElementById('glowIntensity');
+            if (!input) return;
             const intensity = input.value;
-            document.getElementById('glowIntensityValue').textContent = intensity + '%';
+            const valueEl = document.getElementById('glowIntensityValue');
+            if (valueEl) valueEl.textContent = intensity + '%';
             updateSliderBackground(input);
         }
 
@@ -2137,25 +2179,63 @@
         }
         
         function updateSliderBackground(input) {
-            const value = (input.value - input.min) / (input.max - input.min) * 100;
-            input.style.background = `linear-gradient(to right, #667eea 0%, #667eea ${value}%, #3a3a3a ${value}%, #3a3a3a 100%)`;
+            // Stability fix: Add null check and validation
+            if (!input || typeof input !== 'object') {
+                console.warn('[Slider] Invalid input element passed to updateSliderBackground');
+                return;
+            }
+            
+            // Ensure input has min, max, and value properties
+            const min = parseFloat(input.min) || 0;
+            const max = parseFloat(input.max) || 100;
+            const value = parseFloat(input.value) || 0;
+            
+            // Calculate percentage safely
+            const range = max - min;
+            if (range <= 0) {
+                input.style.background = '#3a3a3a';
+                return;
+            }
+            
+            const percentage = ((value - min) / range) * 100;
+            
+            // Use CSS variable for accent color
+            input.style.background = `linear-gradient(to right, var(--accent-primary, #667eea) 0%, var(--accent-primary, #667eea) ${percentage}%, #3a3a3a ${percentage}%, #3a3a3a 100%)`;
         }
         
         function initializeAllSliders() {
-            document.querySelectorAll('input[type="range"]').forEach(slider => {
-                updateSliderBackground(slider);
-                slider.addEventListener('input', () => updateSliderBackground(slider));
+            const sliders = document.querySelectorAll('input[type="range"]');
+            if (!sliders || sliders.length === 0) {
+                console.log('[Sliders] No range inputs found to initialize');
+                return;
+            }
+            
+            sliders.forEach((slider, index) => {
+                try {
+                    updateSliderBackground(slider);
+                    slider.addEventListener('input', () => updateSliderBackground(slider));
+                } catch (error) {
+                    console.error(`[Sliders] Error initializing slider ${index}:`, error);
+                }
             });
+            
+            console.log(`[Sliders] Initialized ${sliders.length} sliders`);
         }
 
         function updateShadowIntensityDisplay() {
-            const intensity = document.getElementById('shadowIntensity').value;
-            document.getElementById('shadowIntensityValue').textContent = intensity + '%';
+            const input = document.getElementById('shadowIntensity');
+            if (!input) return;
+            const intensity = input.value;
+            const valueEl = document.getElementById('shadowIntensityValue');
+            if (valueEl) valueEl.textContent = intensity + '%';
         }
 
         function updateGlowSpreadDisplay() {
-            const spread = document.getElementById('glowSpread').value;
-            document.getElementById('glowSpreadValue').textContent = spread + '%';
+            const input = document.getElementById('glowSpread');
+            if (!input) return;
+            const spread = input.value;
+            const valueEl = document.getElementById('glowSpreadValue');
+            if (valueEl) valueEl.textContent = spread + '%';
         }
 
         function updateFlickerOpacityDisplay() {
@@ -2175,8 +2255,12 @@
         }
 
         function updateFireSizeDisplay() {
-            const size = document.getElementById('fireSize').value;
-            document.getElementById('fireSizeValue').textContent = size + 'px';
+            const input = document.getElementById('fireSize');
+            if (!input) return;
+            const size = input.value;
+            const valueEl = document.getElementById('fireSizeValue');
+            if (valueEl) valueEl.textContent = size + 'px';
+            
             // Only save fireSize setting, not all settings
             const currentSettings = JSON.parse(localStorage.getItem('campfireWidgetSettings') || '{}');
             const newSize = parseInt(size);
@@ -2188,8 +2272,12 @@
         }
 
         function updateSpriteSizeDisplay() {
-            const size = document.getElementById('spriteSize').value;
-            document.getElementById('spriteSizeValue').textContent = size + 'px';
+            const input = document.getElementById('spriteSize');
+            if (!input) return;
+            const size = input.value;
+            const valueEl = document.getElementById('spriteSizeValue');
+            if (valueEl) valueEl.textContent = size + 'px';
+            
             // Only save spriteSize setting, not all settings
             const currentSettings = JSON.parse(localStorage.getItem('campfireWidgetSettings') || '{}');
             const newSize = parseInt(size);
@@ -2201,8 +2289,12 @@
         }
 
         function updateChatBubbleSizeDisplay() {
-            const size = document.getElementById('chatBubbleSize').value;
-            document.getElementById('chatBubbleSizeValue').textContent = size + 'px';
+            const input = document.getElementById('chatBubbleSize');
+            if (!input) return;
+            const size = input.value;
+            const valueEl = document.getElementById('chatBubbleSizeValue');
+            if (valueEl) valueEl.textContent = size + 'px';
+            
             // Only save chatBubbleSize setting, not all settings
             const currentSettings = JSON.parse(localStorage.getItem('campfireWidgetSettings') || '{}');
             const newSize = parseInt(size);
@@ -2243,29 +2335,43 @@
         let _syncingSpriteMode = false;
         
         function updateSpriteMode(skipSave = false) {
-            const mode = document.getElementById('spriteMode').value;
+            const modeSelect = document.getElementById('spriteMode');
+            if (!modeSelect) return;
+            const mode = modeSelect.value;
+            
+            // Get all sprite sections safely
+            const circleSection = document.getElementById('circleSpriteSection');
+            const rpgSection = document.getElementById('rpgSpriteSection');
+            const morphSection = document.getElementById('morphSpriteSection');
+            const customSection = document.getElementById('customSpriteSection');
             
             // Hide all sections
-            document.getElementById('circleSpriteSection').style.display = 'none';
-            document.getElementById('rpgSpriteSection').style.display = 'none';
-            document.getElementById('morphSpriteSection').style.display = 'none';
-            document.getElementById('customSpriteSection').style.display = 'none';
+            if (circleSection) circleSection.style.display = 'none';
+            if (rpgSection) rpgSection.style.display = 'none';
+            if (morphSection) morphSection.style.display = 'none';
+            if (customSection) customSection.style.display = 'none';
             
             // Show relevant section
             if (mode === 'circles') {
                 // Circles mode: no section needed (uses simple colored circles)
                 // All sections remain hidden
             } else if (mode === 'circle') {
-                document.getElementById('circleSpriteSection').style.display = 'block';
-                loadSpriteList('shadow');
+                if (circleSection) {
+                    circleSection.style.display = 'block';
+                    loadSpriteList('shadow');
+                }
             } else if (mode === 'rpg-characters') {
-                document.getElementById('rpgSpriteSection').style.display = 'block';
-                loadSpriteList('rpg');
+                if (rpgSection) {
+                    rpgSection.style.display = 'block';
+                    loadSpriteList('rpg');
+                }
             } else if (mode === 'pixel-morphs') {
-                document.getElementById('morphSpriteSection').style.display = 'block';
-                loadSpriteList('morph');
+                if (morphSection) {
+                    morphSection.style.display = 'block';
+                    loadSpriteList('morph');
+                }
             } else if (mode === 'custom') {
-                document.getElementById('customSpriteSection').style.display = 'block';
+                if (customSection) customSection.style.display = 'block';
             }
             
             // Restore direction for this sprite mode
