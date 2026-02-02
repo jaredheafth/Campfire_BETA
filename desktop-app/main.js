@@ -239,20 +239,66 @@ function registerSpriteProtocol() {
 // ============================================
 
 async function disconnectTwitchClients() {
-    try {
-        if (twitchClient) {
-            try { await twitchClient.disconnect(); } catch (e) { try { twitchClient.disconnect(); } catch (e2) { /* ignore */ } }
-        }
-    } catch (e) { /* ignore */ }
-    try {
-        if (twitchChatClient) {
-            try { await twitchChatClient.disconnect(); } catch (e) { try { twitchChatClient.disconnect(); } catch (e2) { /* ignore */ } }
-        }
-    } catch (e) { /* ignore */ }
+    console.log('[Main] Disconnecting Twitch clients...');
+    
+    const disconnectPromises = [];
+    
+    // Disconnect main Twitch client with timeout
+    if (twitchClient) {
+        disconnectPromises.push(
+            Promise.race([
+                (async () => {
+                    try {
+                        await twitchClient.disconnect();
+                    } catch (e) {
+                        console.warn('[Main] First disconnect attempt failed, retrying...');
+                        // Try again once
+                        try {
+                            await twitchClient.disconnect();
+                        } catch (e2) {
+                            console.warn('[Main] Second disconnect attempt also failed, giving up');
+                        }
+                    }
+                })(),
+                new Promise(resolve => setTimeout(resolve, 3000)) // 3 second timeout
+            ])
+        );
+    }
+    
+    // Disconnect chat bot client with timeout
+    if (twitchChatClient) {
+        disconnectPromises.push(
+            Promise.race([
+                (async () => {
+                    try {
+                        await twitchChatClient.disconnect();
+                    } catch (e) {
+                        console.warn('[Main] Chat bot disconnect failed, retrying...');
+                        try {
+                            await twitchChatClient.disconnect();
+                        } catch (e2) {
+                            console.warn('[Main] Chat bot second disconnect also failed, giving up');
+                        }
+                    }
+                })(),
+                new Promise(resolve => setTimeout(resolve, 3000)) // 3 second timeout
+            ])
+        );
+    }
+    
+    // Wait for all disconnections (with overall timeout)
+    await Promise.race([
+        Promise.all(disconnectPromises),
+        new Promise(resolve => setTimeout(resolve, 5000)) // 5 second overall timeout
+    ]);
+    
+    // Clear state regardless of disconnection success
     twitchClient = null;
     twitchChatClient = null;
     isTwitchConnected = false;
     isTwitchChatConnected = false;
+    
+    console.log('[Main] Twitch clients disconnected');
 }
 
 async function shutdownEntireApp({ reason = 'shutdown', forUpdate = false } = {}) {
@@ -260,6 +306,20 @@ async function shutdownEntireApp({ reason = 'shutdown', forUpdate = false } = {}
     isQuittingApp = true;
     if (forUpdate) isQuittingForUpdate = true;
     try { console.log(`[Main] shutdownEntireApp: ${reason}${forUpdate ? ' (for update)' : ''}`); } catch (e) { /* ignore */ }
+
+    // Notify all windows to prepare for shutdown (save state, etc.)
+    if (forUpdate) {
+        const windows = BrowserWindow.getAllWindows();
+        windows.forEach(w => {
+            if (!w.isDestroyed()) {
+                try {
+                    w.webContents.send('prepare-shutdown');
+                } catch (e) { /* ignore */ }
+            }
+        });
+        // Give renderers time to save state
+        await new Promise(r => setTimeout(r, 500));
+    }
 
     // Disconnect Twitch clients (both main + optional chat bot)
     await disconnectTwitchClients();
@@ -272,24 +332,71 @@ async function shutdownEntireApp({ reason = 'shutdown', forUpdate = false } = {}
         }
     } catch (e) { /* ignore */ }
 
-    // Close all windows (use close(), not destroy(), so Electron can unwind cleanly)
-    try {
-        const wins = BrowserWindow.getAllWindows();
-        wins.forEach(w => {
-            try { w.removeAllListeners('close'); } catch (e) { /* ignore */ }
-            try { w.close(); } catch (e) { /* ignore */ }
+    // Close all windows with proper Promise-based handling
+    const windows = BrowserWindow.getAllWindows();
+    if (windows.length > 0) {
+        console.log(`[Main] Closing ${windows.length} windows...`);
+        
+        // Create promises for each window closure
+        const closePromises = windows.map(w => {
+            return new Promise(resolve => {
+                if (w.isDestroyed()) {
+                    resolve();
+                    return;
+                }
+                
+                // Remove close listeners to prevent preventDefault
+                w.removeAllListeners('close');
+                
+                // Set up one-time close handler
+                w.once('closed', () => {
+                    resolve();
+                });
+                
+                // Attempt to close
+                try {
+                    w.close();
+                } catch (e) {
+                    // If close fails, still resolve
+                    resolve();
+                }
+            });
         });
-    } catch (e) { /* ignore */ }
+        
+        // Wait for all windows to close with timeout
+        await Promise.race([
+            Promise.all(closePromises),
+            new Promise(resolve => setTimeout(resolve, 5000)) // 5 second timeout
+        ]);
+        
+        // Allow additional time for Electron to clean up
+        await new Promise(r => setTimeout(r, 300));
+        
+        // Verify all windows are closed
+        const remainingWindows = BrowserWindow.getAllWindows().filter(w => !w.isDestroyed());
+        if (remainingWindows.length > 0) {
+            console.warn(`[Main] ${remainingWindows.length} windows still open, forcing close...`);
+            remainingWindows.forEach(w => {
+                try {
+                    w.removeAllListeners('close');
+                    w.destroy();
+                } catch (e) { /* ignore */ }
+            });
+            await new Promise(r => setTimeout(r, 200));
+        }
+    }
 
-    // Allow a moment for sockets/windows to close before triggering the updater or quitting
-    await new Promise(r => setTimeout(r, 600));
-
+    // Proceed with update or quit
     if (forUpdate) {
         try {
+            console.log('[Main] Calling quitAndInstall...');
             autoUpdater.quitAndInstall(false, true);
             return;
         } catch (e) {
             console.error('[Main] quitAndInstall failed:', e);
+            // Fallback: try to exit anyway
+            app.exit(0);
+            return;
         }
     }
 
@@ -2244,6 +2351,13 @@ function connectTwitch() {
                 shouldShowInPopout = false;
             }
         }
+        
+        // DEBUG: Log emote data to diagnose issues
+        console.log('[ChatDebug] ====');
+        console.log('[ChatDebug] Username:', username);
+        console.log('[ChatDebug] Message:', message);
+        console.log('[ChatDebug] Raw tags.emotes:', tags.emotes);
+        console.log('[ChatDebug] Emotes count:', tags.emotes ? Object.keys(tags.emotes).length : 0);
         
         // Send to widget for chat bubbles (only non-commands)
         // Pass shouldShowInPopout flag to control popout chat display
@@ -6807,29 +6921,79 @@ ipcMain.handle('reset-sprite-path', async () => {
     }
 });
 
-// Auto-updater (keep existing handlers)
+// Auto-updater with retry logic
+
+/**
+ * Get error code for updater errors
+ * @param {Error} error - The error object
+ * @returns {string} Error code
+ */
+function getErrorCode(error) {
+    const message = error.message || '';
+    if (message.includes('net::')) return 'NETWORK_ERROR';
+    if (message.includes('ECONNRESET')) return 'CONNECTION_RESET';
+    if (message.includes('ETIMEDOUT')) return 'TIMEOUT';
+    if (message.includes('socket hang up')) return 'SOCKET_HANG_UP';
+    if (message.includes('404')) return 'NOT_FOUND';
+    if (message.includes('401') || message.includes('403')) return 'AUTH_ERROR';
+    if (message.includes('ENOTFOUND') || message.includes('getaddrinfo')) return 'DNS_ERROR';
+    return 'UNKNOWN_ERROR';
+}
+
+/**
+ * Check for updates with retry on network failure
+ * @param {number} maxRetries - Maximum number of retry attempts
+ * @returns {Promise<Object>} Update check result
+ */
+async function checkForUpdatesWithRetry(maxRetries = 3) {
+    const isPrivateRepo = false;
+    const githubToken = process.env.GH_TOKEN || null;
+    
+    const feedConfig = {
+        provider: 'github',
+        owner: 'jaredheafth',
+        repo: 'Campfire_BETA',
+        private: isPrivateRepo
+    };
+    
+    if (isPrivateRepo && githubToken) {
+        feedConfig.token = githubToken;
+    }
+    
+    autoUpdater.setFeedURL(feedConfig);
+    
+    let lastError;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            const result = await autoUpdater.checkForUpdates();
+            return { success: true, updateInfo: result?.updateInfo };
+        } catch (error) {
+            lastError = error;
+            // Only retry on network-related errors
+            const isNetworkError = error.message?.includes('net::') || 
+                                    error.message?.includes('ECONNRESET') ||
+                                    error.message?.includes('ETIMEDOUT') ||
+                                    error.message?.includes('socket hang up');
+            
+            if (!isNetworkError || attempt >= maxRetries - 1) {
+                throw error;
+            }
+            
+            const delayMs = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s
+            console.warn(`[Updater] Network error on attempt ${attempt + 1}/${maxRetries}, retrying in ${delayMs}ms:`, error.message);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+    }
+    throw lastError;
+}
+
 ipcMain.handle('check-for-updates', async () => {
     try {
-        const isPrivateRepo = false;
-        const githubToken = process.env.GH_TOKEN || null;
-        
-        const feedConfig = {
-            provider: 'github',
-            owner: 'jaredheafth',
-            repo: 'offlineclub_widget_Campfire',
-            private: isPrivateRepo
-        };
-        
-        if (isPrivateRepo && githubToken) {
-            feedConfig.token = githubToken;
-        }
-        
-        autoUpdater.setFeedURL(feedConfig);
-        const result = await autoUpdater.checkForUpdates();
-        return { success: true, updateInfo: result?.updateInfo };
+        const result = await checkForUpdatesWithRetry(3);
+        return result;
     } catch (error) {
-        console.error('Error checking for updates:', error);
-        return { success: false, error: error.message };
+        console.error('[Updater] checkForUpdates failed:', error);
+        return { success: false, error: error.message, code: getErrorCode(error) };
     }
 });
 
@@ -6846,15 +7010,11 @@ ipcMain.handle('download-update', async () => {
 ipcMain.handle('install-update', async () => {
     try {
         console.log('🔄 Preparing to install update...');
-        // Use the same full shutdown path as the END button / closing the Visual Display,
-        // so we don't leave invisible background processes that block NSIS replacement.
-        shutdownEntireApp({ reason: 'install-update', forUpdate: true }).catch(() => {
-            try { autoUpdater.quitAndInstall(false, true); } catch (e) { /* ignore */ }
-            try { app.exit(0); } catch (e2) { /* ignore */ }
-        });
+        // Use the same full shutdown path - handles all cleanup and quitAndInstall
+        shutdownEntireApp({ reason: 'install-update', forUpdate: true });
         return { success: true };
     } catch (error) {
-        console.error('Error installing update:', error);
+        console.error('[Updater] Error installing update:', error);
         return { success: false, error: error.message };
     }
 });
@@ -7176,7 +7336,7 @@ app.whenReady().then(() => {
     const feedConfig = {
         provider: 'github',
         owner: 'jaredheafth',
-        repo: 'offlineclub_widget_Campfire',
+        repo: 'Campfire_BETA',
         private: isPrivateRepo
     };
     if (isPrivateRepo && githubToken) {
@@ -7219,12 +7379,33 @@ app.whenReady().then(() => {
     // Listen for auto-return events (user chatted while in SLEEPY/AFK state)
     userManager.on('user:autoReturn', async (user, previousState) => {
         console.log(`[Main] Auto-return detected for ${user.username} from ${previousState}`);
+        
+        // Check if this state is enabled for auto-return messages
         try {
-            await botMessageHelper.sendBotMessage('auto-return', {
-                username: user.username
-            }, {
-                commandCategory: 'AUTO_STATE'
-            });
+            // Get bot messages to check trigger states
+            const botMessages = await botMessageHelper.getBotMessages();
+            const autoReturnMsg = botMessages.find(m => m.id === 'auto-return');
+            
+            if (autoReturnMsg && autoReturnMsg.enabled !== false) {
+                const triggerStates = autoReturnMsg.triggerStates || { sleepy: true, afk: true };
+                const normalizedPreviousState = previousState ? previousState.toUpperCase() : '';
+                
+                // Check if this state should trigger auto-return
+                const shouldTrigger = (
+                    (normalizedPreviousState === 'SLEEPY' && triggerStates.sleepy !== false) ||
+                    (normalizedPreviousState === 'AFK' && triggerStates.afk !== false)
+                );
+                
+                if (shouldTrigger) {
+                    await botMessageHelper.sendBotMessage('auto-return', {
+                        username: user.username
+                    }, {
+                        commandCategory: 'AUTO_STATE'
+                    });
+                } else {
+                    console.log(`[Main] Auto-return for ${user.username} from ${previousState} skipped (trigger disabled)`);
+                }
+            }
         } catch (error) {
             console.error('[Main] Error sending auto-return message:', error);
         }

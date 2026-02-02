@@ -174,3 +174,767 @@ body {
     max-height: calc(100vh - 300px);
     overflow-y: auto;
 }
+
+/* Status Badge - Bottom Center */
+.status-badge {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--bg-secondary, #2a2a2a);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.status-badge .status-text {
+    font-size: 11px;
+    color: var(--text-primary, #fff);
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--error, #f44336);
+    animation: statusPulse 2s infinite;
+}
+
+.status-indicator.connected {
+    background: var(--success, #4caf50);
+}
+
+@keyframes statusPulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 0.7;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Layout Utility Classes */
+.form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.form-header .label-hint {
+    display: block;
+    margin-top: 4px;
+}
+
+.form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.form-row-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.form-row-compact .form-group {
+    flex: 1;
+    min-width: 150px;
+}
+
+.form-two-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.form-two-columns-narrow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+@media (max-width: 768px) {
+    .form-two-columns,
+    .form-two-columns-narrow {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Section Headers */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color, #3a3a3a);
+}
+
+.section-header h3,
+.section-header h4 {
+    margin: 0;
+    color: var(--text-primary, #fff);
+}
+
+/* Info Box */
+.info-box {
+    background: var(--bg-tertiary, #333);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.info-box.compact {
+    padding: 10px 15px;
+    margin-bottom: 15px;
+}
+
+/* Audio Section Styles */
+.audio-section {
+    background: var(--bg-tertiary, #252525);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.audio-section:last-child {
+    margin-bottom: 0;
+}
+
+.audio-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color, #3a3a3a);
+}
+
+.audio-section-header h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-primary, #667eea);
+}
+
+.audio-section-header .section-hint {
+    font-size: 11px;
+    color: var(--text-muted, #888);
+    margin-left: auto;
+}
+
+/* Background Audio Channels - Side by Side Layout */
+.audio-channels-row {
+    display: flex;
+    gap: 12px;
+}
+
+.audio-channel-card {
+    flex: 1;
+    background: var(--bg-secondary, #2a2a2a);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 6px;
+    padding: 10px;
+    min-width: 0;
+}
+
+.audio-channel-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.audio-channel-card-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary, #e0e0e0);
+    flex: 1;
+}
+
+.audio-channel-card .file-name {
+    font-size: 10px;
+    color: var(--text-muted, #888);
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.audio-channel-card-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+
+.audio-channel-card .volume-slider {
+    flex: 1;
+    min-width: 60px;
+    max-width: 100px;
+}
+
+.audio-channel-card .volume-value {
+    font-size: 10px;
+    color: var(--text-secondary, #aaa);
+    min-width: 28px;
+    text-align: right;
+}
+
+.audio-channel-card .toggle-group {
+    display: flex;
+    gap: 8px;
+}
+
+.audio-channel-card .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    color: var(--text-secondary, #aaa);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.audio-channel-card .toggle-label input {
+    margin: 0;
+    width: 12px;
+    height: 12px;
+}
+
+.audio-channel-card .play-btn {
+    padding: 3px 6px;
+    font-size: 10px;
+    min-width: 24px;
+}
+
+.audio-channel-card .preview-btn {
+    padding: 3px 6px;
+    font-size: 10px;
+}
+
+/* User Sounds Grid - Compact Cards */
+.user-sounds-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+}
+
+.user-sound-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    background: var(--bg-secondary, #2a2a2a);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 6px;
+}
+
+.user-sound-item-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.user-sound-item .sound-icon {
+    font-size: 12px;
+}
+
+.user-sound-item .sound-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary, #e0e0e0);
+    flex: 1;
+}
+
+.user-sound-item .sound-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.user-sound-item .sound-controls button {
+    padding: 2px 4px;
+    font-size: 9px;
+    min-width: 20px;
+}
+
+.user-sound-item .sound-file-name {
+    font-size: 9px;
+    color: var(--text-muted, #888);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-sound-item .gain-slider {
+    width: 100%;
+    height: 4px;
+}
+
+.user-sound-item .gain-value {
+    font-size: 9px;
+    color: var(--text-secondary, #aaa);
+    text-align: right;
+}
+
+/* Updated User Sounds Layout - Clean, Consistent Cards */
+.user-sound-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary, #e0e0e0);
+    margin-bottom: 4px;
+}
+
+.user-sound-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.user-sound-filename {
+    font-size: 10px;
+    color: var(--text-muted, #888);
+    min-width: 50px;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-sound-slider {
+    flex: 1;
+    min-width: 60px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border-color, #3a3a3a);
+    border-radius: 2px;
+    outline: none;
+}
+
+.user-sound-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--primary-color, #667eea);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.user-sound-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: var(--primary-color, #667eea);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+.user-sound-gain {
+    font-size: 10px;
+    color: var(--text-secondary, #aaa);
+    min-width: 35px;
+    text-align: right;
+}
+
+.button-small {
+    padding: 4px 8px !important;
+    font-size: 10px !important;
+    min-width: auto !important;
+}
+
+/* File button wrapper */
+.audio-file-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Role Sprite Row */
+.role-sprite-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: var(--bg-tertiary, #333);
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+.role-sprite-row .role-label {
+    min-width: 100px;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.role-sprite-row select {
+    flex: 1;
+    padding: 6px 8px;
+    background: var(--bg-secondary, #2a2a2a);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 4px;
+    color: var(--text-primary, #fff);
+    font-size: 12px;
+}
+
+/* Direction Button Group */
+.direction-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.direction-buttons .direction-button {
+    flex: 1;
+    padding: 12px;
+    background: var(--bg-tertiary, #333);
+    border: 2px solid var(--border-color, #3a3a3a);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 24px;
+    color: var(--text-primary, #fff);
+    transition: all 0.2s;
+}
+
+.direction-buttons .direction-button:hover {
+    background: var(--bg-secondary, #2a2a2a);
+    border-color: var(--accent-primary, #667eea);
+}
+
+.direction-buttons .direction-button.active {
+    background: var(--accent-primary, #667eea);
+    border-color: var(--accent-primary, #667eea);
+}
+
+.direction-display {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted, #888);
+}
+
+/* Status Icon Preview */
+.status-icon-preview {
+    width: 80px;
+    height: 80px;
+    background: var(--bg-secondary, #2a2a2a);
+    border: 2px solid var(--border-color, #3a3a3a);
+    border-radius: 8px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.status-icon-preview .preview-circle {
+    width: 50px;
+    height: 50px;
+    background: #666;
+    border-radius: 50%;
+}
+
+.status-icon-preview .preview-icon {
+    position: absolute;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+/* Range Input with Value Display */
+.range-with-value {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.range-with-value input[type="range"] {
+    flex: 1;
+}
+
+.range-with-value .range-value {
+    min-width: 40px;
+    font-size: 12px;
+    color: var(--text-secondary, #aaa);
+    text-align: right;
+}
+
+/* Path Display */
+.path-display {
+    background: var(--bg-tertiary, #333);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text-secondary, #aaa);
+    margin-bottom: 8px;
+}
+
+.path-info {
+    font-size: 11px;
+    color: var(--text-muted, #888);
+    margin-bottom: 10px;
+}
+
+.path-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Twitch Account Columns */
+.twitch-account-column {
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 8px;
+    padding: 15px;
+    background: var(--bg-tertiary, #333);
+}
+
+.twitch-account-column h3 {
+    margin: 0 0 5px 0;
+    font-size: 16px;
+    color: var(--accent-primary, #ff6b35);
+}
+
+.twitch-account-column .account-status {
+    margin-bottom: 15px;
+    font-size: 11px;
+    color: var(--text-muted, #888);
+}
+
+/* Chat Log */
+.chat-log {
+    height: 320px;
+    overflow-y: auto;
+    background: var(--bg-tertiary, #1a1a1a);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.chat-log:empty::before {
+    content: 'Connect to Twitch in the Twitch tab to see chat';
+    color: var(--text-muted, #666);
+    font-style: italic;
+}
+
+/* Sprite Preview */
+.sprite-preview {
+    background: var(--bg-tertiary, #1a1a1a);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 6px;
+    padding: 15px;
+    margin-top: 10px;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sprite-preview:empty::before {
+    content: 'No sprite uploaded';
+    color: var(--text-muted, #888);
+    font-size: 12px;
+}
+
+/* Sprite Grid */
+.sprite-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.sprite-list .sprite-item {
+    position: relative;
+    border: 2px solid var(--border-color, #3a3a3a);
+    border-radius: 4px;
+    overflow: hidden;
+    aspect-ratio: 1;
+}
+
+.sprite-list .sprite-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: var(--bg-tertiary, #1a1a1a);
+}
+
+.sprite-list .sprite-item .remove-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: rgba(255, 0, 0, 0.8);
+    color: white;
+    border: none;
+    border-radius: 3px;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Background Swatch Grid */
+.bg-swatch-grid {
+    display: flex;
+    gap: 8px;
+    margin-top: 5px;
+}
+
+.bg-swatch {
+    width: 32px;
+    height: 32px;
+    border: 2px solid var(--border-color, #3a3a3a);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bg-swatch:hover {
+    border-color: var(--accent-primary, #667eea);
+    transform: scale(1.1);
+}
+
+.bg-swatch.active {
+    border-color: var(--accent-primary, #667eea);
+    box-shadow: 0 0 0 2px var(--accent-primary, #667eea);
+}
+
+.bg-swatch-transparent {
+    background: linear-gradient(45deg, #ccc 25%, transparent 25%),
+                linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #ccc 75%),
+                linear-gradient(-45deg, transparent 75%, #ccc 75%);
+    background-size: 8px 8px;
+    background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+}
+
+/* Checkbox Group */
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.checkbox-group label {
+    margin: 0;
+    cursor: pointer;
+}
+
+/* Settings Modal */
+.settings-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000000;
+    align-items: center;
+    justify-content: center;
+}
+
+.settings-modal.open {
+    display: flex;
+}
+
+.settings-modal-content {
+    background: var(--bg-primary, #1a1a1a);
+    border: 1px solid var(--border-color, #3a3a3a);
+    border-radius: 12px;
+    padding: 20px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.settings-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color, #3a3a3a);
+}
+
+.settings-modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.settings-modal-close {
+    background: none;
+    border: none;
+    color: var(--text-primary, #fff);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.settings-section-item {
+    margin-bottom: 20px;
+}
+
+.settings-section-item label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+/* Dimension Inputs Row */
+.dimension-inputs {
+    display: flex;
+    gap: 15px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.dimension-inputs .dimension-field {
+    flex: 1;
+    min-width: 100px;
+}
+
+.dimension-inputs .dimension-field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-secondary, #aaa);
+    margin-bottom: 5px;
+}
+
+.dimension-inputs .dimension-field input {
+    width: 100%;
+    padding: 6px;
+    background: var(--bg-secondary, #2a2a2a);
+    border: 1px solid var(--border-color, #444);
+    border-radius: 4px;
+    color: var(--text-primary, #fff);
+    font-size: 13px;
+}

@@ -439,6 +439,31 @@
             border-bottom: 2px solid rgba(145, 71, 255, 0.7);
         }
         
+        .picker-search {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .picker-search input {
+            width: 100%;
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+        }
+        
+        .picker-search input::placeholder {
+            color: #888;
+        }
+        
+        .picker-search input:focus {
+            outline: none;
+            border-color: rgba(145, 71, 255, 0.5);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
         .picker-content {
             flex: 1;
             overflow-y: auto;
@@ -632,6 +657,88 @@
         }
         
         .mention-empty {
+            padding: 12px;
+            text-align: center;
+            color: #888;
+            font-size: 12px;
+        }
+        
+        /* : Emote Autocomplete Dropdown */
+        .emote-dropdown {
+            position: absolute;
+            bottom: 100%;
+            left: 50px; /* Align with chat input */
+            right: 50px;
+            background: rgba(18, 18, 18, 0.98);
+            border: 1px solid rgba(145, 71, 255, 0.5);
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            z-index: 200;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            margin-bottom: 8px;
+        }
+        
+        .emote-dropdown.show {
+            display: block;
+        }
+        
+        .emote-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .emote-dropdown-item:last-child {
+            border-bottom: none;
+        }
+        
+        .emote-dropdown-item:hover,
+        .emote-dropdown-item.selected {
+            background: rgba(145, 71, 255, 0.3);
+        }
+        
+        .emote-dropdown-item.selected {
+            border-left: 3px solid rgba(145, 71, 255, 0.8);
+        }
+        
+        .emote-dropdown-preview {
+            width: 28px;
+            height: 28px;
+            object-fit: contain;
+        }
+        
+        .emote-dropdown-name {
+            font-size: 13px;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* Scrollbar styling for emote dropdown */
+        .emote-dropdown::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .emote-dropdown::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+        
+        .emote-dropdown::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        .emote-dropdown::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .emote-empty {
             padding: 12px;
             text-align: center;
             color: #888;
@@ -980,12 +1087,14 @@
         }
         
         body.mode-nostalgia .picker-content::-webkit-scrollbar-track,
-        body.mode-nostalgia .mention-dropdown::-webkit-scrollbar-track {
+        body.mode-nostalgia .mention-dropdown::-webkit-scrollbar-track,
+        body.mode-nostalgia .emote-dropdown::-webkit-scrollbar-track {
             background: #D4D0C8;
         }
         
         body.mode-nostalgia .picker-content::-webkit-scrollbar-thumb,
-        body.mode-nostalgia .mention-dropdown::-webkit-scrollbar-thumb {
+        body.mode-nostalgia .mention-dropdown::-webkit-scrollbar-thumb,
+        body.mode-nostalgia .emote-dropdown::-webkit-scrollbar-thumb {
             background: #C0C0C0;
             border: 1px solid;
             border-color: #FFFFFF #808080 #808080 #FFFFFF;
@@ -1098,6 +1207,9 @@
                     <button class="picker-tab" id="tabChannel" onclick="switchPickerTab('channel')">📺 Channel</button>
                     <button class="picker-tab" id="tabUser" onclick="switchPickerTab('user')">👤 My Emotes</button>
                 </div>
+                <div class="picker-search">
+                    <input type="text" id="emoteSearch" placeholder="Search emotes..." oninput="filterEmotes(this.value)">
+                </div>
                 <div class="picker-content" id="pickerContent">
                     <!-- Content loaded dynamically -->
                 </div>
@@ -1105,6 +1217,11 @@
             
             <!-- @ Mention Autocomplete Dropdown -->
             <div class="mention-dropdown" id="mentionDropdown">
+                <!-- Populated dynamically -->
+            </div>
+            
+            <!-- : Emote Autocomplete Dropdown -->
+            <div class="emote-dropdown" id="emoteDropdown">
                 <!-- Populated dynamically -->
             </div>
         </div>
@@ -1523,6 +1640,37 @@
             container.innerHTML = html;
         }
         
+        // Emote search state
+        let emoteSearchQuery = '';
+        
+        // Filter emotes by search query
+        function filterEmotes(query) {
+            emoteSearchQuery = query.toLowerCase().trim();
+            
+            const container = document.getElementById('pickerContent');
+            
+            if (emoteSearchQuery === '') {
+                // If no search, show current tab's emotes
+                loadEmotes(currentPickerTab, container);
+                return;
+            }
+            
+            // Get all emotes from current tab's cache
+            const allEmotes = emoteCache[currentPickerTab] || [];
+            
+            // Filter emotes by search query
+            const filteredEmotes = allEmotes.filter(emote => {
+                const name = emote.name || emote.code || '';
+                return name.toLowerCase().includes(emoteSearchQuery);
+            });
+            
+            if (filteredEmotes.length === 0) {
+                container.innerHTML = `<div class="picker-empty">No emotes found for "${escapeHtml(query)}"</div>`;
+            } else {
+                renderEmotes(filteredEmotes, container, currentPickerTab);
+            }
+        }
+        
         // Insert emoji at cursor position
         function insertEmoji(emoji) {
             const input = document.getElementById('chatInput');
@@ -1615,6 +1763,15 @@
         function addChatMessage(data) {
             const container = document.getElementById('chatContainer');
             const emptyState = document.getElementById('emptyState');
+            
+            // DEBUG: Log what data we receive
+            console.log('[ChatPopoutDebug] Received message:', {
+                username: data.username,
+                message: data.message,
+                emotes: data.emotes,
+                emotesType: typeof data.emotes,
+                emotesKeys: data.emotes ? Object.keys(data.emotes) : 'none'
+            });
             
             // Remove empty state
             if (emptyState) {
@@ -1900,10 +2057,288 @@
         // END @ MENTION AUTOCOMPLETE
         // ============================================
         
+        // ============================================
+        // : EMOTE AUTOCOMPLETE
+        // ============================================
+        
+        // Emote autocomplete state
+        let emoteState = {
+            active: false,
+            query: '',
+            selectedIndex: 0,
+            filteredEmotes: [],
+            allEmotes: []
+        };
+        
+        // Load all emotes for autocomplete
+        async function loadEmotesForAutocomplete() {
+            // Combine all emote types for autocomplete
+            const allEmotes = [];
+            
+            // Add global emotes
+            if (emoteCache.global) {
+                allEmotes.push(...emoteCache.global);
+            }
+            // Add channel emotes
+            if (emoteCache.channel) {
+                allEmotes.push(...emoteCache.channel);
+            }
+            // Add user (sub) emotes
+            if (emoteCache.user) {
+                allEmotes.push(...emoteCache.user);
+            }
+            
+            // Sort all emotes alphabetically by name
+            emoteState.allEmotes = allEmotes.sort((a, b) => {
+                const nameA = (a.name || a.code || '').toLowerCase();
+                const nameB = (b.name || b.code || '').toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
+            
+            console.log(`[EmoteAutocomplete] Loaded and sorted ${allEmotes.length} emotes for autocomplete:`, {
+                global: emoteCache.global?.length || 0,
+                channel: emoteCache.channel?.length || 0,
+                user: emoteCache.user?.length || 0
+            });
+        }
+        
+        // Pre-load emote cache silently for autocomplete
+        async function preloadEmoteCache() {
+            const types = ['global', 'channel', 'user'];
+            
+            console.log('[EmoteAutocomplete] Starting to preload emote cache...');
+            
+            for (const type of types) {
+                if (emoteCache[type]) {
+                    console.log(`[EmoteAutocomplete] ${type} emotes already cached (${emoteCache[type].length} emotes)`);
+                    continue;
+                }
+                
+                try {
+                    if (window.electronAPI && window.electronAPI.getTwitchEmotes) {
+                        console.log(`[EmoteAutocomplete] Loading ${type} emotes...`);
+                        const emotes = await window.electronAPI.getTwitchEmotes(type);
+                        if (emotes && emotes.length > 0) {
+                            emoteCache[type] = emotes;
+                            console.log(`[EmoteAutocomplete] Loaded ${emotes.length} ${type} emotes`);
+                        } else {
+                            console.log(`[EmoteAutocomplete] No ${type} emotes available (empty response)`);
+                        }
+                    } else {
+                        console.warn('[EmoteAutocomplete] electronAPI.getTwitchEmotes not available');
+                    }
+                } catch (error) {
+                    console.warn(`[EmoteAutocomplete] Failed to preload ${type} emotes:`, error);
+                }
+            }
+            
+            // Log final cache state
+            console.log('[EmoteAutocomplete] Cache state:', {
+                global: emoteCache.global?.length || 0,
+                channel: emoteCache.channel?.length || 0,
+                user: emoteCache.user?.length || 0
+            });
+            
+            // Now load all emotes for autocomplete
+            loadEmotesForAutocomplete();
+        }
+        
+        // Show emote dropdown with filtered emotes
+        function showEmoteDropdown(query) {
+            const dropdown = document.getElementById('emoteDropdown');
+            
+            // Filter emotes based on query (without the leading :)
+            const queryLower = query.toLowerCase();
+            emoteState.filteredEmotes = emoteState.allEmotes.filter(emote => {
+                const name = emote.name || emote.code || '';
+                return name.toLowerCase().includes(queryLower);
+            }).slice(0, 10); // Limit to 10 results
+            
+            if (emoteState.filteredEmotes.length === 0) {
+                dropdown.innerHTML = '<div class="emote-empty">No emotes found</div>';
+            } else {
+                dropdown.innerHTML = emoteState.filteredEmotes.map((emote, index) => {
+                    const name = emote.name || emote.code || 'emote';
+                    const url = emote.url || `https://static-cdn.jtvnw.net/emoticons/v2/${emote.id}/default/dark/2.0`;
+                    
+                    return `
+                        <div class="emote-dropdown-item ${index === emoteState.selectedIndex ? 'selected' : ''}"
+                             data-index="${index}"
+                             onclick="selectEmote(${index})">
+                            <img class="emote-dropdown-preview" src="${url}" alt="${escapeHtml(name)}" onerror="this.style.display='none'">
+                            <span class="emote-dropdown-name">${name}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            dropdown.classList.add('show');
+            emoteState.active = true;
+            
+            // Scroll selected item into view
+            scrollSelectedEmoteIntoView();
+        }
+        
+        // Scroll the selected emote item into view
+        function scrollSelectedEmoteIntoView() {
+            const dropdown = document.getElementById('emoteDropdown');
+            if (!dropdown) return;
+            
+            const selectedItem = dropdown.querySelector('.emote-dropdown-item.selected');
+            if (selectedItem) {
+                selectedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+        
+        // Hide emote dropdown
+        function hideEmoteDropdown() {
+            const dropdown = document.getElementById('emoteDropdown');
+            dropdown.classList.remove('show');
+            emoteState.active = false;
+            emoteState.query = '';
+            emoteState.selectedIndex = 0;
+            emoteState.filteredEmotes = [];
+        }
+        
+        // Select an emote and insert it
+        function selectEmote(index) {
+            const emote = emoteState.filteredEmotes[index];
+            if (!emote) return;
+            
+            const input = document.getElementById('chatInput');
+            const text = input.value;
+            const beforeEmote = text.substring(0, emoteState.mentionStartIndex);
+            const afterCursor = text.substring(emoteState.cursorPosition);
+            
+            const emoteName = emote.name || emote.code || 'emote';
+            // Insert emote name WITHOUT colons - Twitch renders emotes by their name
+            const insertText = emoteName + (afterCursor.startsWith(' ') ? '' : ' ') + afterCursor;
+            
+            input.value = beforeEmote + insertText;
+            
+            // Set cursor position after the inserted emote
+            const newCursorPos = beforeEmote.length + emoteName.length + (afterCursor.startsWith(' ') ? 0 : 1);
+            input.setSelectionRange(newCursorPos, newCursorPos);
+            input.focus();
+            
+            hideEmoteDropdown();
+        }
+        
+        // Handle input for emote detection (typing :)
+        function handleEmoteInput() {
+            const input = document.getElementById('chatInput');
+            const text = input.value;
+            const cursorPos = input.selectionStart;
+            
+            // Find if we're in an emote context (after :)
+            const textBeforeCursor = text.substring(0, cursorPos);
+            const lastColonIndex = textBeforeCursor.lastIndexOf(':');
+            
+            if (lastColonIndex === -1) {
+                hideEmoteDropdown();
+                return;
+            }
+            
+            // Check if there's another : after the first one (which means we're past the trigger)
+            const textBetween = textBeforeCursor.substring(lastColonIndex + 1);
+            if (textBetween.includes(':')) {
+                hideEmoteDropdown();
+                return;
+            }
+            
+            // Check if there's a space between : and cursor
+            if (textBetween.includes(' ')) {
+                hideEmoteDropdown();
+                return;
+            }
+            
+            // Check if we're at the start (just typed single :)
+            if (textBetween.length === 0) {
+                // Show dropdown with all emotes when just : is typed
+                if (emoteState.allEmotes.length > 0) {
+                    emoteState.query = '';
+                    emoteState.cursorPosition = cursorPos;
+                    emoteState.mentionStartIndex = lastColonIndex;
+                    emoteState.selectedIndex = 0;
+                    emoteState.filteredEmotes = emoteState.allEmotes.slice(0, 10);
+                    showEmoteDropdown('');
+                }
+                return;
+            }
+            
+            // We're in an emote context
+            emoteState.query = textBetween;
+            emoteState.cursorPosition = cursorPos;
+            emoteState.mentionStartIndex = lastColonIndex;
+            emoteState.selectedIndex = 0;
+            
+            // Show dropdown with filtered results
+            showEmoteDropdown(emoteState.query);
+        }
+        
+        // Handle keyboard navigation for emotes
+        function handleEmoteKeydown(e) {
+            if (!emoteState.active) return false;
+            
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    emoteState.selectedIndex = (emoteState.selectedIndex + 1) % emoteState.filteredEmotes.length;
+                    showEmoteDropdown(emoteState.query);
+                    return true;
+                    
+                case 'ArrowUp':
+                    e.preventDefault();
+                    emoteState.selectedIndex = emoteState.selectedIndex <= 0
+                        ? emoteState.filteredEmotes.length - 1
+                        : emoteState.selectedIndex - 1;
+                    showEmoteDropdown(emoteState.query);
+                    return true;
+                    
+                case 'Enter':
+                case 'Tab':
+                    e.preventDefault();
+                    if (emoteState.filteredEmotes.length > 0) {
+                        selectEmote(emoteState.selectedIndex);
+                    }
+                    return true;
+                    
+                case 'Escape':
+                    e.preventDefault();
+                    hideEmoteDropdown();
+                    return true;
+                    
+                default:
+                    return false;
+            }
+        }
+        
+        // Close emote dropdown when clicking outside
+        function setupEmoteDropdownClickHandler() {
+            document.addEventListener('click', (e) => {
+                const dropdown = document.getElementById('emoteDropdown');
+                const input = document.getElementById('chatInput');
+                
+                if (emoteState.active &&
+                    !dropdown.contains(e.target) &&
+                    e.target !== input) {
+                    hideEmoteDropdown();
+                }
+            });
+        }
+        
+        // ============================================
+        // END : EMOTE AUTOCOMPLETE
+        // ============================================
+        
         // Handle Enter key in input
         document.getElementById('chatInput').addEventListener('keydown', (e) => {
             // Check for mention navigation first
             if (handleMentionKeydown(e)) {
+                return;
+            }
+            // Check for emote navigation
+            if (handleEmoteKeydown(e)) {
                 return;
             }
             
@@ -1913,8 +2348,25 @@
             }
         });
         
-        // Handle input for mention detection
-        document.getElementById('chatInput').addEventListener('input', handleMentionInput);
+        // Handle input for mention and emote detection
+        document.getElementById('chatInput').addEventListener('input', () => {
+            handleMentionInput();
+            handleEmoteInput();
+        });
+        
+        // Load emote autocomplete when chat opens
+        loadEmotesForAutocomplete();
+        
+        // Refresh emote cache periodically for autocomplete
+        setInterval(() => {
+            loadEmotesForAutocomplete();
+        }, 60000); // Refresh every minute
+        
+        // Set up click handler for emote dropdown
+        setupEmoteDropdownClickHandler();
+        
+        // Ensure emote cache is loaded for autocomplete
+        // Trigger emote picker to load cache if not already loaded
         
         // Check if scrolled to bottom
         const container = document.getElementById('chatContainer');
@@ -2015,6 +2467,12 @@
             
             // Load chatters list for mention autocomplete
             loadChattersList();
+            
+            // Pre-load emote cache for autocomplete (silently, without displaying)
+            preloadEmoteCache().then(() => {
+                // Load all emotes for autocomplete AFTER cache is populated
+                loadEmotesForAutocomplete();
+            });
         }
     </script>
 </body>

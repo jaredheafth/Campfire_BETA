@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getActiveUsers: () => ipcRenderer.invoke('get-active-users'),
     getWidgetUsers: () => ipcRenderer.invoke('get-widget-users'),
     getPotentialMembers: () => ipcRenderer.invoke('get-potential-members'),
+    getChattersList: () => ipcRenderer.invoke('get-chatters-list'),
     getWidgetDisplayUsers: () => ipcRenderer.invoke('get-widget-display-users'),
     refreshChatters: () => ipcRenderer.invoke('refresh-chatters'),
     addToChatters: (username, userData) => ipcRenderer.invoke('add-to-chatters', username, userData),
@@ -119,6 +120,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
     onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, data) => callback(data)),
     onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (event, data) => callback(data)),
+    onPrepareShutdown: (callback) => ipcRenderer.on('prepare-shutdown', () => callback()),
     
     // Shutdown
     shutdownApp: () => ipcRenderer.invoke('shutdown-app'),

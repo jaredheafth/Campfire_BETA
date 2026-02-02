@@ -97,41 +97,11 @@
         </div>
 
     <!-- Status Indicator at Bottom Center -->
-    <div style="position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 999999; display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(26, 26, 26, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);">
+    <div class="status-badge">
         <div class="status-indicator" id="statusIndicator"></div>
-        <span id="statusText" style="font-size: 11px; color: #fff;">Disconnected</span>
+        <span class="status-text" id="statusText">Disconnected</span>
     </div>
     
-    <style>
-        .status-indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #ff3b30;
-            animation: pulse 2s infinite;
-        }
-        
-        .status-indicator.connected {
-            background: #34c759;
-        }
-        
-        @keyframes pulse {
-            0% {
-                transform: scale(1);
-                opacity: 1;
-            }
-            50% {
-                transform: scale(1.2);
-                opacity: 0.7;
-            }
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-    </style>
-    
-        
         <div id="overlayBackdrop" onclick="closeOverlay()"></div>
         <div id="overlayCard">
             <div id="overlayBody">
@@ -1258,15 +1228,15 @@
                         </div>
                     </div>
 
-                    <!-- Audio Tab -->
+                                        <!-- Audio Tab -->
                     <div id="audioTab" class="settings-section">
                         <!-- Audio Output Device Section -->
                         <div class="form-section">
                             <div class="form-group">
                                 <label>🔊 Audio Output Device</label>
                                 <span class="label-hint">Select which audio device to use for playback</span>
-                                <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px;">
-                                    <select id="audioOutputDevice" onchange="setAudioOutputDevice(this.value)" style="flex: 1; padding: 8px; background: #2a2a2a; border: 1px solid #444; color: #fff; border-radius: 4px;">
+                                <div class="form-row-compact" style="margin-top: 8px;">
+                                    <select id="audioOutputDevice" onchange="setAudioOutputDevice(this.value)" style="flex: 1; max-width: 300px;">
                                         <option value="">Default System Output</option>
                                     </select>
                                     <button type="button" class="button button-secondary" onclick="refreshAudioDevices()" style="padding: 6px 12px; font-size: 12px;">🔄 Refresh</button>
@@ -1274,112 +1244,159 @@
                             </div>
                         </div>
                         
-                        <div class="form-section">
-                            <div class="form-group">
-                                <label>Audio Channels</label>
-                                <span class="label-hint">Configure background music, ambience, and sound effects</span>
+                        <!-- Background Audio Section -->
+                        <div class="audio-section">
+                            <div class="audio-section-header">
+                                <h4>🎵 Background Audio</h4>
+                                <span class="section-hint">Continuous audio that plays in the background</span>
                             </div>
-                            <!-- Music Channel -->
-                            <div class="form-group">
-                                <label>🎵 Music</label>
-                                <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
-                                    <div class="audio-file-wrapper" style="display: flex; align-items: center; gap: 5px;">
-                                        <input type="file" id="musicFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'musicFileName'); updateAudioSetting('music', 'file', this.files[0])">
-                                        <button type="button" class="button button-secondary" onclick="document.getElementById('musicFile').click()" style="padding: 4px 10px; font-size: 12px;">📁 Choose</button>
-                                        <span id="musicFileName" style="font-size: 11px; color: #888; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No file</span>
+                            
+                            <div class="audio-channels-row">
+                                <!-- Music Channel Card -->
+                                <div class="audio-channel-card">
+                                    <div class="audio-channel-card-header">
+                                        <span class="audio-channel-card-label">Music</span>
+                                        <div class="audio-file-wrapper">
+                                            <input type="file" id="musicFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'musicFileName'); updateAudioSetting('music', 'file', this.files[0])">
+                                            <button type="button" class="button button-secondary" onclick="document.getElementById('musicFile').click()" style="padding: 3px 6px; font-size: 10px;">📁</button>
+                                            <span id="musicFileName" class="file-name">No file</span>
+                                        </div>
                                     </div>
-                                    <input type="range" id="musicVolume" min="0" max="100" value="70" onchange="updateAudioSetting('music', 'volume', this.value); document.getElementById('musicVolumeValue').textContent = this.value + '%'">
-                                    <span id="musicVolumeValue">70%</span>
-                                    <input type="checkbox" id="musicLoop" checked onchange="updateAudioSetting('music', 'loop', this.checked)">
-                                    <label for="musicLoop" style="margin: 0;">Loop</label>
-                                    <input type="checkbox" id="musicAutoPlay" onchange="updateAudioSetting('music', 'autoPlay', this.checked)">
-                                    <label for="musicAutoPlay" style="margin: 0;">Auto-play</label>
-                                    <button id="musicPlayBtn" onclick="toggleAudioPlayback('music')" style="padding: 4px 8px;">▶️ Play</button>
-                                    <button onclick="previewAudio('music')" title="Preview">🔊</button>
+                                    <div class="audio-channel-card-controls">
+                                        <input type="range" id="musicVolume" class="volume-slider" min="0" max="100" value="70" onchange="updateAudioSetting('music', 'volume', this.value); document.getElementById('musicVolumeValue').textContent = this.value + '%'">
+                                        <span id="musicVolumeValue" class="volume-value">70%</span>
+                                        <div class="toggle-group">
+                                            <label class="toggle-label">
+                                                <input type="checkbox" id="musicLoop" checked onchange="updateAudioSetting('music', 'loop', this.checked)">
+                                                Loop
+                                            </label>
+                                            <label class="toggle-label">
+                                                <input type="checkbox" id="musicAutoPlay" onchange="updateAudioSetting('music', 'autoPlay', this.checked)">
+                                                Auto
+                                            </label>
+                                        </div>
+                                        <button id="musicPlayBtn" onclick="toggleAudioPlayback('music')" class="button button-secondary play-btn">▶️</button>
+                                        <button onclick="previewAudio('music')" class="button button-secondary preview-btn" title="Preview">🔊</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Ambience Channel Card -->
+                                <div class="audio-channel-card">
+                                    <div class="audio-channel-card-header">
+                                        <span class="audio-channel-card-label">🌿 Ambience</span>
+                                        <div class="audio-file-wrapper">
+                                            <input type="file" id="ambienceFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'ambienceFileName'); updateAudioSetting('ambience', 'file', this.files[0])">
+                                            <button type="button" class="button button-secondary" onclick="document.getElementById('ambienceFile').click()" style="padding: 3px 6px; font-size: 10px;">📁</button>
+                                            <span id="ambienceFileName" class="file-name">No file</span>
+                                        </div>
+                                    </div>
+                                    <div class="audio-channel-card-controls">
+                                        <input type="range" id="ambienceVolume" class="volume-slider" min="0" max="100" value="50" onchange="updateAudioSetting('ambience', 'volume', this.value); document.getElementById('ambienceVolumeValue').textContent = this.value + '%'">
+                                        <span id="ambienceVolumeValue" class="volume-value">50%</span>
+                                        <div class="toggle-group">
+                                            <label class="toggle-label">
+                                                <input type="checkbox" id="ambienceLoop" checked onchange="updateAudioSetting('ambience', 'loop', this.checked)">
+                                                Loop
+                                            </label>
+                                            <label class="toggle-label">
+                                                <input type="checkbox" id="ambienceAutoPlay" onchange="updateAudioSetting('ambience', 'autoPlay', this.checked)">
+                                                Auto
+                                            </label>
+                                        </div>
+                                        <button id="ambiencePlayBtn" onclick="toggleAudioPlayback('ambience')" class="button button-secondary play-btn">▶️</button>
+                                        <button onclick="previewAudio('ambience')" class="button button-secondary preview-btn" title="Preview">🔊</button>
+                                    </div>
                                 </div>
                             </div>
-                            <!-- Ambience Channel -->
-                            <div class="form-group">
-                                <label>🌿 Ambience</label>
-                                <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
-                                    <div class="audio-file-wrapper" style="display: flex; align-items: center; gap: 5px;">
-                                        <input type="file" id="ambienceFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'ambienceFileName'); updateAudioSetting('ambience', 'file', this.files[0])">
-                                        <button type="button" class="button button-secondary" onclick="document.getElementById('ambienceFile').click()" style="padding: 4px 10px; font-size: 12px;">📁 Choose</button>
-                                        <span id="ambienceFileName" style="font-size: 11px; color: #888; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No file</span>
-                                    </div>
-                                    <input type="range" id="ambienceVolume" min="0" max="100" value="50" onchange="updateAudioSetting('ambience', 'volume', this.value); document.getElementById('ambienceVolumeValue').textContent = this.value + '%'">
-                                    <span id="ambienceVolumeValue">50%</span>
-                                    <input type="checkbox" id="ambienceLoop" checked onchange="updateAudioSetting('ambience', 'loop', this.checked)">
-                                    <label for="ambienceLoop" style="margin: 0;">Loop</label>
-                                    <input type="checkbox" id="ambienceAutoPlay" onchange="updateAudioSetting('ambience', 'autoPlay', this.checked)">
-                                    <label for="ambienceAutoPlay" style="margin: 0;">Auto-play</label>
-                                    <button id="ambiencePlayBtn" onclick="toggleAudioPlayback('ambience')" style="padding: 4px 8px;">▶️ Play</button>
-                                    <button onclick="previewAudio('ambience')" title="Preview">🔊</button>
+                        </div>
+                        
+                        </div>
+                    </div>
+                    
+                    <!-- User Sounds Section -->
+                    <div class="audio-section">
+                        <div class="audio-section-header">
+                            <h4>User Sounds</h4>
+                            <span class="section-hint">Sounds that play when users join, leave, or interact</span>
+                        </div>
+                        
+                        <div class="user-sounds-grid">
+                            <!-- Join Sound -->
+                            <div class="user-sound-item">
+                                <span class="user-sound-label">Join</span>
+                                <div class="user-sound-controls">
+                                    <input type="file" id="joinSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'joinFileName'); updateAudioSetting('userSounds', 'join', {file: this.files[0]?.name || '', gain: document.getElementById('joinGain').value})">
+                                    <button type="button" class="button button-secondary button-small" onclick="document.getElementById('joinSoundFile').click()">File</button>
+                                    <span id="joinFileName" class="user-sound-filename">No file</span>
+                                    <input type="range" id="joinGain" class="user-sound-slider" min="0" max="100" value="80" onchange="updateAudioSetting('userSounds', 'join', {file: document.getElementById('joinSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('joinGainValue').textContent = this.value + '%'">
+                                    <span id="joinGainValue" class="user-sound-gain">80%</span>
+                                    <button onclick="previewAudio('join')" class="button button-secondary button-small">Play</button>
                                 </div>
                             </div>
-                            <!-- User Sounds -->
-                            <div class="form-group">
-                                <label>👤 User Sounds</label>
-                                <div style="margin-top: 8px;">
-                                    <!-- Join Sound -->
-                                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
-                                        <span style="width: 50px;">Join:</span>
-                                        <div class="audio-file-wrapper" style="display: flex; align-items: center; gap: 5px;">
-                                            <input type="file" id="joinSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'joinFileName'); updateAudioSetting('userSounds', 'join', {file: this.files[0]?.name || '', gain: document.getElementById('joinGain').value})">
-                                            <button type="button" class="button button-secondary" onclick="document.getElementById('joinSoundFile').click()" style="padding: 4px 10px; font-size: 12px;">📁</button>
-                                            <span id="joinFileName" style="font-size: 11px; color: #888; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No file</span>
-                                        </div>
-                                        <input type="range" id="joinGain" min="0" max="100" value="80" style="width: 80px;" onchange="updateAudioSetting('userSounds', 'join', {file: document.getElementById('joinSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('joinGainValue').textContent = this.value + '%'">
-                                        <span id="joinGainValue" style="width: 35px;">80%</span>
-                                        <button onclick="previewAudio('join')">▶️</button>
-                                    </div>
-                                    <!-- Leave Sound -->
-                                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
-                                        <span style="width: 50px;">Leave:</span>
-                                        <div class="audio-file-wrapper" style="display: flex; align-items: center; gap: 5px;">
-                                            <input type="file" id="leaveSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'leaveFileName'); updateAudioSetting('userSounds', 'leave', {file: this.files[0]?.name || '', gain: document.getElementById('leaveGain').value})">
-                                            <button type="button" class="button button-secondary" onclick="document.getElementById('leaveSoundFile').click()" style="padding: 4px 10px; font-size: 12px;">📁</button>
-                                            <span id="leaveFileName" style="font-size: 11px; color: #888; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No file</span>
-                                        </div>
-                                        <input type="range" id="leaveGain" min="0" max="100" value="60" style="width: 80px;" onchange="updateAudioSetting('userSounds', 'leave', {file: document.getElementById('leaveSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('leaveGainValue').textContent = this.value + '%'">
-                                        <span id="leaveGainValue" style="width: 35px;">60%</span>
-                                        <button onclick="previewAudio('leave')">▶️</button>
-                                    </div>
-                                    <!-- Speak Sound -->
-                                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
-                                        <span style="width: 50px;">Speak:</span>
-                                        <div class="audio-file-wrapper" style="display: flex; align-items: center; gap: 5px;">
-                                            <input type="file" id="speakSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'speakFileName'); updateAudioSetting('userSounds', 'speak', {file: this.files[0]?.name || '', gain: document.getElementById('speakGain').value})">
-                                            <button type="button" class="button button-secondary" onclick="document.getElementById('speakSoundFile').click()" style="padding: 4px 10px; font-size: 12px;">📁</button>
-                                            <span id="speakFileName" style="font-size: 11px; color: #888; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No file</span>
-                                        </div>
-                                        <input type="range" id="speakGain" min="0" max="100" value="40" style="width: 80px;" onchange="updateAudioSetting('userSounds', 'speak', {file: document.getElementById('speakSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('speakGainValue').textContent = this.value + '%'">
-                                        <span id="speakGainValue" style="width: 35px;">40%</span>
-                                        <button onclick="previewAudio('speak')">▶️</button>
-                                    </div>
-                                    <!-- AFK Sound -->
-                                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
-                                        <span style="width: 50px;">AFK:</span>
-                                        <div class="audio-file-wrapper" style="display: flex; align-items: center; gap: 5px;">
-                                            <input type="file" id="afkSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'afkFileName'); updateAudioSetting('userSounds', 'afk', {file: this.files[0]?.name || '', gain: document.getElementById('afkGain').value})">
-                                            <button type="button" class="button button-secondary" onclick="document.getElementById('afkSoundFile').click()" style="padding: 4px 10px; font-size: 12px;">📁</button>
-                                            <span id="afkFileName" style="font-size: 11px; color: #888; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No file</span>
-                                        </div>
-                                        <input type="range" id="afkGain" min="0" max="100" value="50" style="width: 80px;" onchange="updateAudioSetting('userSounds', 'afk', {file: document.getElementById('afkSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('afkGainValue').textContent = this.value + '%'">
-                                        <span id="afkGainValue" style="width: 35px;">50%</span>
-                                        <button onclick="previewAudio('afk')">▶️</button>
-                                    </div>
-                                    <!-- Lurk Sound -->
-                                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                                        <span style="width: 50px;">Lurk:</span>
-                                        <div class="audio-file-wrapper" style="display: flex; align-items: center; gap: 5px;">
-                                            <input type="file" id="lurkSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'lurkFileName'); updateAudioSetting('userSounds', 'lurk', {file: this.files[0]?.name || '', gain: document.getElementById('lurkGain').value})">
-                                            <button type="button" class="button button-secondary" onclick="document.getElementById('lurkSoundFile').click()" style="padding: 4px 10px; font-size: 12px;">📁</button>
-                                            <span id="lurkFileName" style="font-size: 11px; color: #888; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No file</span>
-                                        </div>
-                                        <input type="range" id="lurkGain" min="0" max="100" value="50" style="width: 80px;" onchange="updateAudioSetting('userSounds', 'lurk', {file: document.getElementById('lurkSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('lurkGainValue').textContent = this.value + '%'">
-                                        <span id="lurkGainValue" style="width: 35px;">50%</span>
-                                        <button onclick="previewAudio('lurk')">▶️</button>
+                            
+                            <!-- Leave Sound -->
+                            <div class="user-sound-item">
+                                <span class="user-sound-label">Leave</span>
+                                <div class="user-sound-controls">
+                                    <input type="file" id="leaveSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'leaveFileName'); updateAudioSetting('userSounds', 'leave', {file: this.files[0]?.name || '', gain: document.getElementById('leaveGain').value})">
+                                    <button type="button" class="button button-secondary button-small" onclick="document.getElementById('leaveSoundFile').click()">File</button>
+                                    <span id="leaveFileName" class="user-sound-filename">No file</span>
+                                    <input type="range" id="leaveGain" class="user-sound-slider" min="0" max="100" value="60" onchange="updateAudioSetting('userSounds', 'leave', {file: document.getElementById('leaveSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('leaveGainValue').textContent = this.value + '%'">
+                                    <span id="leaveGainValue" class="user-sound-gain">60%</span>
+                                    <button onclick="previewAudio('leave')" class="button button-secondary button-small">Play</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Speak Sound -->
+                            <div class="user-sound-item">
+                                <span class="user-sound-label">Speak</span>
+                                <div class="user-sound-controls">
+                                    <input type="file" id="speakSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'speakFileName'); updateAudioSetting('userSounds', 'speak', {file: this.files[0]?.name || '', gain: document.getElementById('speakGain').value})">
+                                    <button type="button" class="button button-secondary button-small" onclick="document.getElementById('speakSoundFile').click()">File</button>
+                                    <span id="speakFileName" class="user-sound-filename">No file</span>
+                                    <input type="range" id="speakGain" class="user-sound-slider" min="0" max="100" value="40" onchange="updateAudioSetting('userSounds', 'speak', {file: document.getElementById('speakSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('speakGainValue').textContent = this.value + '%'">
+                                    <span id="speakGainValue" class="user-sound-gain">40%</span>
+                                    <button onclick="previewAudio('speak')" class="button button-secondary button-small">Play</button>
+                                </div>
+                            </div>
+                            
+                            <!-- AFK Sound -->
+                            <div class="user-sound-item">
+                                <span class="user-sound-label">AFK</span>
+                                <div class="user-sound-controls">
+                                    <input type="file" id="afkSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'afkFileName'); updateAudioSetting('userSounds', 'afk', {file: this.files[0]?.name || '', gain: document.getElementById('afkGain').value})">
+                                    <button type="button" class="button button-secondary button-small" onclick="document.getElementById('afkSoundFile').click()">File</button>
+                                    <span id="afkFileName" class="user-sound-filename">No file</span>
+                                    <input type="range" id="afkGain" class="user-sound-slider" min="0" max="100" value="50" onchange="updateAudioSetting('userSounds', 'afk', {file: document.getElementById('afkSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('afkGainValue').textContent = this.value + '%'">
+                                    <span id="afkGainValue" class="user-sound-gain">50%</span>
+                                    <button onclick="previewAudio('afk')" class="button button-secondary button-small">Play</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Lurk Sound -->
+                            <div class="user-sound-item">
+                                <span class="user-sound-label">Lurk</span>
+                                <div class="user-sound-controls">
+                                    <input type="file" id="lurkSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'lurkFileName'); updateAudioSetting('userSounds', 'lurk', {file: this.files[0]?.name || '', gain: document.getElementById('lurkGain').value})">
+                                    <button type="button" class="button button-secondary button-small" onclick="document.getElementById('lurkSoundFile').click()">File</button>
+                                    <span id="lurkFileName" class="user-sound-filename">No file</span>
+                                    <input type="range" id="lurkGain" class="user-sound-slider" min="0" max="100" value="50" onchange="updateAudioSetting('userSounds', 'lurk', {file: document.getElementById('lurkSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('lurkGainValue').textContent = this.value + '%'">
+                                    <span id="lurkGainValue" class="user-sound-gain">50%</span>
+                                    <button onclick="previewAudio('lurk')" class="button button-secondary button-small">Play</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                                <div class="user-sound-item">
+                                    <span class="sound-icon">👁️</span>
+                                    <span class="sound-name">Lurk</span>
+                                    <div class="sound-controls">
+                                        <input type="file" id="lurkSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'lurkFileName'); updateAudioSetting('userSounds', 'lurk', {file: this.files[0]?.name || '', gain: document.getElementById('lurkGain').value})">
+                                        <button type="button" class="button button-secondary" onclick="document.getElementById('lurkSoundFile').click()" style="padding: 2px 6px; font-size: 10px;">📁</button>
+                                        <span id="lurkFileName" style="font-size: 10px; color: #888; max-width: 50px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No file</span>
+                                        <input type="range" id="lurkGain" min="0" max="100" value="50" style="width: 50px;" onchange="updateAudioSetting('userSounds', 'lurk', {file: document.getElementById('lurkSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('lurkGainValue').textContent = this.value + '%'">
+                                        <span id="lurkGainValue" style="font-size: 10px; color: #aaa; min-width: 30px;">50%</span>
+                                        <button onclick="previewAudio('lurk')" class="button button-secondary" style="padding: 2px 6px; font-size: 10px;">▶️</button>
                                     </div>
                                 </div>
                             </div>
@@ -6701,7 +6718,7 @@
         const defaultAutoStateCommands = [
             { id: 'sleepy', name: 'Sleepy State', commands: [], command: '', message: '{username} is now sleepy 😴', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' },
             { id: 'auto-afk', name: 'Auto AFK', commands: [], command: '', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' },
-            { id: 'auto-return', name: 'Auto Return', commands: [], command: '', message: '{username} is back! 👋', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' },
+            { id: 'auto-return', name: 'Auto Return', commands: [], command: '', message: '{username} is back! 👋', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user', triggerStates: { sleepy: true, afk: true } },
             { id: 'auto-leave', name: 'Auto Leave', commands: [], command: '', message: '{username} has left due to inactivity', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' }
         ];
 
@@ -7433,6 +7450,37 @@
                     </div>
                 `;
                 respValue.title = 'Customize the header message, user format, icons, and filters';
+            } else if (msg.id === 'auto-return') {
+                // Special handling for auto-return command - show trigger states checkboxes
+                const triggerStates = msg.triggerStates || { sleepy: true, afk: true };
+                
+                respValue.innerHTML = `
+                    <div style="margin-bottom: 12px;">
+                        <div style="color: #888; font-size: 11px; margin-bottom: 8px;">Message:</div>
+                        <input type="text" id="autorreturn-message-${msg.id}" value="${escapeHtml(msg.message || '{username} is back! 👋')}"
+                            style="width: 100%; padding: 8px 10px; background: #2a2a2a; border: 1px solid #444; border-radius: 4px; color: #fff; font-size: 13px;"
+                            onchange="updateAutoReturnField('${msg.id}', 'message', this.value)"
+                            title="The message sent when a user returns from Sleepy/AFK state">
+                    </div>
+                    <div style="background: #1a1a1a; padding: 12px; border-radius: 6px; border: 1px solid #333;">
+                        <div style="color: #888; font-size: 11px; margin-bottom: 10px; font-weight: 600;">Trigger Auto Return when user returns from:</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="autorreturn-trigger-sleepy-${msg.id}" ${triggerStates.sleepy !== false ? 'checked' : ''}
+                                    onchange="updateAutoReturnTrigger('${msg.id}', 'sleepy', this.checked)"
+                                    style="cursor: pointer; width: 16px; height: 16px;">
+                                <span style="font-size: 12px; color: #ccc;">😴 Sleepy</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="autorreturn-trigger-afk-${msg.id}" ${triggerStates.afk !== false ? 'checked' : ''}
+                                    onchange="updateAutoReturnTrigger('${msg.id}', 'afk', this.checked)"
+                                    style="cursor: pointer; width: 16px; height: 16px;">
+                                <span style="font-size: 12px; color: #ccc;">💤 AFK</span>
+                            </label>
+                        </div>
+                    </div>
+                `;
+                respValue.title = 'Configure which states trigger the Auto Return message';
             } else {
                 respValue.textContent = msg.message;
                 respValue.title = 'Use {username} to include the user\'s name in the response';
@@ -7659,6 +7707,41 @@
                 }
             } catch (error) {
                 console.error('[Dashboard] Error updating who state filter:', error);
+            }
+        }
+
+        // Update auto-return message field
+        async function updateAutoReturnField(commandId, field, value) {
+            try {
+                const messages = await window.electronAPI.getBotMessages();
+                const msgIndex = messages.findIndex(m => m.id === commandId);
+                if (msgIndex !== -1) {
+                    messages[msgIndex][field] = value;
+                    await window.electronAPI.saveBotMessages(messages);
+                    console.log(`[Dashboard] Updated ${field} for ${commandId} to: ${value}`);
+                }
+            } catch (error) {
+                console.error('[Dashboard] Error updating auto-return field:', error);
+            }
+        }
+
+        // Update auto-return trigger state
+        async function updateAutoReturnTrigger(commandId, state, enabled) {
+            try {
+                const messages = await window.electronAPI.getBotMessages();
+                const msgIndex = messages.findIndex(m => m.id === commandId);
+                if (msgIndex !== -1) {
+                    // Initialize triggerStates if not present
+                    if (!messages[msgIndex].triggerStates) {
+                        messages[msgIndex].triggerStates = { sleepy: true, afk: true };
+                    }
+                    // Update the specific trigger state
+                    messages[msgIndex].triggerStates[state] = enabled;
+                    await window.electronAPI.saveBotMessages(messages);
+                    console.log(`[Dashboard] Updated ${state} trigger for ${commandId} to ${enabled}`);
+                }
+            } catch (error) {
+                console.error('[Dashboard] Error updating auto-return trigger:', error);
             }
         }
 
@@ -8505,3 +8588,5 @@
     </div>
 </body>
 </html>
+
+
