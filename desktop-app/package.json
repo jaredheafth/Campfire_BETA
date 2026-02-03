@@ -1,6 +1,6 @@
 {
   "name": "Campfire-Widget",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Campfire Widget Desktop Application",
   "main": "main.js",
   "scripts": {
