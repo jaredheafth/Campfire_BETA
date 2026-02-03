@@ -996,13 +996,13 @@
         <div class="buddy-footer">
             <div class="footer-left">
                 <select class="campfire-select footer-campfire-select" id="campfireSelect" onchange="changeCampfire(this.value)">
-                    <option value="heafth">heafth's Campfire <span id="campfireUserCount">(0)</span></option>
+                    <option value="">Loading...</option>
                 </select>
             </div>
             <div class="footer-right">
                 <div class="connection-indicator">
                     <div class="status-dot disconnected" id="statusDot"></div>
-                    <span id="statusText">Connecting...</span>
+                    <span id="statusText">Disconnected</span>
                 </div>
             </div>
         </div>
@@ -1031,7 +1031,7 @@
             isAttached: false,
             isConnected: false,
             isConnecting: false,
-            currentCampfire: 'heafth',
+            currentCampfire: null,
             currentUser: null,
             users: new Map(),
             userOrder: [],
@@ -1117,6 +1117,9 @@
             setupEventListeners();
             updateWindowControls();
             initSnapStateListener();
+            
+            // Populate campfire dropdown from Twitch config
+            populateCampfireDropdown();
             
             if (state.isStandalone) {
                 initStandaloneMode();
@@ -1299,6 +1302,36 @@
                     state.isAttached = data.bothSnapped;
                     updateWindowControls();
                     updateSnapVisualFeedback(data.bothSnapped);
+                });
+            }
+            
+            // Listen for Twitch connection status updates
+            if (window.electronAPI && window.electronAPI.onTwitchConnected) {
+                window.electronAPI.onTwitchConnected((data) => {
+                    console.log('[BuddyList] Twitch connected:', data);
+                    updateConnectionStatus(true, 'Connected');
+                });
+            }
+            
+            if (window.electronAPI && window.electronAPI.onTwitchDisconnected) {
+                window.electronAPI.onTwitchDisconnected((data) => {
+                    console.log('[BuddyList] Twitch disconnected:', data);
+                    updateConnectionStatus(false, 'Disconnected');
+                });
+            }
+            
+            // Listen for bot connection status updates
+            if (window.electronAPI && window.electronAPI.onTwitchChatBotConnected) {
+                window.electronAPI.onTwitchChatBotConnected((data) => {
+                    console.log('[BuddyList] Bot connected:', data);
+                    updateConnectionStatus(true, 'Bot Connected');
+                });
+            }
+            
+            if (window.electronAPI && window.electronAPI.onTwitchChatBotDisconnected) {
+                window.electronAPI.onTwitchChatBotDisconnected((data) => {
+                    console.log('[BuddyList] Bot disconnected:', data);
+                    updateConnectionStatus(false, 'Bot Disconnected');
                 });
             }
         }
@@ -2155,6 +2188,66 @@
             document.body.classList.remove('font-tahoma', 'font-w95fa');
             document.body.classList.add(`font-${font}`);
             localStorage.setItem('buddyListFont', font);
+        }
+        
+        
+        // ========================================
+        // CAMPFIRE SELECTION
+        // ========================================
+        
+        async function populateCampfireDropdown() {
+            const select = document.getElementById('campfireSelect');
+            if (!select) return;
+            
+            // Clear existing options
+            select.innerHTML = '';
+            
+            let defaultCampfire = null;
+            
+            // Try to get Twitch config
+            if (window.electronAPI && window.electronAPI.getTwitchConfig) {
+                try {
+                    const config = await window.electronAPI.getTwitchConfig();
+                    if (config && config.channelName) {
+                        const channelName = config.channelName.toLowerCase().trim();
+                        const displayName = config.channelName;
+                        
+                        const option = document.createElement('option');
+                        option.value = channelName;
+                        option.textContent = `${displayName}'s Campfire`;
+                        select.appendChild(option);
+                        
+                        defaultCampfire = channelName;
+                        console.log('[BuddyList] Populated campfire dropdown with:', channelName);
+                    }
+                } catch (err) {
+                    console.error('[BuddyList] Error getting Twitch config:', err);
+                }
+            }
+            
+            // If no config, use last saved or default
+            if (!defaultCampfire) {
+                const lastCampfire = localStorage.getItem('lastCampfire');
+                if (lastCampfire) {
+                    const option = document.createElement('option');
+                    option.value = lastCampfire;
+                    option.textContent = `${lastCampfire}'s Campfire`;
+                    select.appendChild(option);
+                    defaultCampfire = lastCampfire;
+                } else {
+                    // Fallback for new users
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'No campfire configured';
+                    select.appendChild(option);
+                }
+            }
+            
+            // Set current campfire
+            if (defaultCampfire) {
+                state.currentCampfire = defaultCampfire;
+                select.value = defaultCampfire;
+            }
         }
         
         function changeCampfire(campfireId) {
