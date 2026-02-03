@@ -7010,8 +7010,49 @@ ipcMain.handle('download-update', async () => {
 ipcMain.handle('install-update', async () => {
     try {
         console.log('🔄 Preparing to install update...');
-        // Use the same full shutdown path - handles all cleanup and quitAndInstall
-        shutdownEntireApp({ reason: 'install-update', forUpdate: true });
+        // Signal that we're quitting for update before starting shutdown
+        isQuittingForUpdate = true;
+        
+        // Notify all windows to prepare for shutdown
+        const windows = BrowserWindow.getAllWindows();
+        windows.forEach(w => {
+            if (!w.isDestroyed()) {
+                try {
+                    w.webContents.send('prepare-shutdown');
+                } catch (e) { /* ignore */ }
+            }
+        });
+        
+        // Give renderers time to save state
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Disconnect Twitch clients
+        await disconnectTwitchClients();
+        
+        // Destroy tray
+        try {
+            if (tray) {
+                tray.destroy();
+                tray = null;
+            }
+        } catch (e) { /* ignore */ }
+        
+        // Force exit all windows immediately without waiting
+        const allWindows = BrowserWindow.getAllWindows();
+        allWindows.forEach(w => {
+            try {
+                w.removeAllListeners('close');
+                w.destroy();
+            } catch (e) { /* ignore */ }
+        });
+        
+        // Small delay to ensure windows are destroyed
+        await new Promise(r => setTimeout(r, 300));
+        
+        // Now call quitAndInstall - this should work since app is still running
+        console.log('[Main] Calling quitAndInstall...');
+        autoUpdater.quitAndInstall(false, true);
+        
         return { success: true };
     } catch (error) {
         console.error('[Updater] Error installing update:', error);

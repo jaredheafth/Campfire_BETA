@@ -447,7 +447,7 @@
                                     Twitch Username
                                     <span class="label-hint">Your Twitch username</span>
                                 </label>
-                                <input type="text" id="twitchBotUsername" placeholder="your_username" readonly onfocus="this.removeAttribute('readonly')" onblur="this.setAttribute('readonly', ''); autoFillUsernameFromChannel();" style="background: #2a2a2a; cursor: text;" oninput="updateTwitchConfig()">
+                                <input type="text" id="twitchBotUsername" placeholder="your_username" style="background: #2a2a2a; cursor: text;" oninput="updateTwitchConfig()" onblur="autoFillUsernameFromChannel();">
                             </div>
                                     
                                     <div class="form-group">
@@ -5287,16 +5287,13 @@
         }
 
         function autoFillUsernameFromChannel() {
-            // Auto-fill username from channel name if username is empty or readonly
+            // Auto-fill username from channel name if username is empty
             const channelName = document.getElementById('twitchChannelName').value.trim();
             const usernameInput = document.getElementById('twitchBotUsername');
             
-            // Only auto-fill if username is readonly (meaning user hasn't clicked into it)
-            if (channelName && usernameInput.hasAttribute('readonly') && !usernameInput.value.trim()) {
+            // Only auto-fill if username is empty and channel name exists
+            if (channelName && !usernameInput.value.trim()) {
                 usernameInput.value = channelName;
-            } else if (channelName && usernameInput.hasAttribute('readonly')) {
-                // If username already has value, only update if it matches old channel name
-                // This prevents overwriting user edits
             }
         }
         
