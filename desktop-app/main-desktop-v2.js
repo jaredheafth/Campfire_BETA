@@ -941,7 +941,16 @@ ipcMain.handle('install-update', async () => {
         }
         
         await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        console.log('[Main] Calling quitAndInstall...');
         autoUpdater.quitAndInstall(false, true);
+        
+        // Fallback: ensure app quits if quitAndInstall doesn't work
+        setTimeout(() => {
+            console.log('[Main] Fallback: calling app.quit() after quitAndInstall...');
+            app.quit();
+        }, 1000);
+        
         return { success: true };
     } catch (error) {
         console.error('Error installing update:', error);
@@ -984,7 +993,21 @@ ipcMain.handle('shutdown-app', async () => {
 
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = false;
-autoUpdater.verifySignature = false;
+
+// Disable signature verification for unsigned installers
+// electron-updater v6.x uses different APIs, so we use try-catch for safety
+try {
+    // New API for v6.x
+    if (typeof autoUpdater.disableWin32CertCheck !== 'undefined') {
+        autoUpdater.disableWin32CertCheck = true;
+    }
+    // Legacy API for older versions
+    if (typeof autoUpdater.verifySignature !== 'undefined') {
+        autoUpdater.verifySignature = false;
+    }
+} catch (e) {
+    console.warn('[Updater] Could not configure signature verification:', e.message);
+}
 
 autoUpdater.on('checking-for-update', () => {
     console.log('Checking for updates...');

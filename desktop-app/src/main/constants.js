@@ -24,8 +24,10 @@ const WINDOW_DEFAULTS = {
  * Dashboard window dimensions
  */
 const DASHBOARD_WINDOW = {
-  WIDTH: 750,
-  HEIGHT: 900
+  WIDTH: 1200,
+  HEIGHT: 800,
+  MIN_WIDTH: 1000,
+  MIN_HEIGHT: 600
 };
 
 /**

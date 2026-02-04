@@ -17,6 +17,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const tmi = require('tmi.js');
+const { TWITCH } = require('./src/main/constants');
 
 // New modular state management system - loaded lazily to avoid circular dependency issues
 // These will be populated in app.whenReady()
@@ -2651,12 +2652,20 @@ function normalizeBotMessage(msg) {
         undeletable: msg.undeletable !== undefined ? msg.undeletable : false
     };
     
-    // !who command specific properties
+    // Command-specific properties
     if (msg.id === 'who') {
         normalized.userLineFormat = msg.userLineFormat || '{icon} {username}';
         normalized.userSeparator = msg.userSeparator || ' • ';
         normalized.stateIcons = msg.stateIcons || { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️' };
         normalized.stateFilters = msg.stateFilters || { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true };
+    }
+    
+    if (msg.id === 'return') {
+        normalized.returnFromStates = msg.returnFromStates || { AFK: true, SLEEPY: false, LURK: true };
+    }
+    
+    if (msg.id === 'auto-return') {
+        normalized.triggerStates = msg.triggerStates || { sleepy: true, afk: true };
     }
     
     return normalized;
@@ -5832,7 +5841,11 @@ ipcMain.handle('generate-twitch-token', async (event, accountType) => {
             }
         });
         server.listen(port, '127.0.0.1', () => {
-            const scopes = 'chat:read chat:edit';
+            // Use appropriate scopes based on account type
+            const scopes = accountType === 'bot' 
+                ? TWITCH.BOT_ACCOUNT_SCOPES.join(' ')
+                : TWITCH.MAIN_ACCOUNT_SCOPES.join(' ');
+            console.log(`[OAuth] Generating token for ${accountType || 'main'} account with scopes: ${scopes}`);
             const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scopes)}&force_verify=true`;
             let resolved = false;
             const finish = (err, result) => {
@@ -7046,12 +7059,19 @@ ipcMain.handle('install-update', async () => {
             } catch (e) { /* ignore */ }
         });
         
-        // Small delay to ensure windows are destroyed
-        await new Promise(r => setTimeout(r, 300));
+        // Give more time for windows to fully close and release resources
+        await new Promise(r => setTimeout(r, 500));
         
         // Now call quitAndInstall - this should work since app is still running
         console.log('[Main] Calling quitAndInstall...');
         autoUpdater.quitAndInstall(false, true);
+        
+        // Fallback: ensure app quits if quitAndInstall doesn't work
+        // This can happen if there's a race condition with the NSIS installer
+        setTimeout(() => {
+            console.log('[Main] Fallback: calling app.quit() after quitAndInstall...');
+            app.quit();
+        }, 1000);
         
         return { success: true };
     } catch (error) {
@@ -7087,14 +7107,20 @@ function initializeAutoUpdater() {
     
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
-    // IMPORTANT (Windows):
-    // - Leaving verifySignature at its default (true) helps avoid "unsigned updater" heuristics.
-    // - We also avoid background update checks on Windows; updates are manual via the Dashboard button.
-    //
-    // NOTE: On some Windows systems, electron-updater refuses to apply NSIS updates unless the installer is code-signed.
-    // If you are not code-signing yet, allow unsigned updates so the updater can function.
-    if (process.platform === 'win32') {
-        autoUpdater.verifySignature = false;
+    
+    // Disable signature verification for unsigned installers
+    // electron-updater v6.x uses different APIs, so we use try-catch for safety
+    try {
+        // New API for v6.x
+        if (typeof autoUpdater.disableWin32CertCheck !== 'undefined') {
+            autoUpdater.disableWin32CertCheck = true;
+        }
+        // Legacy API for older versions
+        if (process.platform === 'win32' && typeof autoUpdater.verifySignature !== 'undefined') {
+            autoUpdater.verifySignature = false;
+        }
+    } catch (e) {
+        console.warn('[Updater] Could not configure signature verification:', e.message);
     }
 
     autoUpdater.on('before-quit-for-update', () => {

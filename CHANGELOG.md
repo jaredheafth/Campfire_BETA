@@ -35,6 +35,20 @@
 
 ---
 
+## [0.1.6] - 2026-02-03 - Updater Bug Fixes
+
+### Fixed
+- ✅ **Updater Signature Verification**: Fixed "this.verifySignature is not a function" error when downloading updates
+- ✅ **Updater Quit Fix**: Fixed "application is still running" error by adding fallback `app.quit()` after `quitAndInstall()`
+- ✅ **Signature Config**: Wrapped in try-catch to handle `electron-updater` v6.x API changes
+
+### Technical
+- 🔧 Updated `autoUpdater` configuration in `main.js`, `main-desktop-v2.js`, and `server/main.js`
+- 🔧 Increased window destruction delay from 300ms to 500ms
+- 🔧 Added 1-second fallback delay before `app.quit()` ensures reliable exit
+
+---
+
 ## [Unreleased] - User Persistence Refactor
 
 ### Changed

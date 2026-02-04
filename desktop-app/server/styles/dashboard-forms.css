@@ -163,7 +163,7 @@ input[type="checkbox"] {
 }
 
 .button {
-    background: #ff6b35; /* Orange/fire color */
+    background: var(--accent-fire, #ff6b35);
     color: white;
     border: none;
     padding: 12px 24px;
@@ -177,16 +177,16 @@ input[type="checkbox"] {
 }
 
 .button:hover {
-    background: #e55a2b;
+    background: var(--accent-fire-hover, #e55a2b);
 }
 
 .button-secondary {
     background: #444;
     color: white;
     border: none;
-    padding: 12px 24px;
-    border-radius: 6px;
-    font-size: 14px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
@@ -223,16 +223,18 @@ input[type="checkbox"] {
 .code-section {
     background: #1e1e1e;
     color: #d4d4d4;
-    padding: 20px;
+    padding: 15px;
     border-radius: 8px;
-    margin-top: 20px;
+    margin-top: 15px;
     font-family: 'Courier New', monospace;
     font-size: 12px;
     overflow-x: auto;
     overflow-y: auto;
     flex: 1;
-    min-height: 200px;
-    max-height: calc(100vh - 450px); /* Dynamic height based on viewport */
+    min-height: 150px;
+    max-height: 400px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 #widgetCode {
@@ -243,29 +245,103 @@ input[type="checkbox"] {
     word-break: normal;
     margin: 0;
     padding: 0;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    display: block;
+    width: max-content;
+    min-width: 100%;
 }
 
 /* CODE tab specific layout */
 #codeTab .form-section {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 350px);
+    display: block;
+    height: auto;
     max-height: none;
-    overflow: hidden;
+    overflow-y: visible;
+    overflow-x: hidden;
+    min-height: 0;
 }
 
 #codeTab .info-box {
     flex-shrink: 0;
+    margin-bottom: 10px;
 }
 
 #codeTab .copy-button {
     flex-shrink: 0;
+    margin-bottom: 10px;
+}
+
+/* COMMANDS tab specific layout */
+#commandsTab .form-section {
+    max-height: calc(100vh - 350px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 8px;
+}
+
+#commandsTab .command-sub-content {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+#commandsTab .command-sub-content h3 {
+    display: block;
+    color: #ff4444;
+    font-size: 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+#commandsTab .command-sub-content h3 span {
+    white-space: nowrap;
+}
+
+#commandsTab .command-sub-content h3 span:last-child {
+    font-size: 11px;
+    color: #888;
+    font-weight: normal;
+    white-space: normal;
+}
+
+#stateCommandsList,
+#movementCommandsList,
+#appearanceCommandsList,
+#animationCommandsList,
+#autoStatesList,
+#appCommandsList,
+#customCommandsList {
+    display: grid;
+    gap: 15px;
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 .code-section h3 {
     color: white;
-    margin-bottom: 15px;
-    font-size: 16px;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+/* Consistent Tab Content Structure */
+.tab-content-wrapper {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+}
+
+.tab-scrollable-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    padding-right: 5px; /* Space for scrollbar */
 }
 
 .copy-button {
@@ -314,4 +390,71 @@ input[type="checkbox"] {
 .bg-swatch-transparent {
     background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="4" height="4" fill="%23ccc"/><rect x="4" y="4" width="4" height="4" fill="%23ccc"/></svg>');
     border: 2px solid #666;
+}
+
+/* Command Sub-tabs */
+.command-sub-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #3a3a3a;
+    padding-bottom: 10px;
+}
+
+.command-sub-tab {
+    padding: 8px 12px;
+    background: #333;
+    border: none;
+    border-radius: 4px 4px 0 0;
+    color: #aaa;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.command-sub-tab:hover {
+    background: #444;
+    color: #fff;
+}
+
+.command-sub-tab.active {
+    background: #667eea;
+    color: #fff;
+}
+
+.command-sub-content {
+    display: none;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.command-sub-content.active {
+    display: block;
+}
+
+.command-category {
+    margin-bottom: 20px;
+}
+
+.command-category h3 {
+    color: #667eea;
+    font-size: 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.command-category h3 span:first-child {
+    white-space: nowrap;
+}
+
+.command-category h3 span:last-child {
+    font-size: 11px;
+    color: #888;
+    font-weight: normal;
+    white-space: normal;
 }

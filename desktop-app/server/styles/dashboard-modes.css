@@ -202,10 +202,10 @@
 }
 
 .confirmation-buttons .confirm-btn {
-    background: #ff6b35;
+    background: var(--accent-fire, #ff6b35);
     color: white;
 }
 
 .confirmation-buttons .confirm-btn:hover {
-    background: #e55a2b;
+    background: var(--accent-fire-hover, #e55a2b);
 }

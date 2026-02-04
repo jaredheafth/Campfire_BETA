@@ -703,7 +703,21 @@ ipcMain.handle('save-twitch-config', async (event, config) => {
 // Configure auto-updater
 autoUpdater.autoDownload = false; // Manual download (user clicks button)
 autoUpdater.autoInstallOnAppQuit = false; // Manual install
-autoUpdater.verifySignature = false; // Skip signature verification (for unsigned installers)
+
+// Disable signature verification for unsigned installers
+// electron-updater v6.x uses different APIs, so we use try-catch for safety
+try {
+    // New API for v6.x
+    if (typeof autoUpdater.disableWin32CertCheck !== 'undefined') {
+        autoUpdater.disableWin32CertCheck = true;
+    }
+    // Legacy API for older versions
+    if (typeof autoUpdater.verifySignature !== 'undefined') {
+        autoUpdater.verifySignature = false;
+    }
+} catch (e) {
+    console.warn('[Updater] Could not configure signature verification:', e.message);
+}
 
 // Note: setFeedURL is called in app.whenReady() to ensure it happens
 // before any update checks, preventing the releases.atom 404 error

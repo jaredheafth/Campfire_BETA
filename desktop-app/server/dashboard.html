@@ -108,11 +108,27 @@
                 <div id="dashboardPanels">
         <div class="main-layout">
             <div class="settings-panel">
-                <div class="info-box">
-                    <strong>📋 How to Use:</strong> Configure your settings below, then copy the generated code and paste it into OBS as a Browser Source or Custom Widget.
-                    <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
-                        <!-- Left side: Action buttons -->
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <div class="info-box dashboard-header-box">
+                    <div class="dashboard-title">
+                        <span style="font-size: 20px;">⚙️</span>
+                        <span style="font-size: 16px; font-weight: 600;">Dashboard</span>
+                    </div>
+                    <div class="dashboard-subtitle">
+                        <strong>📋 How to Use:</strong> Configure your settings below, then copy the generated code and paste it into OBS as a Browser Source or Custom Widget.</div>
+                    <div class="dashboard-toolbar">
+                        <!-- Left: Test Users -->
+                        <div class="toolbar-left">
+                            <span class="toolbar-label">Test Users:</span>
+                            <button onclick="showAllTestUsers()" class="button-secondary" title="Show all test users">
+                                ✅
+                            </button>
+                            <button onclick="hideAllTestUsers()" class="button-secondary" title="Hide all test users">
+                                ❌
+                            </button>
+                        </div>
+                        <!-- Center: Campers -->
+                        <div class="toolbar-center">
+                            <span class="toolbar-label">Campers:</span>
                             <button onclick="kickAllUsersConfirm()" class="button-secondary" title="Kick all (non-test) users">
                                 ☁️
                             </button>
@@ -122,17 +138,10 @@
                             <button onclick="joinAllChaosConfirm()" class="button-secondary" title="Override Join Rules">
                                 ⚡
                             </button>
-                            <span style="font-weight: 600; color: #888; font-size: 12px;">Test Users:</span>
-                            <button onclick="showAllTestUsers()" class="button-secondary" title="Show all test users">
-                                ✅
-                            </button>
-                            <button onclick="hideAllTestUsers()" class="button-secondary" title="Hide all test users">
-                                ❌
-                            </button>
                         </div>
-                        <!-- Right side: Settings and Save buttons -->
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                            <span id="versionNumber" style="font-size: 11px; color: #888; min-width: 50px;">v?.?.?</span>
+                        <!-- Right: Version and Actions -->
+                        <div class="toolbar-right">
+                            <span id="versionNumber" class="version-number">v?.?.?</span>
                             <button onclick="checkForUpdates()" class="button-secondary" title="Check for Updates">
                                 🔄
                             </button>
@@ -149,7 +158,6 @@
                 <div class="tabs">
                     <button class="tab active" onclick="switchSettingsTab('campfire', this)">Campfire</button>
                     <button class="tab" onclick="switchSettingsTab('sprites', this)">Sprites</button>
-                    <button class="tab" onclick="switchSettingsTab('glow', this)">Glow</button>
                     <button class="tab" onclick="switchSettingsTab('size', this)">View</button>
                     <button class="tab" onclick="switchSettingsTab('twitch', this)">Twitch</button>
                     <button class="tab" onclick="switchSettingsTab('chat', this)">Chat</button>
@@ -163,9 +171,10 @@
                 <div id="settingsTab" class="tab-content active">
                     <!-- Campfire Graphic Tab -->
                     <div id="campfireTab" class="settings-section active">
-                        <div class="form-section">
+                        <!-- Fixed Header Section -->
+                        <div class="tab-fixed-header">
                             <!-- Hide Campfire Toggle -->
-                            <div class="form-group" style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #3a3a3a;">
+                            <div class="form-group" style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #3a3a3a;">
                                 <div style="display: flex; align-items: center; gap: 10px;">
                                     <input type="checkbox" id="hideCampfireGraphic" onchange="toggleCampfireVisibility(this.checked)">
                                     <label for="hideCampfireGraphic" style="margin: 0; cursor: pointer;">
@@ -189,7 +198,10 @@
                                     </button>
                                 </div>
                             </div>
-
+                        </div>
+                        
+                        <!-- Scrollable Content Section -->
+                        <div class="tab-scrollable-content">
                             <div id="campfireUrlSection" class="form-group">
                                 <label for="campfireUrl">
                                     Campfire GIF/Video URL
@@ -215,13 +227,12 @@
                                     <span style="color: #888; font-size: 12px;">No campfire graphic uploaded</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Glow Settings Tab -->
-                    <div id="glowTab" class="settings-section">
-                        <div class="form-section">
-                            <div class="form-group">
+                            
+                            <!-- Glow Settings Section -->
+                            <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
+                            <h4>🔥 Glow Settings</h4>
+                            
+                            <div class="form-group" style="margin-top: 15px;">
                                 <label for="glowSize">
                                     Glow Size
                                     <span class="label-hint">Size of the glow effect around the campfire</span>
@@ -269,7 +280,7 @@
                                 </div>
                             </div>
 
-                            <div class="form-group" style="margin-bottom: 0;">
+                            <div class="form-group">
                                 <div class="checkbox-group">
                                     <input type="checkbox" id="animatedGlow" checked onchange="updateFullPreview()">
                                     <label for="animatedGlow" style="margin: 0;">Animated Glow</label>
@@ -277,7 +288,7 @@
                                 <span class="label-hint">Creates a gentle pulsing fire effect</span>
                             </div>
 
-                            <div class="form-group" style="margin-top: 14px;">
+                            <div class="form-group">
                                 <label for="flickerOpacity">
                                     Flicker Opacity
                                     <span class="label-hint">A second glow layer that sits in front of the campfire</span>
@@ -307,7 +318,8 @@
 
                     <!-- Size Settings Tab -->
                     <div id="sizeTab" class="settings-section">
-                        <div class="form-section">
+                        <!-- Fixed Header Section -->
+                        <div class="tab-fixed-header">
                             <h4>Perspective</h4>
                             <div class="form-group">
                                 <label for="circleAngle">
@@ -323,7 +335,10 @@
                                     <span>Side View (Line)</span>
                                 </div>
                             </div>
-
+                        </div>
+                        
+                        <!-- Scrollable Content Section -->
+                        <div class="tab-scrollable-content">
                             <h4>Sizing</h4>
                             <div class="form-group">
                                 <label for="fireSize">
@@ -394,13 +409,14 @@
 
                     <!-- Twitch Connection Tab -->
                     <div id="twitchTab" class="settings-section">
-                        <div class="form-section" style="max-height: 500px; overflow-y: auto; padding-right: 8px;">
-                            <div class="form-group">
+                        <!-- Fixed Header Section -->
+                        <div class="tab-fixed-header twitch-connection-header">
+                            <div class="form-group" style="margin-bottom: 0;">
                                 <label>
                                     Twitch Connection
                                     <span class="label-hint">Connect your Twitch account to enable chat integration</span>
                                 </label>
-                                <div id="twitchConnectionStatus" style="padding: 15px; background: #2a2a2a; border-radius: 8px; margin-bottom: 15px;">
+                                <div id="twitchConnectionStatus" style="padding: 15px; background: #2a2a2a; border-radius: 8px; margin-top: 8px;">
                                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                                         <span id="twitchStatusIcon">⚪</span>
                                         <span id="twitchStatusText">Not Connected</span>
@@ -411,11 +427,13 @@
                                         <div id="twitchBotAccountDisplay" style="display: none;">Bot Account: <span id="twitchBotAccountName">-</span></div>
                                     </div>
                                 </div>
-                                
                             </div>
-                            
+                        </div>
+
+                        <!-- Scrollable Content Section -->
+                        <div class="tab-scrollable-content">
                             <!-- Top controls: Checkbox and Save button -->
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 20px; margin-bottom: 15px; padding: 12px; background: #1f1f1f; border-radius: 6px; border: 1px solid #333;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 15px; margin-bottom: 15px; padding: 12px; background: #1f1f1f; border-radius: 6px; border: 1px solid #333;">
                                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #fff;">
                                     <input type="checkbox" id="useSeparateChatBot" onchange="toggleChatBotInputs()" style="cursor: pointer; width: 16px; height: 16px;">
                                     <span>Use separate bot account for sending messages</span>
@@ -424,7 +442,7 @@
                                     💾 Save Configuration
                                 </button>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label for="twitchChannelName">
                                     Channel Name
@@ -432,7 +450,7 @@
                                 </label>
                                 <input type="text" id="twitchChannelName" placeholder="your_channel" oninput="updateTwitchConfig(); autoFillUsernameFromChannel();">
                             </div>
-                            
+
                             <!-- Side-by-side layout for Main Account and Chat Bot Account -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
                                 <!-- Main Account Column -->
@@ -442,15 +460,15 @@
                                         <span id="mainAccountStatusIcon">⚪</span>
                                         <span id="mainAccountStatusText">Not configured</span>
                                     </div>
-                                    
-                            <div class="form-group">
-                                <label for="twitchBotUsername">
-                                    Twitch Username
-                                    <span class="label-hint">Your Twitch username</span>
-                                </label>
-                                <input type="text" id="twitchBotUsername" placeholder="your_username" style="background: #2a2a2a; cursor: text;" oninput="updateTwitchConfig()" onblur="autoFillUsernameFromChannel();">
-                            </div>
-                                    
+
+                                    <div class="form-group">
+                                        <label for="twitchBotUsername">
+                                            Twitch Username
+                                            <span class="label-hint">Your Twitch username</span>
+                                        </label>
+                                        <input type="text" id="twitchBotUsername" placeholder="your_username" style="background: #2a2a2a; cursor: text;" oninput="updateTwitchConfig()" onblur="autoFillUsernameFromChannel();">
+                                    </div>
+
                                     <div class="form-group">
                                         <label for="twitchAccessToken">
                                             ACCESS TOKEN
@@ -463,7 +481,7 @@
                                             </button>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="form-group">
                                         <label for="twitchRefreshToken">
                                             REFRESH TOKEN
@@ -476,7 +494,7 @@
                                             </button>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="form-group">
                                         <label for="twitchClientId">
                                             CLIENT ID
@@ -484,11 +502,11 @@
                                         </label>
                                         <input type="text" id="twitchClientId" placeholder="Client ID..." style="width: 100%; font-size: 11px;">
                                     </div>
-                                    
+
                                     <button type="button" class="button button-primary" id="generateTwitchToken" onclick="generateTwitchToken('main')" style="width: 100%; margin-top: 10px; font-size: 12px;">
                                         🔑 Generate Token
                                     </button>
-                                    
+
                                     <div style="display: flex; gap: 8px; margin-top: 8px;">
                                         <button type="button" class="button button-primary" onclick="connectTwitchAccount('main')" style="flex: 1; font-size: 12px; background: #4caf50;">
                                             🔌 Connect
@@ -498,15 +516,15 @@
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 <!-- Chat Bot Account Column -->
                                 <div style="border: 1px solid #333; border-radius: 8px; padding: 15px; background: #1f1f1f;">
-                                        <h3 style="margin-top: 0; margin-bottom: 5px; color: #ff6b35; font-size: 16px;">🤖 Chat Bot Account</h3>
-                                        <div id="chatBotStatusIndicator" style="margin-bottom: 15px; font-size: 11px; color: #888;">
-                                            <span id="chatBotStatusIcon">⚪</span>
-                                            <span id="chatBotStatusText">Not configured</span>
-                                        </div>
-                                    
+                                    <h3 style="margin-top: 0; margin-bottom: 5px; color: #ff6b35; font-size: 16px;">🤖 Chat Bot Account</h3>
+                                    <div id="chatBotStatusIndicator" style="margin-bottom: 15px; font-size: 11px; color: #888;">
+                                        <span id="chatBotStatusIcon">⚪</span>
+                                        <span id="chatBotStatusText">Not configured</span>
+                                    </div>
+
                                     <div class="form-group">
                                         <label for="twitchChatBotUsername">
                                             Twitch Username
@@ -514,7 +532,7 @@
                                         </label>
                                         <input type="text" id="twitchChatBotUsername" placeholder="bot_username" oninput="updateTwitchConfig()" disabled style="opacity: 0.5; cursor: not-allowed;">
                                     </div>
-                                    
+
                                     <div class="form-group">
                                         <label for="twitchChatBotAccessToken">
                                             ACCESS TOKEN
@@ -527,7 +545,7 @@
                                             </button>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="form-group">
                                         <label for="twitchChatBotRefreshToken">
                                             REFRESH TOKEN
@@ -540,7 +558,7 @@
                                             </button>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="form-group">
                                         <label for="twitchChatBotClientId">
                                             CLIENT ID
@@ -548,11 +566,11 @@
                                         </label>
                                         <input type="text" id="twitchChatBotClientId" placeholder="Client ID..." style="width: 100%; font-size: 11px;" disabled>
                                     </div>
-                                    
+
                                     <button type="button" class="button button-primary" id="generateChatBotToken" onclick="generateTwitchToken('chatbot')" style="width: 100%; margin-top: 10px; font-size: 12px;" disabled>
                                         🔑 Generate Token
                                     </button>
-                                    
+
                                     <div style="display: flex; gap: 8px; margin-top: 8px;">
                                         <button type="button" class="button button-primary" id="connectChatBotBtn" onclick="connectTwitchAccount('chatbot')" style="flex: 1; font-size: 12px; background: #4caf50;" disabled>
                                             🔌 Connect
@@ -563,8 +581,7 @@
                                     </div>
                                 </div>
                             </div>
-                            </div>
-                            
+
                             <div style="margin-top: 15px; padding: 10px; background: #1a1a1a; border-radius: 5px; border-left: 3px solid #ff6b35;">
                                 <p style="margin: 0; font-size: 11px; color: #888;">
                                     💡 <strong>Tip:</strong> Click "Generate Token" to open the token generator. Use the checkbox at the top to configure a separate bot account for sending messages.
@@ -573,8 +590,8 @@
                                     🤖 <strong>About Bot Account:</strong> The bot account uses the Main Account's connection to Twitch. When connected, bot messages are sent using the bot's credentials. Both accounts share the same connection status.
                                 </p>
                             </div>
-                            
-                            <div style="margin-top: 20px; padding: 15px; background: #1a1a1a; border-radius: 8px; border-left: 3px solid #ff6b35;">
+
+                            <div style="margin-top: 20px; margin-bottom: 20px; padding: 15px; background: #1a1a1a; border-radius: 8px; border-left: 3px solid #ff6b35;">
                                 <strong style="color: #ff6b35;">ℹ️ How it works:</strong>
                                 <ol style="margin-top: 10px; padding-left: 20px; font-size: 13px; line-height: 1.8;">
                                     <li>Enter your Twitch username (channel name will auto-fill)</li>
@@ -584,7 +601,7 @@
                                     <li>The widget will automatically connect to your channel</li>
                                 </ol>
                                 <p style="margin-top: 10px; font-size: 12px; color: #888;">
-                                    <strong>Why Channel Name?</strong> The channel name tells the widget which Twitch channel's chat to monitor. 
+                                    <strong>Why Channel Name?</strong> The channel name tells the widget which Twitch channel's chat to monitor.
                                     It's usually the same as your username, but you can monitor a different channel if needed (e.g., if you're using a bot account to monitor another streamer's chat).
                                 </p>
                             </div>
@@ -625,16 +642,17 @@
 
                     <!-- Join Settings Tab -->
                     <div id="joinTab" class="settings-section">
-                        <div class="form-section">
-                            <!-- Join Method, Command/Emote/Cheer, and Max Users in one row -->
-                            <div class="form-row">
+                        <!-- Fixed Header Section - Join Method Controls -->
+                        <div class="tab-fixed-header">
+                            <!-- Join Method, Command/Emote/Cheer in one row -->
+                            <div class="form-row form-row-narrow">
                                 <!-- Join Method -->
-                                <div class="form-group form-group-compact">
+                                <div class="form-group form-group-compact" style="flex: 0 0 140px;">
                                     <label for="joinMethod">
                                         Join Method
                                         <span class="label-hint">How viewers join</span>
                                     </label>
-                                    <select id="joinMethod" onchange="updateJoinMethod(); updateFullPreview();">
+                                    <select id="joinMethod" onchange="updateJoinMethod(); updateFullPreview();" style="width: 100%;">
                                         <option value="command">Chat Command</option>
                                         <option value="emote">Emote</option>
                                         <option value="cheer">Cheer/Payment</option>
@@ -642,81 +660,71 @@
                                 </div>
 
                                 <!-- Command Settings (shown when method is "command") -->
-                                <div id="commandSettings" class="form-group form-group-compact">
+                                <div id="commandSettings" class="form-group form-group-compact" style="flex: 0 0 120px;">
                                     <label for="command">
-                                        Join Command(s)
-                                        <span class="label-hint">e.g., !join, !camp (comma-separated)</span>
+                                        Join Cmd
+                                        <span class="label-hint">e.g., !join</span>
                                     </label>
-                                    <input type="text" id="command" value="!join" placeholder="!join" oninput="updateFullPreview(); updateCurrentCommandDisplay();">
+                                    <input type="text" id="command" value="!join" placeholder="!join" oninput="updateFullPreview(); updateCurrentCommandDisplay();" style="width: 100%;">
                                 </div>
 
                                 <!-- AFK Command Settings -->
-                                <div class="form-group form-group-compact">
+                                <div class="form-group form-group-compact" style="flex: 0 0 100px;">
                                     <label for="afkCommand">
-                                        AFK Command(s)
-                                        <span class="label-hint">e.g., !afk, !brb (comma-separated)</span>
+                                        AFK Cmd
+                                        <span class="label-hint">e.g., !afk</span>
                                     </label>
-                                    <input type="text" id="afkCommand" value="!afk" placeholder="!afk" oninput="updateAfkCommandDisplay();">
+                                    <input type="text" id="afkCommand" value="!afk" placeholder="!afk" oninput="updateAfkCommandDisplay();" style="width: 100%;">
                                 </div>
 
                                 <!-- Lurk Command Settings -->
-                                <div class="form-group form-group-compact">
+                                <div class="form-group form-group-compact" style="flex: 0 0 100px;">
                                     <label for="lurkCommand">
-                                        Lurk Command(s)
-                                        <span class="label-hint">e.g., !lurk (comma-separated)</span>
+                                        Lurk Cmd
+                                        <span class="label-hint">e.g., !lurk</span>
                                     </label>
-                                    <input type="text" id="lurkCommand" value="!lurk" placeholder="!lurk" oninput="updateLurkCommandDisplay();">
+                                    <input type="text" id="lurkCommand" value="!lurk" placeholder="!lurk" oninput="updateLurkCommandDisplay();" style="width: 100%;">
                                 </div>
 
                                 <!-- Emote Settings (shown when method is "emote") -->
-                                <div id="emoteSettings" class="form-group form-group-compact" style="display: none;">
+                                <div id="emoteSettings" class="form-group form-group-compact" style="flex: 0 0 120px; display: none;">
                                     <label for="emoteName">
-                                        Emote Name
+                                        Emote
                                         <span class="label-hint">e.g., Campfire</span>
                                     </label>
-                                    <input type="text" id="emoteName" value="" placeholder="Campfire" oninput="updateFullPreview();">
+                                    <input type="text" id="emoteName" value="" placeholder="Campfire" oninput="updateFullPreview();" style="width: 100%;">
                                 </div>
 
                                 <!-- Cheer Settings (shown when method is "cheer") -->
-                                <div id="cheerSettings" class="form-group form-group-compact" style="display: none;">
+                                <div id="cheerSettings" class="form-group form-group-compact" style="flex: 0 0 120px; display: none;">
                                     <label for="cheerMethod">
-                                        Payment Type
+                                        Payment
                                         <span class="label-hint">What they pay with</span>
                                     </label>
-                                    <select id="cheerMethod" onchange="updateFullPreview();">
+                                    <select id="cheerMethod" onchange="updateFullPreview();" style="width: 100%;">
                                         <option value="bits">Bits</option>
                                         <option value="giftsubs">Gift Subs</option>
-                                        <option value="both">Bits or Gift Subs</option>
+                                        <option value="both">Bits or Subs</option>
                                     </select>
                                 </div>
 
                                 <!-- Cheer Amount (shown when method is "cheer") -->
-                                <div id="cheerAmountSettings" class="form-group form-group-compact" style="display: none;">
+                                <div id="cheerAmountSettings" class="form-group form-group-compact" style="flex: 0 0 80px; display: none;">
                                     <label for="cheerAmount">
                                         Amount
-                                        <span class="label-hint">Required amount</span>
+                                        <span class="label-hint">Required</span>
                                     </label>
-                                    <input type="number" id="cheerAmount" value="100" min="1" oninput="updateFullPreview();">
-                                </div>
-
-                                <!-- Maximum Users -->
-                                <div class="form-group form-group-compact">
-                                    <label for="maxUsers">
-                                        Maximum Users
-                                        <span class="label-hint">Max around campfire</span>
-                                    </label>
-                                    <div style="display: flex; gap: 10px; align-items: flex-end;">
-                                        <input type="number" id="maxUsers" value="20" min="1" max="50" oninput="updateFullPreview();" style="flex: 1;">
-                                        <button class="button button-primary" onclick="saveJoinSettings()" style="padding: 6px 12px; font-size: 12px; white-space: nowrap;">
-                                            SET
-                                        </button>
-                                    </div>
+                                    <input type="number" id="cheerAmount" value="100" min="1" oninput="updateFullPreview();" style="width: 100%;">
                                 </div>
                             </div>
+                        </div>
+                        
+                        <!-- Scrollable Content Section -->
+                        <div class="tab-scrollable-content">
 
                             <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
 
-                            <!-- Restrictions (Two Columns) -->
+                            <!-- Restrictions (Three Columns) -->
                             <div class="form-group">
                                 <label>
                                     Restrictions
@@ -742,7 +750,7 @@
                                         </div>
                                     </div>
 
-                                    <!-- Right Column: Other Restrictions -->
+                                    <!-- Center Column: Other Restrictions -->
                                     <div style="flex: 1;">
                                         <div style="font-size: 12px; font-weight: 600; color: #aaa; margin-bottom: 8px;">Other Restrictions</div>
                                         <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -757,6 +765,23 @@
                                             <div class="checkbox-group">
                                                 <input type="checkbox" id="followersOnly" onchange="updateFullPreview();">
                                                 <label for="followersOnly" style="margin: 0;">Followers Only</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Right Column: Maximum Users -->
+                                    <div style="flex: 1;">
+                                        <div style="font-size: 12px; font-weight: 600; color: #aaa; margin-bottom: 8px;">Capacity</div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label for="maxUsers" style="font-size: 12px; margin-bottom: 6px;">
+                                                Maximum Users
+                                                <span class="label-hint" style="font-size: 10px;">Max around campfire</span>
+                                            </label>
+                                            <div style="display: flex; gap: 8px; align-items: flex-end;">
+                                                <input type="number" id="maxUsers" value="20" min="1" max="50" oninput="updateFullPreview();" style="flex: 1;">
+                                                <button class="button button-primary" onclick="saveJoinSettings()" style="padding: 6px 12px; font-size: 12px; white-space: nowrap;">
+                                                    SET
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -795,7 +820,7 @@
 
                     <!-- Sprite Settings Tab -->
                     <div id="spritesTab" class="settings-section">
-                        <div class="form-section" style="max-height: 500px; overflow-y: auto; padding-right: 8px;">
+                        <div class="form-section">
                             <div class="form-group">
                                 <label for="spriteMode">
                                     Sprite Mode
@@ -997,54 +1022,53 @@
                                 </div>
                             </div>
 
-                        </div>
-                        
-                        <!-- User Activity States Section (moved from Audio tab) -->
-                        <div class="form-section">
-                            <div class="form-group">
-                                <label>👁️ User Activity States</label>
-                                <span class="label-hint">Show visual indicators based on user activity (SLEEPY users become STILL, AFK users move to outer ring)</span>
-                            </div>
-                            <div class="form-group">
-                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-                                    <input type="checkbox" id="userStatesEnabled" onchange="updateUserStateSetting('enabled', this.checked)">
-                                    <label for="userStatesEnabled" style="margin: 0;">Enable User State Indicators</label>
+                            <!-- User Activity States Section (moved from Audio tab) -->
+                            <div class="form-section" style="margin-top: 20px;">
+                                <div class="form-group">
+                                    <label>👁️ User Activity States</label>
+                                    <span class="label-hint">Show visual indicators based on user activity (SLEEPY users become STILL, AFK users move to outer ring)</span>
                                 </div>
-                                <div style="margin-left: 20px;">
-                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                                        <span style="width: 140px;">🟢 Active → 💙 Sleepy:</span>
-                                        <input type="range" id="sleepyMinutes" min="1" max="30" value="5" onchange="updateUserStateSetting('sleepyMinutes', parseInt(this.value)); document.getElementById('sleepyMinutesValue').textContent = this.value + ' min'">
-                                        <span id="sleepyMinutesValue">5 min</span>
+                                <div class="form-group">
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                                        <input type="checkbox" id="userStatesEnabled" onchange="updateUserStateSetting('enabled', this.checked)">
+                                        <label for="userStatesEnabled" style="margin: 0;">Enable User State Indicators</label>
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                                        <span style="width: 140px;">💙 Sleepy → 💤 AFK:</span>
-                                        <input type="range" id="afkMinutes" min="5" max="60" value="15" onchange="updateUserStateSetting('afkMinutes', parseInt(this.value)); document.getElementById('afkMinutesValue').textContent = this.value + ' min'">
-                                        <span id="afkMinutesValue">15 min</span>
+                                    <div style="margin-left: 20px;">
+                                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                            <span style="width: 140px;">🟢 Active → 💙 Sleepy:</span>
+                                            <input type="range" id="sleepyMinutes" min="1" max="30" value="5" onchange="updateUserStateSetting('sleepyMinutes', parseInt(this.value)); document.getElementById('sleepyMinutesValue').textContent = this.value + ' min'">
+                                            <span id="sleepyMinutesValue">5 min</span>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                            <span style="width: 140px;">💙 Sleepy → 💤 AFK:</span>
+                                            <input type="range" id="afkMinutes" min="5" max="60" value="15" onchange="updateUserStateSetting('afkMinutes', parseInt(this.value)); document.getElementById('afkMinutesValue').textContent = this.value + ' min'">
+                                            <span id="afkMinutesValue">15 min</span>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <span style="width: 140px;">💤 AFK → 👋 Auto Leave:</span>
+                                            <select id="autoLeaveMinutes" onchange="updateUserStateSetting('autoLeaveMinutes', parseInt(this.value))">
+                                                <option value="0">Disabled</option>
+                                                <option value="30">30 minutes</option>
+                                                <option value="60">1 hour</option>
+                                                <option value="90">1.5 hours</option>
+                                                <option value="120">2 hours</option>
+                                                <option value="180">3 hours</option>
+                                                <option value="240">4 hours</option>
+                                                <option value="360">6 hours</option>
+                                                <option value="480">8 hours</option>
+                                            </select>
+                                        </div>
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <span style="width: 140px;">💤 AFK → 👋 Auto Leave:</span>
-                                        <select id="autoLeaveMinutes" onchange="updateUserStateSetting('autoLeaveMinutes', parseInt(this.value))">
-                                            <option value="0">Disabled</option>
-                                            <option value="30">30 minutes</option>
-                                            <option value="60">1 hour</option>
-                                            <option value="90">1.5 hours</option>
-                                            <option value="120">2 hours</option>
-                                            <option value="180">3 hours</option>
-                                            <option value="240">4 hours</option>
-                                            <option value="360">6 hours</option>
-                                            <option value="480">8 hours</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div style="margin-top: 12px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 4px;">
-                                    <div style="font-size: 11px; color: #888;">
-                                        <strong>State Indicators:</strong><br>
-                                        🟡 <strong>Joined</strong> - Yellow pulse when user first joins (3 pulses)<br>
-                                        🟢 <strong>Active</strong> - Green glow when user recently chatted<br>
-                                        💙 <strong>Sleepy</strong> - Blue overlay, 💤 animation, STILL mode<br>
-                                        💤 <strong>AFK</strong> - Dimmed sprite, &lt;AFK&gt; badge, outer ring, STILL mode<br>
-                                        💙💤 <strong>Sleepy+AFK</strong> - Blue dimmed sprite, 💤 animation, outer ring<br>
-                                        👁️ <strong>Lurk</strong> - Purple overlay, eye icon, outer ring (manual via !lurk)
+                                    <div style="margin-top: 12px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+                                        <div style="font-size: 11px; color: #888;">
+                                            <strong>State Indicators:</strong><br>
+                                            🟡 <strong>Joined</strong> - Yellow pulse when user first joins (3 pulses)<br>
+                                            🟢 <strong>Active</strong> - Green glow when user recently chatted<br>
+                                            💙 <strong>Sleepy</strong> - Blue overlay, 💤 animation, STILL mode<br>
+                                            💤 <strong>AFK</strong> - Dimmed sprite, &lt;AFK&gt; badge, outer ring, STILL mode<br>
+                                            💙💤 <strong>Sleepy+AFK</strong> - Blue dimmed sprite, 💤 animation, outer ring<br>
+                                            👁️ <strong>Lurk</strong> - Purple overlay, eye icon, outer ring (manual via !lurk)
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1064,7 +1088,7 @@
                                 <button class="button button-secondary" onclick="refreshMembersList()" style="white-space: nowrap; margin-left: 10px;">🔄 Refresh</button>
                             </div>
                             
-                            <div id="membersList" style="display: grid; gap: 10px; max-height: 500px; overflow-y: auto; padding-right: 8px;">
+                            <div id="membersList">
                                 <!-- Member list will be populated here -->
                                 <div style="text-align: center; padding: 40px; color: #888;">
                                     <p>Loading members...</p>
@@ -1075,7 +1099,7 @@
 
                     <!-- Commands Tab -->
                     <div id="commandsTab" class="settings-section">
-                        <div class="form-section" style="max-height: calc(100vh - 350px); overflow-y: auto; padding-right: 8px;">
+                        <div class="form-section">
                             <div class="form-group">
                                 <label title="Configure chat commands that viewers can use to interact with the campfire widget">
                                     Commands Configuration
@@ -1083,121 +1107,100 @@
                                 </label>
 
                                 <!-- Sub-tabs for command categories -->
-                                <div class="command-sub-tabs" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 15px; margin-bottom: 15px; border-bottom: 1px solid #3a3a3a; padding-bottom: 10px;">
-                                    <button class="command-sub-tab active" onclick="switchCommandSubTab('state', this)" style="padding: 8px 12px; background: #667eea; border: none; border-radius: 4px 4px 0 0; color: #fff; cursor: pointer; font-size: 12px;" title="Commands that change user state (join, leave, afk, lurk, return)">
+                                <div class="command-sub-tabs">
+                                    <button class="command-sub-tab active" onclick="switchCommandSubTab('state', this)" title="Commands that change user state (join, leave, afk, lurk, return)">
                                         🔴 State
                                     </button>
-                                    <button class="command-sub-tab" onclick="switchCommandSubTab('movement', this)" style="padding: 8px 12px; background: #333; border: none; border-radius: 4px 4px 0 0; color: #aaa; cursor: pointer; font-size: 12px;" title="Movement commands (cw, ccw, still, roam, wander)">
+                                    <button class="command-sub-tab" onclick="switchCommandSubTab('movement', this)" title="Movement commands (cw, ccw, still, roam, wander)">
                                         🎮 Movement
                                     </button>
-                                    <button class="command-sub-tab" onclick="switchCommandSubTab('appearance', this)" style="padding: 8px 12px; background: #333; border: none; border-radius: 4px 4px 0 0; color: #aaa; cursor: pointer; font-size: 12px;" title="Appearance commands (sprite, color, next, back, random, reset)">
+                                    <button class="command-sub-tab" onclick="switchCommandSubTab('appearance', this)" title="Appearance commands (sprite, color, next, back, random, reset)">
                                         🎨 Appearance
                                     </button>
-                                    <button class="command-sub-tab" onclick="switchCommandSubTab('animation', this)" style="padding: 8px 12px; background: #333; border: none; border-radius: 4px 4px 0 0; color: #aaa; cursor: pointer; font-size: 12px;" title="Animation commands (spin, dance, sparkle)">
+                                    <button class="command-sub-tab" onclick="switchCommandSubTab('animation', this)" title="Animation commands (spin, dance, sparkle)">
                                         ✨ Animation
                                     </button>
-                                    <button class="command-sub-tab" onclick="switchCommandSubTab('auto-states', this)" style="padding: 8px 12px; background: #333; border: none; border-radius: 4px 4px 0 0; color: #aaa; cursor: pointer; font-size: 12px;" title="Auto state change responses (sleepy, auto-afk, auto-return, auto-leave)">
+                                    <button class="command-sub-tab" onclick="switchCommandSubTab('auto-states', this)" title="Auto state change responses (sleepy, auto-afk, auto-return, auto-leave)">
                                         ⏳ Auto States
                                     </button>
-                                    <button class="command-sub-tab" onclick="switchCommandSubTab('app', this)" style="padding: 8px 12px; background: #333; border: none; border-radius: 4px 4px 0 0; color: #aaa; cursor: pointer; font-size: 12px;" title="App-specific commands (!who and other special features)">
+                                    <button class="command-sub-tab" onclick="switchCommandSubTab('app', this)" title="App-specific commands (!who and other special features)">
                                         🔥 App
                                     </button>
-                                    <button class="command-sub-tab" onclick="switchCommandSubTab('custom', this)" style="padding: 8px 12px; background: #333; border: none; border-radius: 4px 4px 0 0; color: #aaa; cursor: pointer; font-size: 12px;" title="Your custom commands">
+                                    <button class="command-sub-tab" onclick="switchCommandSubTab('custom', this)" title="Your custom commands">
                                         💬 Custom
                                     </button>
                                 </div>
 
                                 <!-- STATE COMMANDS Sub-tab Content -->
-                                <div id="stateSubTab" class="command-sub-content" style="display: block;">
-                                    <div style="margin-bottom: 20px;">
-                                        <h3 style="color: #ff4444; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;" title="Commands that change user state (join, leave, afk, lurk, return). These control campfire membership and status.">
-                                            <span>🔴 STATE COMMANDS</span>
-                                            <span style="font-size: 11px; color: #888; font-weight: normal;">(Join/Leave/AFK/Lurk/Return)</span>
-                                        </h3>
-                                        <div id="stateCommandsList" style="display: grid; gap: 15px;">
+                                <div id="stateSubTab" class="command-sub-content">
+                                    <div class="command-category">
+                                        <h3><span>🔴 STATE COMMANDS</span><span>(Join/Leave/AFK/Lurk/Return)</span></h3>
+                                        <div id="stateCommandsList">
                                             <!-- State commands will be populated here -->
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- MOVEMENT COMMANDS Sub-tab Content -->
-                                <div id="movementSubTab" class="command-sub-content" style="display: none;">
-                                    <div style="margin-bottom: 20px;">
-                                        <h3 style="color: #ff6b35; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;" title="Commands for sprite movement (rotation and position)">
-                                            <span>🎮 MOVEMENT COMMANDS</span>
-                                            <span style="font-size: 11px; color: #888; font-weight: normal;">(CW/CCW/Still/Roam/Wander)</span>
-                                        </h3>
-                                        <div id="movementCommandsList" style="display: grid; gap: 15px;">
+                                <div id="movementSubTab" class="command-sub-content">
+                                    <div class="command-category">
+                                        <h3><span>🎮 MOVEMENT COMMANDS</span><span>(CW/CCW/Still/Roam/Wander)</span></h3>
+                                        <div id="movementCommandsList">
                                             <!-- Movement commands will be populated here -->
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- APPEARANCE COMMANDS Sub-tab Content -->
-                                <div id="appearanceSubTab" class="command-sub-content" style="display: none;">
-                                    <div style="margin-bottom: 20px;">
-                                        <h3 style="color: #4caf50; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;" title="Commands for changing sprite appearance">
-                                            <span>🎨 APPEARANCE COMMANDS</span>
-                                            <span style="font-size: 11px; color: #888; font-weight: normal;">(Sprite/Color/Next/Back/Random/Reset)</span>
-                                        </h3>
-                                        <div id="appearanceCommandsList" style="display: grid; gap: 15px;">
+                                <div id="appearanceSubTab" class="command-sub-content">
+                                    <div class="command-category">
+                                        <h3><span>🎨 APPEARANCE COMMANDS</span><span>(Sprite/Color/Next/Back/Random/Reset)</span></h3>
+                                        <div id="appearanceCommandsList">
                                             <!-- Appearance commands will be populated here -->
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- ANIMATION COMMANDS Sub-tab Content -->
-                                <div id="animationSubTab" class="command-sub-content" style="display: none;">
-                                    <div style="margin-bottom: 20px;">
-                                        <h3 style="color: #e91e63; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;" title="Animation commands for fun effects">
-                                            <span>✨ ANIMATION COMMANDS</span>
-                                            <span style="font-size: 11px; color: #888; font-weight: normal;">(Spin/Dance/Sparkle)</span>
-                                        </h3>
-                                        <div id="animationCommandsList" style="display: grid; gap: 15px;">
+                                <div id="animationSubTab" class="command-sub-content">
+                                    <div class="command-category">
+                                        <h3><span>✨ ANIMATION COMMANDS</span><span>(Spin/Dance/Sparkle)</span></h3>
+                                        <div id="animationCommandsList">
                                             <!-- Animation commands will be populated here -->
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- AUTO STATES Sub-tab Content -->
-                                <div id="autoStatesSubTab" class="command-sub-content" style="display: none;">
-                                    <div style="margin-bottom: 20px;">
-                                        <h3 style="color: #ff9500; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;" title="Auto state change responses triggered by timers (sleepy, afk, auto-leave)">
-                                            <span>⏳ AUTO STATE RESPONSES</span>
-                                            <span style="font-size: 11px; color: #888; font-weight: normal;">(Timer-based state changes)</span>
-                                        </h3>
-                                        <div id="autoStatesList" style="display: grid; gap: 15px;">
+                                <div id="autoStatesSubTab" class="command-sub-content">
+                                    <div class="command-category">
+                                        <h3><span>⏳ AUTO STATE RESPONSES</span><span>(Timer-based state changes)</span></h3>
+                                        <div id="autoStatesList">
                                             <!-- Auto state responses will be populated here -->
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- APP COMMANDS Sub-tab Content -->
-                                <div id="appSubTab" class="command-sub-content" style="display: none;">
-                                    <div style="margin-bottom: 20px;">
-                                        <h3 style="color: #ff6600; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;" title="App-specific commands that provide special functionality">
-                                            <span>🔥 APP COMMANDS</span>
-                                            <span style="font-size: 11px; color: #888; font-weight: normal;">(Special app features)</span>
-                                        </h3>
-                                        <div id="appCommandsList" style="display: grid; gap: 15px;">
+                                <div id="appSubTab" class="command-sub-content">
+                                    <div class="command-category">
+                                        <h3><span>🔥 APP COMMANDS</span><span>(Special app features)</span></h3>
+                                        <div id="appCommandsList">
                                             <!-- App commands will be populated here -->
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- CUSTOM COMMANDS Sub-tab Content -->
-                                <div id="customSubTab" class="command-sub-content" style="display: none;">
-                                    <div style="margin-bottom: 20px;">
-                                        <h3 style="color: #9146ff; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;" title="Create your own custom commands with custom responses. Great for fun interactions with your community!">
-                                            <span>💬 CUSTOM COMMANDS</span>
-                                            <span style="font-size: 11px; color: #888; font-weight: normal;">(Your custom commands)</span>
-                                        </h3>
-                                        <div style="margin-bottom: 15px;">
-                                            <button class="button button-primary" onclick="addBotMessage()" style="padding: 10px 20px; font-size: 14px; white-space: nowrap;" title="Create a new custom command with your own trigger word and response message">
+                                <div id="customSubTab" class="command-sub-content">
+                                    <div class="command-category">
+                                        <h3><span>💬 CUSTOM COMMANDS</span><span>(Your custom commands)</span></h3>
+                                        <div class="mt-10">
+                                            <button class="button button-primary" onclick="addBotMessage()" title="Create a new custom command with your own trigger word and response message">
                                                 ➕ Add Custom Command
                                             </button>
                                         </div>
-                                        <div id="customBotMessagesList" style="display: grid; gap: 15px;">
+                                        <div id="customBotMessagesList" style="display: grid; gap: 15px; margin-top: 15px;">
                                             <!-- Custom bot messages will be populated here -->
                                         </div>
                                         <div id="noCustomMessages" style="display: none; text-align: center; padding: 20px; color: #888; background: #1f1f1f; border-radius: 6px; border: 1px dashed #3a3a3a;">
@@ -1232,7 +1235,7 @@
                                         <!-- Audio Tab -->
                     <div id="audioTab" class="settings-section">
                         <!-- Audio Output Device Section -->
-                        <div class="form-section">
+                        <div class="form-section tab-scrollable-content">
                             <div class="form-group">
                                 <label>🔊 Audio Output Device</label>
                                 <span class="label-hint">Select which audio device to use for playback</span>
@@ -1311,93 +1314,76 @@
                             </div>
                         </div>
                         
-                        </div>
-                    </div>
-                    
-                    <!-- User Sounds Section -->
-                    <div class="audio-section">
-                        <div class="audio-section-header">
-                            <h4>User Sounds</h4>
-                            <span class="section-hint">Sounds that play when users join, leave, or interact</span>
-                        </div>
-                        
-                        <div class="user-sounds-grid">
-                            <!-- Join Sound -->
-                            <div class="user-sound-item">
-                                <span class="user-sound-label">Join</span>
-                                <div class="user-sound-controls">
-                                    <input type="file" id="joinSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'joinFileName'); updateAudioSetting('userSounds', 'join', {file: this.files[0]?.name || '', gain: document.getElementById('joinGain').value})">
-                                    <button type="button" class="button button-secondary button-small" onclick="document.getElementById('joinSoundFile').click()">File</button>
-                                    <span id="joinFileName" class="user-sound-filename">No file</span>
-                                    <input type="range" id="joinGain" class="user-sound-slider" min="0" max="100" value="80" onchange="updateAudioSetting('userSounds', 'join', {file: document.getElementById('joinSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('joinGainValue').textContent = this.value + '%'">
-                                    <span id="joinGainValue" class="user-sound-gain">80%</span>
-                                    <button onclick="previewAudio('join')" class="button button-secondary button-small">Play</button>
-                                </div>
+                        <!-- User Sounds Section -->
+                        <div class="audio-section">
+                            <div class="audio-section-header">
+                                <h4>User Sounds</h4>
+                                <span class="section-hint">Sounds that play when users join, leave, or interact</span>
                             </div>
                             
-                            <!-- Leave Sound -->
-                            <div class="user-sound-item">
-                                <span class="user-sound-label">Leave</span>
-                                <div class="user-sound-controls">
-                                    <input type="file" id="leaveSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'leaveFileName'); updateAudioSetting('userSounds', 'leave', {file: this.files[0]?.name || '', gain: document.getElementById('leaveGain').value})">
-                                    <button type="button" class="button button-secondary button-small" onclick="document.getElementById('leaveSoundFile').click()">File</button>
-                                    <span id="leaveFileName" class="user-sound-filename">No file</span>
-                                    <input type="range" id="leaveGain" class="user-sound-slider" min="0" max="100" value="60" onchange="updateAudioSetting('userSounds', 'leave', {file: document.getElementById('leaveSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('leaveGainValue').textContent = this.value + '%'">
-                                    <span id="leaveGainValue" class="user-sound-gain">60%</span>
-                                    <button onclick="previewAudio('leave')" class="button button-secondary button-small">Play</button>
-                                </div>
-                            </div>
-                            
-                            <!-- Speak Sound -->
-                            <div class="user-sound-item">
-                                <span class="user-sound-label">Speak</span>
-                                <div class="user-sound-controls">
-                                    <input type="file" id="speakSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'speakFileName'); updateAudioSetting('userSounds', 'speak', {file: this.files[0]?.name || '', gain: document.getElementById('speakGain').value})">
-                                    <button type="button" class="button button-secondary button-small" onclick="document.getElementById('speakSoundFile').click()">File</button>
-                                    <span id="speakFileName" class="user-sound-filename">No file</span>
-                                    <input type="range" id="speakGain" class="user-sound-slider" min="0" max="100" value="40" onchange="updateAudioSetting('userSounds', 'speak', {file: document.getElementById('speakSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('speakGainValue').textContent = this.value + '%'">
-                                    <span id="speakGainValue" class="user-sound-gain">40%</span>
-                                    <button onclick="previewAudio('speak')" class="button button-secondary button-small">Play</button>
-                                </div>
-                            </div>
-                            
-                            <!-- AFK Sound -->
-                            <div class="user-sound-item">
-                                <span class="user-sound-label">AFK</span>
-                                <div class="user-sound-controls">
-                                    <input type="file" id="afkSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'afkFileName'); updateAudioSetting('userSounds', 'afk', {file: this.files[0]?.name || '', gain: document.getElementById('afkGain').value})">
-                                    <button type="button" class="button button-secondary button-small" onclick="document.getElementById('afkSoundFile').click()">File</button>
-                                    <span id="afkFileName" class="user-sound-filename">No file</span>
-                                    <input type="range" id="afkGain" class="user-sound-slider" min="0" max="100" value="50" onchange="updateAudioSetting('userSounds', 'afk', {file: document.getElementById('afkSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('afkGainValue').textContent = this.value + '%'">
-                                    <span id="afkGainValue" class="user-sound-gain">50%</span>
-                                    <button onclick="previewAudio('afk')" class="button button-secondary button-small">Play</button>
-                                </div>
-                            </div>
-                            
-                            <!-- Lurk Sound -->
-                            <div class="user-sound-item">
-                                <span class="user-sound-label">Lurk</span>
-                                <div class="user-sound-controls">
-                                    <input type="file" id="lurkSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'lurkFileName'); updateAudioSetting('userSounds', 'lurk', {file: this.files[0]?.name || '', gain: document.getElementById('lurkGain').value})">
-                                    <button type="button" class="button button-secondary button-small" onclick="document.getElementById('lurkSoundFile').click()">File</button>
-                                    <span id="lurkFileName" class="user-sound-filename">No file</span>
-                                    <input type="range" id="lurkGain" class="user-sound-slider" min="0" max="100" value="50" onchange="updateAudioSetting('userSounds', 'lurk', {file: document.getElementById('lurkSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('lurkGainValue').textContent = this.value + '%'">
-                                    <span id="lurkGainValue" class="user-sound-gain">50%</span>
-                                    <button onclick="previewAudio('lurk')" class="button button-secondary button-small">Play</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                            <div class="user-sounds-grid">
+                                <!-- Join Sound -->
                                 <div class="user-sound-item">
-                                    <span class="sound-icon">👁️</span>
-                                    <span class="sound-name">Lurk</span>
-                                    <div class="sound-controls">
+                                    <span class="user-sound-label">Join</span>
+                                    <div class="user-sound-controls">
+                                        <input type="file" id="joinSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'joinFileName'); updateAudioSetting('userSounds', 'join', {file: this.files[0]?.name || '', gain: document.getElementById('joinGain').value})">
+                                        <button type="button" class="button button-secondary button-small" onclick="document.getElementById('joinSoundFile').click()">File</button>
+                                        <span id="joinFileName" class="user-sound-filename">No file</span>
+                                        <input type="range" id="joinGain" class="user-sound-slider" min="0" max="100" value="80" onchange="updateAudioSetting('userSounds', 'join', {file: document.getElementById('joinSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('joinGainValue').textContent = this.value + '%'">
+                                        <span id="joinGainValue" class="user-sound-gain">80%</span>
+                                        <button onclick="previewAudio('join')" class="button button-secondary button-small">Play</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Leave Sound -->
+                                <div class="user-sound-item">
+                                    <span class="user-sound-label">Leave</span>
+                                    <div class="user-sound-controls">
+                                        <input type="file" id="leaveSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'leaveFileName'); updateAudioSetting('userSounds', 'leave', {file: this.files[0]?.name || '', gain: document.getElementById('leaveGain').value})">
+                                        <button type="button" class="button button-secondary button-small" onclick="document.getElementById('leaveSoundFile').click()">File</button>
+                                        <span id="leaveFileName" class="user-sound-filename">No file</span>
+                                        <input type="range" id="leaveGain" class="user-sound-slider" min="0" max="100" value="60" onchange="updateAudioSetting('userSounds', 'leave', {file: document.getElementById('leaveSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('leaveGainValue').textContent = this.value + '%'">
+                                        <span id="leaveGainValue" class="user-sound-gain">60%</span>
+                                        <button onclick="previewAudio('leave')" class="button button-secondary button-small">Play</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Speak Sound -->
+                                <div class="user-sound-item">
+                                    <span class="user-sound-label">Speak</span>
+                                    <div class="user-sound-controls">
+                                        <input type="file" id="speakSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'speakFileName'); updateAudioSetting('userSounds', 'speak', {file: this.files[0]?.name || '', gain: document.getElementById('speakGain').value})">
+                                        <button type="button" class="button button-secondary button-small" onclick="document.getElementById('speakSoundFile').click()">File</button>
+                                        <span id="speakFileName" class="user-sound-filename">No file</span>
+                                        <input type="range" id="speakGain" class="user-sound-slider" min="0" max="100" value="40" onchange="updateAudioSetting('userSounds', 'speak', {file: document.getElementById('speakSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('speakGainValue').textContent = this.value + '%'">
+                                        <span id="speakGainValue" class="user-sound-gain">40%</span>
+                                        <button onclick="previewAudio('speak')" class="button button-secondary button-small">Play</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- AFK Sound -->
+                                <div class="user-sound-item">
+                                    <span class="user-sound-label">AFK</span>
+                                    <div class="user-sound-controls">
+                                        <input type="file" id="afkSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'afkFileName'); updateAudioSetting('userSounds', 'afk', {file: this.files[0]?.name || '', gain: document.getElementById('afkGain').value})">
+                                        <button type="button" class="button button-secondary button-small" onclick="document.getElementById('afkSoundFile').click()">File</button>
+                                        <span id="afkFileName" class="user-sound-filename">No file</span>
+                                        <input type="range" id="afkGain" class="user-sound-slider" min="0" max="100" value="50" onchange="updateAudioSetting('userSounds', 'afk', {file: document.getElementById('afkSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('afkGainValue').textContent = this.value + '%'">
+                                        <span id="afkGainValue" class="user-sound-gain">50%</span>
+                                        <button onclick="previewAudio('afk')" class="button button-secondary button-small">Play</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Lurk Sound -->
+                                <div class="user-sound-item">
+                                    <span class="user-sound-label">Lurk</span>
+                                    <div class="user-sound-controls">
                                         <input type="file" id="lurkSoundFile" accept="audio/*" style="display: none;" onchange="handleAudioFileSelect(this, 'lurkFileName'); updateAudioSetting('userSounds', 'lurk', {file: this.files[0]?.name || '', gain: document.getElementById('lurkGain').value})">
-                                        <button type="button" class="button button-secondary" onclick="document.getElementById('lurkSoundFile').click()" style="padding: 2px 6px; font-size: 10px;">📁</button>
-                                        <span id="lurkFileName" style="font-size: 10px; color: #888; max-width: 50px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No file</span>
-                                        <input type="range" id="lurkGain" min="0" max="100" value="50" style="width: 50px;" onchange="updateAudioSetting('userSounds', 'lurk', {file: document.getElementById('lurkSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('lurkGainValue').textContent = this.value + '%'">
-                                        <span id="lurkGainValue" style="font-size: 10px; color: #aaa; min-width: 30px;">50%</span>
-                                        <button onclick="previewAudio('lurk')" class="button button-secondary" style="padding: 2px 6px; font-size: 10px;">▶️</button>
+                                        <button type="button" class="button button-secondary button-small" onclick="document.getElementById('lurkSoundFile').click()">File</button>
+                                        <span id="lurkFileName" class="user-sound-filename">No file</span>
+                                        <input type="range" id="lurkGain" class="user-sound-slider" min="0" max="100" value="50" onchange="updateAudioSetting('userSounds', 'lurk', {file: document.getElementById('lurkSoundFile').files[0]?.name || '', gain: this.value}); document.getElementById('lurkGainValue').textContent = this.value + '%'">
+                                        <span id="lurkGainValue" class="user-sound-gain">50%</span>
+                                        <button onclick="previewAudio('lurk')" class="button button-secondary button-small">Play</button>
                                     </div>
                                 </div>
                             </div>
@@ -1791,64 +1777,62 @@
                 const subContents = document.querySelectorAll('.command-sub-content');
                 const subTabs = document.querySelectorAll('.command-sub-tab');
                 
-                // Hide all command sub-content
+                // Hide all command sub-content using CSS class
                 subContents.forEach(content => {
-                    if (content && content.style) {
-                        content.style.display = 'none';
-                    }
+                    content.classList.remove('active');
                 });
                 
-                // Reset all sub-tab buttons
+                // Reset all sub-tab buttons using CSS class
                 subTabs.forEach(tab => {
-                    if (tab) {
-                        tab.style.background = '#333';
-                        tab.style.color = '#aaa';
-                    }
+                    tab.classList.remove('active');
                 });
                 
                 // Show selected sub-content and load data if needed
                 switch (subTabName) {
                     case 'state':
                         const stateTab = document.getElementById('stateSubTab');
-                        if (stateTab) stateTab.style.display = 'block';
+                        if (stateTab) stateTab.classList.add('active');
+                        if (clickedButton) clickedButton.classList.add('active');
+                        loadStateCommands();
+                        break;
                         if (typeof loadStateCommands === 'function') loadStateCommands();
                         break;
                     case 'movement':
                         const movementTab = document.getElementById('movementSubTab');
-                        if (movementTab) movementTab.style.display = 'block';
+                        if (movementTab) movementTab.classList.add('active');
+                        if (clickedButton) clickedButton.classList.add('active');
                         if (typeof loadMovementCommands === 'function') loadMovementCommands();
                         break;
                     case 'appearance':
                         const appearanceTab = document.getElementById('appearanceSubTab');
-                        if (appearanceTab) appearanceTab.style.display = 'block';
+                        if (appearanceTab) appearanceTab.classList.add('active');
+                        if (clickedButton) clickedButton.classList.add('active');
                         if (typeof loadAppearanceCommands === 'function') loadAppearanceCommands();
                         break;
                     case 'animation':
                         const animationTab = document.getElementById('animationSubTab');
-                        if (animationTab) animationTab.style.display = 'block';
+                        if (animationTab) animationTab.classList.add('active');
+                        if (clickedButton) clickedButton.classList.add('active');
                         loadAnimationCommands();
                         break;
                     case 'auto-states':
                         const autoStatesTab = document.getElementById('autoStatesSubTab');
-                        if (autoStatesTab) autoStatesTab.style.display = 'block';
+                        if (autoStatesTab) autoStatesTab.classList.add('active');
+                        if (clickedButton) clickedButton.classList.add('active');
                         loadAutoStateCommands();
                         break;
                     case 'app':
                         const appTab = document.getElementById('appSubTab');
-                        if (appTab) appTab.style.display = 'block';
+                        if (appTab) appTab.classList.add('active');
+                        if (clickedButton) clickedButton.classList.add('active');
                         loadAppCommands();
                         break;
                     case 'custom':
                         const customTab = document.getElementById('customSubTab');
-                        if (customTab) customTab.style.display = 'block';
+                        if (customTab) customTab.classList.add('active');
+                        if (clickedButton) clickedButton.classList.add('active');
                         loadCustomCommands();
                         break;
-                }
-                
-                // Activate clicked button
-                if (clickedButton) {
-                    clickedButton.style.background = '#667eea';
-                    clickedButton.style.color = '#fff';
                 }
             } catch (error) {
                 console.error('Error switching command sub-tab:', error);
@@ -7923,11 +7907,11 @@
                     { id: 'afk', name: 'AFK Announcement', commands: [], command: '', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true },
                     { id: 'lurk', name: 'Lurk Announcement', commands: [], command: '', message: '{username} is now lurking 👁️', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true },
                     { id: 'return', name: 'Return Command', commands: ['!return', '!imback'], command: '!return', message: '{username} has returned!', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'APP', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user', undeletable: true, action: 'handleReturnCommand', returnFromStates: { AFK: true, SLEEPY: false, LURK: true } },
-                    // Auto-state commands
-                    { id: 'sleepy', name: 'Sleepy State', commands: [], command: '', message: '{username} is now sleepy 😴', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
-                    { id: 'auto-afk', name: 'Auto AFK', commands: [], command: '', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
-                    { id: 'auto-return', name: 'Auto Return', commands: [], command: '', message: '{username} is back! 👋', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
-                    { id: 'auto-leave', name: 'Auto Leave', commands: [], command: '', message: '{username} has left due to inactivity', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE' },
+                    // Auto-state commands (with cooldown and triggerStates properties)
+                    { id: 'sleepy', name: 'Sleepy State', commands: [], command: '', message: '{username} is now sleepy 😴', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' },
+                    { id: 'auto-afk', name: 'Auto AFK', commands: [], command: '', message: '{username} went AFK 💤', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' },
+                    { id: 'auto-return', name: 'Auto Return', commands: [], command: '', message: '{username} is back! 👋', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user', triggerStates: { sleepy: true, afk: true } },
+                    { id: 'auto-leave', name: 'Auto Leave', commands: [], command: '', message: '{username} has left due to inactivity', enabled: true, silent: false, respondAllChats: true, allowNonCampers: false, isDefault: true, category: 'AUTO_STATE', cooldown: 0, cooldownEnabled: false, cooldownType: 'per-user' },
                     // APP commands
                     { id: 'who', name: 'Who Command', commands: ['!who'], command: '!who', message: '🔥 Around the campfire:', enabled: true, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'APP', cooldown: 30, cooldownEnabled: true, cooldownType: 'global', undeletable: true, userLineFormat: '{icon} {username}', userSeparator: ' • ', stateIcons: { JOINED: '🔥', ACTIVE: '🔥', SLEEPY: '😴', AFK: '💤', LURK: '👁️', BOT: '🤖' }, stateFilters: { JOINED: true, ACTIVE: true, SLEEPY: true, AFK: true, LURK: true } },
                     { id: 'duel', name: 'Duel Command', commands: ['!duel'], command: '!duel', message: '{winner} defeats {loser} in a duel! ⚔️', enabled: false, silent: false, respondAllChats: true, allowNonCampers: true, isDefault: true, category: 'APP', cooldown: 3, cooldownEnabled: true, cooldownType: 'per-user', undeletable: true, action: 'handleDuelCommand' },

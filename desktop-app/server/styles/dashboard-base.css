@@ -1,33 +1,69 @@
 /* Dashboard Base Styles - Global Layout & Colors */
 
+:root {
+    --dashboard-padding: 15px;
+    --container-border-radius: 12px;
+}
+
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
+html, body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background: #1a1a1a;
-    height: 100vh;
     margin: 0;
-    padding: 15px;
+    padding: var(--dashboard-padding);
     color: #e0e0e0;
-    overflow: hidden; /* Prevent scrolling */
-    box-sizing: border-box;
 }
 
 .container {
-    max-width: 1400px;
-    margin: 0 auto;
     background: #2a2a2a;
-    border-radius: 12px;
+    border-radius: var(--container-border-radius);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     overflow: hidden;
     border: 1px solid #3a3a3a;
-    height: calc(100vh - 30px); /* Full height minus body padding */
+    min-height: calc(100vh - (var(--dashboard-padding) * 2));
+    width: 100%;
+    max-width: none;
     display: flex;
     flex-direction: column;
+    /* Ensure container fits exactly in the body padding area */
+    box-sizing: border-box;
+    /* Use min-height to allow content to dictate size */
+    height: auto;
+}
+
+@media (max-width: 900px) {
+    :root {
+        --dashboard-padding: 10px;
+        --container-border-radius: 8px;
+    }
+    
+    .tab {
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+    
+    .header h1 {
+        font-size: 18px;
+    }
+    
+    .settings-panel {
+        padding: 10px 15px;
+    }
+    
+    .preview-panel {
+        height: 300px;
+    }
 }
 
 .header {
@@ -87,8 +123,10 @@ body {
     flex: 1;
     padding: 15px 20px;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto; /* Allow horizontal scrolling for tabs */
     min-height: 0;
+    /* Ensure content doesn't extend beyond panel width */
+    max-width: 100%;
 }
 
 .preview-panel {
@@ -141,38 +179,269 @@ body {
 .settings-panel::-webkit-scrollbar,
 .code-section::-webkit-scrollbar,
 .form-section::-webkit-scrollbar,
-#codeTab .form-section::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+#codeTab .form-section::-webkit-scrollbar,
+.tab-scrollable-content::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
 }
 
 .settings-panel::-webkit-scrollbar-track,
 .code-section::-webkit-scrollbar-track,
 .form-section::-webkit-scrollbar-track,
-#codeTab .form-section::-webkit-scrollbar-track {
+#codeTab .form-section::-webkit-scrollbar-track,
+.tab-scrollable-content::-webkit-scrollbar-track {
     background: #1a1a1a;
-    border-radius: 4px;
+    border-radius: 5px;
 }
 
 .settings-panel::-webkit-scrollbar-thumb,
 .code-section::-webkit-scrollbar-thumb,
 .form-section::-webkit-scrollbar-thumb,
-#codeTab .form-section::-webkit-scrollbar-thumb {
+#codeTab .form-section::-webkit-scrollbar-thumb,
+.tab-scrollable-content::-webkit-scrollbar-thumb {
     background: #4a4a4a;
-    border-radius: 4px;
+    border-radius: 5px;
+    border: 2px solid #1a1a1a;
 }
 
 .settings-panel::-webkit-scrollbar-thumb:hover,
 .code-section::-webkit-scrollbar-thumb:hover,
 .form-section::-webkit-scrollbar-thumb:hover,
-#codeTab .form-section::-webkit-scrollbar-thumb:hover {
+#codeTab .form-section::-webkit-scrollbar-thumb:hover,
+.tab-scrollable-content::-webkit-scrollbar-thumb:hover {
     background: #5a5a5a;
 }
 
-/* Ensure tall content tabs have proper scrolling */
-.settings-section {
-    max-height: calc(100vh - 300px);
+/* Firefox scrollbar styling */
+.settings-panel,
+.code-section,
+.form-section,
+#codeTab .form-section,
+.tab-scrollable-content {
+    scrollbar-width: thin;
+    scrollbar-color: #4a4a4a #1a1a1a;
+}
+
+/* ===========================================
+   TAB CONTENT SCROLLING & LAYOUT
+   Fixed header + scrollable content pattern
+   =========================================== */
+
+/* Fixed header section - stays at top, doesn't scroll */
+.tab-fixed-header {
+    flex-shrink: 0;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #333;
+    margin-bottom: 15px;
+}
+
+/* Scrollable content section - scrolls when content overflows */
+.tab-scrollable-content {
     overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 8px;
+}
+
+/* Form section - no longer used for scrolling, just for form layout */
+.form-section {
+    display: block;
+    height: auto;
+    overflow: visible;
+}
+
+/* ===========================================
+   TWITCH TAB - Fixed header + scrollable content
+   =========================================== */
+#twitchTab.settings-section.active {
+    display: flex;
+    flex-direction: column;
+}
+
+#twitchTab .form-section.tab-scrollable-content {
+    overflow-y: visible;
+    overflow-x: hidden;
+}
+
+.twitch-connection-header {
+    flex-shrink: 0;
+    padding: 10px 0;
+    border-bottom: 1px solid #333;
+    margin: 0 0 10px 0;
+}
+
+.twitch-scrollable-content {
+    overflow-y: visible;
+    overflow-x: hidden;
+    padding-bottom: 15px;
+}
+
+/* ===========================================
+   SPRITES TAB - Allow scrolling
+   =========================================== */
+#spritesTab.active .form-section {
+    max-height: none;
+    overflow-y: visible;
+}
+
+/* Make sprite lists scrollable within their containers */
+.sprite-list {
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* ===========================================
+   MEMBERS TAB - Allow scrolling
+   =========================================== */
+#membersTab.active .form-section {
+    max-height: none;
+    overflow-y: visible;
+}
+
+#membersList {
+    max-height: calc(100vh - 400px);
+    min-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* ===========================================
+   COMMANDS TAB - Sub-tabs styling
+   =========================================== */
+.command-sub-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #333;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+/* Hide scrollbar for cleaner appearance but keep functionality */
+.command-sub-tabs::-webkit-scrollbar {
+    height: 4px;
+}
+
+.command-sub-tabs::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+.command-sub-tabs::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+    border-radius: 2px;
+}
+
+.command-sub-tabs::-webkit-scrollbar-thumb:hover {
+    background: #5a5a5a;
+}
+
+.command-sub-tab {
+    padding: 6px 12px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 4px;
+    color: #888;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.command-sub-tab:hover {
+    background: #2a2a2a;
+    color: #fff;
+    border-color: #444;
+}
+
+.command-sub-tab.active {
+    background: #3a3a3a;
+    color: #fff;
+    border-color: #667eea;
+}
+
+.command-sub-content {
+    display: none;
+}
+
+.command-sub-content.active {
+    display: block;
+}
+
+.command-category h3 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #333;
+    font-size: 14px;
+    color: #fff;
+}
+
+.command-category h3 span:first-child {
+    color: #ff6b35;
+}
+
+/* ===========================================
+   CODE TAB - Ensure proper scrolling
+   =========================================== */
+.code-section {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 15px;
+    overflow-x: auto;
+}
+
+.code-section pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    color: #ccc;
+    margin: 0;
+    min-width: 100%;
+}
+
+/* ===========================================
+   AUDIO TAB - Allow scrolling
+   =========================================== */
+#audioTab.active {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#audioTab.active .form-section.tab-scrollable-content {
+    overflow-y: visible;
+    overflow-x: hidden;
+    padding-bottom: 15px;
+}
+
+/* ===========================================
+   NARROW FORM ROW - Compact inputs
+   =========================================== */
+.form-row-narrow {
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.form-row-narrow .form-group {
+    min-width: 80px;
+}
+
+/* ===========================================
+   GENERAL FORM SECTIONS
+   =========================================== */
+.form-section {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+/* Make form groups with many items scrollable */
+.form-section .form-group:only-child {
+    overflow-y: visible;
 }
 
 /* Status Badge - Bottom Center */
@@ -296,8 +565,74 @@ body {
     background: var(--bg-tertiary, #333);
     border: 1px solid var(--border-color, #3a3a3a);
     border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 20px;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+.dashboard-header-box {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.dashboard-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.dashboard-subtitle {
+    flex: 1;
+    min-width: 200px;
+}
+
+.dashboard-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    width: 100%;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.toolbar-left,
+.toolbar-center,
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toolbar-left {
+    flex: 1;
+    justify-content: flex-start;
+}
+
+.toolbar-center {
+    flex: 1;
+    justify-content: center;
+}
+
+.toolbar-right {
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.toolbar-label {
+    font-weight: 600;
+    color: #888;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.version-number {
+    font-size: 11px;
+    color: #888;
+    white-space: nowrap;
+    margin-right: 5px;
 }
 
 .info-box.compact {
@@ -937,4 +1272,205 @@ body {
     border-radius: 4px;
     color: var(--text-primary, #fff);
     font-size: 13px;
+}
+
+/* ========================================
+    UTILITY CLASSES
+    Extracted from inline styles in dashboard.html
+    ======================================== */
+
+/* Margin-top utilities */
+.mt-5 { margin-top: 5px; }
+.mt-6 { margin-top: 6px; }
+.mt-8 { margin-top: 8px; }
+.mt-10 { margin-top: 10px; }
+.mt-12 { margin-top: 12px; }
+.mt-14 { margin-top: 14px; }
+.mt-15 { margin-top: 15px; }
+.mt-16 { margin-top: 16px; }
+.mt-20 { margin-top: 20px; }
+
+/* Margin-bottom utilities */
+.mb-5 { margin-bottom: 5px; }
+.mb-6 { margin-bottom: 6px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-10 { margin-bottom: 10px; }
+.mb-15 { margin-bottom: 15px; }
+.mb-20 { margin-bottom: 20px; }
+
+/* Padding utilities */
+.p-10 { padding: 10px; }
+.p-12 { padding: 12px; }
+.p-15 { padding: 15px; }
+.p-16 { padding: 16px; }
+
+/* Flex layout utilities */
+.flex { display: flex; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-1 { flex: 1; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.flex-gap-8 { gap: 8px; }
+.flex-gap-10 { gap: 10px; }
+.flex-gap-15 { gap: 15px; }
+
+/* Background utilities */
+.bg-dark { background: #1a1a1a; }
+.bg-darker { background: #0a0a0a; }
+
+/* Border utilities */
+.border-left-accent { border-left: 3px solid #ff6b35; }
+.border-radius-5 { border-radius: 5px; }
+.border-radius-8 { border-radius: 8px; }
+
+/* Text utilities */
+.text-small { font-size: 11px; }
+.text-muted { color: #888; }
+.text-muted-light { color: #aaa; }
+.text-accent { color: #ff6b35; }
+.text-warning { color: #ffa500; }
+
+/* Info box variants */
+.info-box-alert {
+    padding: 10px;
+    background: #1a1a1a;
+    border-radius: 5px;
+    border-left: 3px solid #ff6b35;
+}
+
+.info-box-alert p {
+    margin: 0;
+    font-size: 11px;
+    color: #888;
+}
+
+.info-box-instruction {
+    padding: 15px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    border-left: 3px solid #ff6b35;
+}
+
+.info-box-instruction strong {
+    color: #ff6b35;
+}
+
+.info-box-instruction ol {
+    margin-top: 10px;
+    padding-left: 20px;
+    font-size: 13px;
+    line-height: 1.8;
+    color: #ccc;
+}
+
+.info-box-instruction p {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #888;
+}
+
+/* Flex row with gap */
+.flex-row-gap-15 {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Flex row with small gap */
+.flex-row-gap-10 {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Action bar layout */
+.action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Grid with gap */
+.grid-auto-fill {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    gap: 10px;
+}
+
+/* Label hint override */
+.label-hint-block {
+    margin-top: 8px;
+    display: block;
+}
+
+/* Text centered */
+.text-center {
+    text-align: center;
+}
+
+/* Width constraints */
+.max-width-300 {
+    max-width: 300px;
+}
+
+.min-width-120 {
+    min-width: 120px;
+}
+
+.min-width-140 {
+    min-width: 140px;
+}
+
+/* Background subtle */
+.bg-subtle {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+/* Form field block */
+.form-field-block {
+    display: block;
+    margin-bottom: 6px;
+}
+
+/* Section header for commands */
+.section-header-commands {
+    margin-top: 15px;
+    margin-bottom: 10px;
+}
+
+.section-header-commands strong {
+    font-size: 13px;
+}
+
+/* Command display */
+.command-display {
+    color: #ff9800;
+    margin-bottom: 8px;
+}
+
+.command-display-simple {
+    color: #888;
+}
+
+/* Members section text */
+.members-description {
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+/* Section with background */
+.section-bg-subtle {
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.section-bg-subtle .section-text {
+    font-size: 11px;
+    color: #888;
 }

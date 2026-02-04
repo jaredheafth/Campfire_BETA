@@ -46,6 +46,11 @@
     --accent-border: rgba(145, 71, 255, 0.5);
     --accent-hover: rgba(145, 71, 255, 0.5);
     
+    /* Dashboard Accent Colors */
+    --accent-fire: #ff6b35;
+    --accent-fire-hover: #e55a2b;
+    --accent-warning: #ffa500;
+    
     /* Scrollbar */
     --scrollbar-track: rgba(255, 255, 255, 0.05);
     --scrollbar-thumb: rgba(255, 255, 255, 0.2);
