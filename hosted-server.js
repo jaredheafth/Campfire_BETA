@@ -121,6 +121,11 @@ if (fs.existsSync(fontsDir)) {
     app.use('/fonts', express.static(fontsDir));
 }
 
+// Landing page - redirect to viewer dashboard
+app.get('/', (req, res) => {
+    res.redirect('/desktop/viewer-dashboard.html');
+});
+
 // ============================================
 // API ROUTES
 // ============================================
