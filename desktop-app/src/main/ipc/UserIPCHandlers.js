@@ -19,13 +19,17 @@ class UserIPCHandlers {
    * Create UserIPCHandlers
    * @param {UserManager} userManager - The UserManager instance
    * @param {Object} windows - Object containing window references
+   * @param {AppSettingsStore} appSettingsStore - Optional app settings store
    */
-  constructor(userManager, windows) {
+  constructor(userManager, windows, appSettingsStore = null) {
     /** @type {UserManager} */
     this.userManager = userManager;
     
     /** @type {Object} Window references */
     this.windows = windows;
+    
+    /** @type {AppSettingsStore|null} App settings store */
+    this.appSettingsStore = appSettingsStore;
     
     /** @type {boolean} Whether handlers are registered */
     this._registered = false;
@@ -41,6 +45,8 @@ class UserIPCHandlers {
     this._handleRemoveUser = this._handleRemoveUser.bind(this);
     this._handleGetUserPreferences = this._handleGetUserPreferences.bind(this);
     this._handleSetUserPreferences = this._handleSetUserPreferences.bind(this);
+    this._handleGetExclusionSettings = this._handleGetExclusionSettings.bind(this);
+    this._handleSetExclusionSettings = this._handleSetExclusionSettings.bind(this);
   }
   
   /**
@@ -65,6 +71,12 @@ class UserIPCHandlers {
     ipcMain.handle(IPC_CHANNELS.USERS.SET_LURK, this._handleSetUserLurk);
     ipcMain.handle(IPC_CHANNELS.USERS.REMOVE, this._handleRemoveUser);
     ipcMain.handle(IPC_CHANNELS.USERS.SET_PREFERENCES, this._handleSetUserPreferences);
+    
+    // Exclusion settings handlers
+    if (this.appSettingsStore) {
+      ipcMain.handle('get-exclusion-settings', this._handleGetExclusionSettings);
+      ipcMain.handle('set-exclusion-settings', this._handleSetExclusionSettings);
+    }
     
     // Subscribe to UserManager events and forward to renderers
     this._setupEventForwarding();
@@ -281,6 +293,67 @@ class UserIPCHandlers {
       return true;
     } catch (error) {
       console.error('[UserIPCHandlers] Error setting preferences:', error);
+      throw error;
+    }
+  }
+  
+  // ============================================
+  // EXCLUSION SETTINGS HANDLERS
+  // ============================================
+  
+  /**
+   * Handle get exclusion settings request
+   * @param {Electron.IpcMainInvokeEvent} event
+   * @returns {Object} Exclusion settings
+   */
+  async _handleGetExclusionSettings(event) {
+    try {
+      if (!this.appSettingsStore) {
+        return {
+          excludeStreamerFromAutoState: true,
+          excludeBotFromAutoState: true,
+          streamerUserId: null,
+          botUserId: null
+        };
+      }
+      const settings = this.appSettingsStore.getSettings();
+      return settings.exclusions || {
+        excludeStreamerFromAutoState: true,
+        excludeBotFromAutoState: true,
+        streamerUserId: null,
+        botUserId: null
+      };
+    } catch (error) {
+      console.error('[UserIPCHandlers] Error getting exclusion settings:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Handle set exclusion settings request
+   * @param {Electron.IpcMainInvokeEvent} event
+   * @param {Object} settings - Exclusion settings to update
+   * @returns {Object} Updated settings
+   */
+  async _handleSetExclusionSettings(event, settings) {
+    try {
+      if (!this.appSettingsStore) {
+        throw new Error('App settings store not available');
+      }
+      
+      const currentSettings = this.appSettingsStore.getSettings();
+      const updatedSettings = {
+        ...currentSettings.exclusions,
+        ...settings
+      };
+      
+      this.appSettingsStore.update({ exclusions: updatedSettings });
+      
+      console.log('[UserIPCHandlers] Updated exclusion settings:', updatedSettings);
+      
+      return updatedSettings;
+    } catch (error) {
+      console.error('[UserIPCHandlers] Error setting exclusion settings:', error);
       throw error;
     }
   }

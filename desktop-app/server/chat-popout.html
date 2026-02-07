@@ -50,7 +50,7 @@
         /* Top menu bar - similar to Visual Display */
         .menu-bar {
             display: flex;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
             gap: 8px;
             padding: 8px 12px;
@@ -59,6 +59,15 @@
             border-radius: 12px 12px 0 0;
             -webkit-app-region: drag;
             position: relative;
+        }
+        
+        /* Chat title */
+        .chat-title {
+            font-family: 'W95FA', sans-serif;
+            font-size: 12px;
+            font-weight: bold;
+            color: #efeff1;
+            margin-right: auto;
         }
         
         /* Menu buttons - styled like Visual Display widget menu */
@@ -750,21 +759,27 @@
             display: flex;
             align-items: center;
             gap: 6px;
-            font-size: 10px;
-            color: rgba(255, 255, 255, 0.5);
-            padding: 0 8px;
         }
         
         .status-dot {
-            width: 6px;
-            height: 6px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             background: #ff4444;
             animation: pulse 2s infinite;
         }
         
         .status-dot.connected {
-            background: #44ff44;
+            background: #00FF00;
+            box-shadow: 0 0 4px #00FF00;
+        }
+        
+        .status-dot.disconnected {
+            background: #ff4444;
+        }
+        
+        .status-dot.connecting {
+            background: #FFA500;
         }
         
         @keyframes pulse {
@@ -1133,12 +1148,18 @@
 </head>
 <body class="font-default">
     <div class="chat-window">
+        <!-- Snap guide overlays (purple glow when close to snapping) -->
+        <div class="snap-guide-overlay snap-left"></div>
+        <div class="snap-guide-overlay snap-right"></div>
         <!-- Top menu bar -->
         <div class="menu-bar">
             <!-- Settings button (gear icon, far left) -->
             <button class="menu-button menu-button-icon" id="btnSettings" onclick="toggleSettings()" title="Settings">⚙️</button>
             <!-- Front button (pin icon, beside settings) -->
             <button class="menu-button menu-button-icon" id="btnBringToFront" onclick="bringToFront()" title="Bring to Front">📌</button>
+            <!-- Title -->
+            <span class="chat-title">Chat</span>
+            <!-- Connection status (centered) -->
             <div class="connection-status">
                 <span class="status-dot" id="statusDot"></span>
                 <span id="statusText">Disconnected</span>
@@ -1268,6 +1289,54 @@
                     }
                 });
                 console.log('[ChatPopout] Snap state listener initialized');
+            }
+            
+            // Listen for snap guide visibility updates (purple glow when close to snapping)
+            if (window.electronAPI && window.electronAPI.onSnapGuideChanged) {
+                window.electronAPI.onSnapGuideChanged((data) => {
+                    updateSnapGuide(data.snapGuideVisible, data.snapPosition);
+                });
+                console.log('[ChatPopout] Snap guide listener initialized');
+            }
+        }
+        
+        /**
+         * Update visual snap guide (purple glow when close to snapping)
+         * Shows overlay ONLY on the edge that will snap, not all sides
+         * @param {boolean} visible - Whether snap guide should be visible
+         * @param {string|null} snapPosition - 'buddy-left' or 'buddy-right'
+         */
+        function updateSnapGuide(visible, snapPosition) {
+            const chatWindow = document.querySelector('.chat-window');
+            if (!chatWindow) return;
+            
+            // Remove all indicator classes first
+            chatWindow.classList.remove('snap-left-indicator', 'snap-right-indicator');
+            
+            // Get both overlays
+            const leftOverlay = chatWindow.querySelector('.snap-left');
+            const rightOverlay = chatWindow.querySelector('.snap-right');
+            
+            // Hide all overlays first
+            if (leftOverlay) leftOverlay.style.display = 'none';
+            if (rightOverlay) rightOverlay.style.display = 'none';
+            
+            if (visible && snapPosition) {
+                chatWindow.classList.add('snap-guide-active');
+                
+                if (snapPosition === 'buddy-left') {
+                    // Buddy on LEFT, Chat on RIGHT
+                    // Show Chat's LEFT edge (where Buddy will snap to)
+                    chatWindow.classList.add('snap-left-indicator');
+                    if (leftOverlay) leftOverlay.style.display = 'block';
+                } else if (snapPosition === 'buddy-right') {
+                    // Buddy on RIGHT, Chat on LEFT
+                    // Show Chat's RIGHT edge (where Buddy will snap to)
+                    chatWindow.classList.add('snap-right-indicator');
+                    if (rightOverlay) rightOverlay.style.display = 'block';
+                }
+            } else {
+                chatWindow.classList.remove('snap-guide-active');
             }
         }
         

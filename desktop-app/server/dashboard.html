@@ -1072,6 +1072,29 @@
                                     </div>
                                 </div>
                             </div>
+                            
+                            <!-- Streamer & Bot Account Handling -->
+                            <div class="form-section" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #333;">
+                                <div class="form-group">
+                                    <label>🔥 Streamer & Bot Account Handling</label>
+                                    <span class="label-hint">Configure how streamer and bot accounts behave at the campfire</span>
+                                </div>
+                                <div style="margin-left: 20px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 12px;">
+                                        <input type="checkbox" id="excludeStreamerFromAutoState" checked onchange="saveExclusionSettings()" style="cursor: pointer; width: 18px; height: 18px;">
+                                        <span>👑 Exclude Streamer from Auto AFK/LURK</span>
+                                    </label>
+                                    
+                                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 12px;">
+                                        <input type="checkbox" id="excludeBotFromAutoState" checked onchange="saveExclusionSettings()" style="cursor: pointer; width: 18px; height: 18px;">
+                                        <span>🤖 Exclude Bot from Auto AFK/LURK</span>
+                                    </label>
+                                    
+                                    <p style="font-size: 11px; color: #888; margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                                        💡 <strong>Note:</strong> SLEEPY state will still apply to these accounts (shows inactivity). Only AFK/LURK auto-transitions are blocked. Both accounts will still appear in the campfire scene.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -3966,6 +3989,76 @@
                 autoLeaveMinutes.value = userStates.autoLeaveMinutes || 0;
             }
         }
+        
+        // ============================================
+        // Exclusion Settings Functions
+        // ============================================
+        
+        /**
+         * Save exclusion settings to localStorage
+         */
+        function saveExclusionSettings() {
+            const settings = {
+                excludeStreamerFromAutoState: document.getElementById('excludeStreamerFromAutoState')?.checked ?? true,
+                excludeBotFromAutoState: document.getElementById('excludeBotFromAutoState')?.checked ?? true
+            };
+            
+            // Save to localStorage
+            localStorage.setItem('streamerBotExclusion', JSON.stringify(settings));
+            
+            // Broadcast to all windows via custom event
+            window.dispatchEvent(new CustomEvent('exclusionSettingsChanged', { detail: settings }));
+            
+            // Also save via IPC if in Electron
+            if (window.electronAPI && window.electronAPI.saveSettings) {
+                window.electronAPI.saveSettings({ exclusions: settings });
+            }
+            
+            showStatusMessage('Exclusion settings saved');
+        }
+        
+        /**
+         * Load exclusion settings from localStorage
+         */
+        function loadExclusionSettings() {
+            const saved = localStorage.getItem('streamerBotExclusion');
+            if (saved) {
+                try {
+                    const settings = JSON.parse(saved);
+                    const streamerCheckbox = document.getElementById('excludeStreamerFromAutoState');
+                    const botCheckbox = document.getElementById('excludeBotFromAutoState');
+                    
+                    if (streamerCheckbox) {
+                        streamerCheckbox.checked = settings.excludeStreamerFromAutoState ?? true;
+                    }
+                    if (botCheckbox) {
+                        botCheckbox.checked = settings.excludeBotFromAutoState ?? true;
+                    }
+                } catch (e) {
+                    console.warn('[Dashboard] Error parsing exclusion settings:', e);
+                }
+            }
+            // Defaults are already set in HTML (checked="checked")
+        }
+        
+        /**
+         * Get exclusion settings (for use by other functions)
+         * @returns {Object} Exclusion settings
+         */
+        function getExclusionSettings() {
+            const saved = localStorage.getItem('streamerBotExclusion');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {
+                    // Ignore parsing errors
+                }
+            }
+            return {
+                excludeStreamerFromAutoState: true,
+                excludeBotFromAutoState: true
+            };
+        }
 
         function setSpriteDirection(direction, updatePreview = true) {
             const leftBtn = document.getElementById('spriteDirectionLeft');
@@ -4961,6 +5054,13 @@
                     loadUserStateSettings();
                 } catch (e) {
                     console.error('Error loading user state settings:', e);
+                }
+                
+                // Load exclusion settings
+                try {
+                    loadExclusionSettings();
+                } catch (e) {
+                    console.error('Error loading exclusion settings:', e);
                 }
                 
                 // Allow updates now that settings are loaded
@@ -6804,33 +6904,65 @@
         }
 
         // Helper function to reload the currently visible command subtab
+        // Uses a data attribute to track the active subtab for reliable state management
         async function reloadCurrentCommandSubTab() {
-            // Check which subtab is currently visible and reload it
-            const stateTab = document.getElementById('stateSubTab');
-            const movementTab = document.getElementById('movementSubTab');
-            const appearanceTab = document.getElementById('appearanceSubTab');
-            const animationTab = document.getElementById('animationSubTab');
-            const autoStatesTab = document.getElementById('autoStatesSubTab');
-            const appTab = document.getElementById('appSubTab');
-            const customTab = document.getElementById('customSubTab');
+            // Get the currently active subtab from data attribute first, then fallback to display check
+            let activeSubTab = document.querySelector('.command-sub-tab.active');
+            let activeSubTabName = activeSubTab ? activeSubTab.getAttribute('onclick').match(/switchCommandSubTab\('(\w+)'/)?.[1] : null;
             
-            if (stateTab && stateTab.style.display !== 'none') {
-                await loadStateCommands();
-            } else if (movementTab && movementTab.style.display !== 'none') {
-                await loadMovementCommands();
-            } else if (appearanceTab && appearanceTab.style.display !== 'none') {
-                await loadAppearanceCommands();
-            } else if (animationTab && animationTab.style.display !== 'none') {
-                await loadAnimationCommands();
-            } else if (autoStatesTab && autoStatesTab.style.display !== 'none') {
-                await loadAutoStateCommands();
-            } else if (appTab && appTab.style.display !== 'none') {
-                await loadAppCommands();
-            } else if (customTab && customTab.style.display !== 'none') {
-                await loadCustomCommands();
-            } else {
-                // Default to state commands if nothing is visible
-                await loadStateCommands();
+            // If no active tab found via attribute, check display style as fallback
+            if (!activeSubTabName) {
+                const tabs = [
+                    { name: 'state', id: 'stateSubTab' },
+                    { name: 'movement', id: 'movementSubTab' },
+                    { name: 'appearance', id: 'appearanceSubTab' },
+                    { name: 'animation', id: 'animationSubTab' },
+                    { name: 'auto-states', id: 'autoStatesSubTab' },
+                    { name: 'app', id: 'appSubTab' },
+                    { name: 'custom', id: 'customSubTab' }
+                ];
+                
+                for (const tab of tabs) {
+                    const tabEl = document.getElementById(tab.id);
+                    if (tabEl && tabEl.style.display !== 'none') {
+                        activeSubTabName = tab.name;
+                        break;
+                    }
+                }
+            }
+            
+            // Fallback to 'state' if nothing found
+            if (!activeSubTabName) {
+                activeSubTabName = 'state';
+            }
+            
+            console.log('[Dashboard] Reloading command subtab:', activeSubTabName);
+            
+            // Reload the appropriate tab
+            switch (activeSubTabName) {
+                case 'state':
+                    await loadStateCommands();
+                    break;
+                case 'movement':
+                    await loadMovementCommands();
+                    break;
+                case 'appearance':
+                    await loadAppearanceCommands();
+                    break;
+                case 'animation':
+                    await loadAnimationCommands();
+                    break;
+                case 'auto-states':
+                    await loadAutoStateCommands();
+                    break;
+                case 'app':
+                    await loadAppCommands();
+                    break;
+                case 'custom':
+                    await loadCustomCommands();
+                    break;
+                default:
+                    await loadStateCommands();
             }
         }
 
@@ -8090,60 +8222,73 @@
                 cancelBtn.onclick = () => modal.remove();
 
                 saveBtn.onclick = async () => {
-                    const commandText = commandInput.value.trim();
+                    const commandText = commandInput ? commandInput.value.trim() : '';
                     const newMessage = messageInput.value.trim();
-
-                    if (newMessage) {
-                        // For auto-state commands, commands array is empty (not user-triggered)
-                        // For other commands, parse comma-separated commands
-                        const isAutoStateCmd = AUTO_STATE_COMMAND_IDS.includes(msg.id);
-                        const isAppCmd = APP_COMMAND_IDS.includes(msg.id);
-
-                        if (!isAutoStateCmd && !isAppCmd && !commandText) {
-                            alert('At least one command is required.');
+                    
+                    // Clear any previous error styles
+                    if (commandInput) commandInput.style.borderColor = '#444';
+                    messageInput.style.borderColor = '#444';
+                    
+                    // Validate response message is required
+                    if (!newMessage) {
+                        messageInput.style.borderColor = '#f44336';
+                        alert('Please enter a bot response message.');
+                        messageInput.focus();
+                        return;
+                    }
+                    
+                    // For non-auto-state and non-APP commands, validate command triggers
+                    const isAutoStateCmd = AUTO_STATE_COMMAND_IDS.includes(msg.id);
+                    const isAppCmd = APP_COMMAND_IDS.includes(msg.id);
+                    
+                    if (!isAutoStateCmd && !isAppCmd) {
+                        if (!commandText) {
+                            if (commandInput) commandInput.style.borderColor = '#f44336';
+                            alert('Please enter at least one command trigger (e.g., !custom).');
+                            if (commandInput) commandInput.focus();
                             return;
                         }
-
-                        if (!isAutoStateCmd && !isAppCmd) {
-                            // Parse comma-separated commands for regular commands
-                            const commands = commandText.split(',').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd.length > 0);
-                            if (commands.length === 0) {
-                                alert('At least one command is required.');
-                                return;
-                            }
-                            msg.commands = commands;
-                            msg.command = commands[0]; // Keep backward compatibility
-                        } else if (isAppCmd) {
-                            // For APP commands, keep primary command and add aliases
-                            const aliasesText = aliasesInput ? aliasesInput.value.trim() : '';
-                            const aliases = aliasesText
-                                ? aliasesText.split(',').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd.length > 0)
-                                : [];
-                            // Combine primary command with aliases
-                            msg.commands = [primaryCommand, ...aliases];
-                            msg.command = primaryCommand;
+                        
+                        // Parse comma-separated commands
+                        const commands = commandText.split(',').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd.length > 0);
+                        if (commands.length === 0) {
+                            if (commandInput) commandInput.style.borderColor = '#f44336';
+                            alert('Command triggers cannot be empty. Please enter valid commands like !custom or !test.');
+                            if (commandInput) commandInput.focus();
+                            return;
                         }
-
-                        // Save state filters for RETURN command
-                        if (msg.id === 'return') {
-                            const afkCheckbox = document.getElementById('returnFilterAFK');
-                            const sleepyCheckbox = document.getElementById('returnFilterSLEEPY');
-                            const lurkCheckbox = document.getElementById('returnFilterLURK');
-                            msg.returnFromStates = {
-                                AFK: afkCheckbox ? afkCheckbox.checked : true,
-                                SLEEPY: sleepyCheckbox ? sleepyCheckbox.checked : false,
-                                LURK: lurkCheckbox ? lurkCheckbox.checked : true
-                            };
-                        }
-
-                        msg.message = newMessage;
-
-                        await window.electronAPI.saveBotMessages(messages);
-                        modal.remove();
-                        await reloadCurrentCommandSubTab();
-                    } else {
-                        alert('Message is required.');
+                        
+                        // All validations passed - update the command
+                        msg.commands = commands;
+                        msg.command = commands[0]; // Keep backward compatibility
+                    } else if (isAppCmd) {
+                        // For APP commands, keep primary command and update aliases
+                        const aliasesText = aliasesInput ? aliasesInput.value.trim() : '';
+                        const aliases = aliasesText
+                            ? aliasesText.split(',').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd.length > 0)
+                            : [];
+                        // Combine primary command with aliases
+                        msg.commands = [primaryCommand, ...aliases];
+                        msg.command = primaryCommand;
                     }
+                    
+                    // Save state filters for RETURN command
+                    if (msg.id === 'return') {
+                        const afkCheckbox = document.getElementById('returnFilterAFK');
+                        const sleepyCheckbox = document.getElementById('returnFilterSLEEPY');
+                        const lurkCheckbox = document.getElementById('returnFilterLURK');
+                        msg.returnFromStates = {
+                            AFK: afkCheckbox ? afkCheckbox.checked : true,
+                            SLEEPY: sleepyCheckbox ? sleepyCheckbox.checked : false,
+                            LURK: lurkCheckbox ? lurkCheckbox.checked : true
+                        };
+                    }
+                    
+                    msg.message = newMessage;
+                    
+                    await window.electronAPI.saveBotMessages(messages);
+                    modal.remove();
+                    await reloadCurrentCommandSubTab();
                 };
 
                 // Close on escape
@@ -8261,38 +8406,66 @@
                     const name = nameInput.value.trim();
                     const commandText = commandInput.value.trim();
                     const message = messageInput.value.trim();
-
-                    if (name && commandText && message) {
-                        // Parse comma-separated commands
-                        const commands = commandText.split(',').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd.length > 0);
-                        if (commands.length === 0) {
-                            alert('At least one command is required.');
-                            return;
-                        }
-
-                        let messages = await window.electronAPI.getBotMessages();
-
-                        // Generate unique ID
-                        const id = 'custom_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-
-                        messages.push({
-                            id: id,
-                            name: name,
-                            commands: commands,
-                            command: commands[0], // Keep backward compatibility
-                            message: message,
-                            enabled: true,
-                            silent: false,
-                            respondAllChats: true,
-                            allowNonCampers: false
-                        });
-
-                        await window.electronAPI.saveBotMessages(messages);
-                        modal.remove();
-                        await reloadCurrentCommandSubTab();
-                    } else {
-                        alert('All fields are required.');
+                    
+                    // Clear any previous error styles
+                    nameInput.style.borderColor = '#444';
+                    commandInput.style.borderColor = '#444';
+                    messageInput.style.borderColor = '#444';
+                    
+                    // Validate command name
+                    if (!name) {
+                        nameInput.style.borderColor = '#f44336';
+                        alert('Please enter a command name.');
+                        nameInput.focus();
+                        return;
                     }
+                    
+                    // Validate command triggers (at least one required)
+                    if (!commandText) {
+                        commandInput.style.borderColor = '#f44336';
+                        alert('Please enter at least one command trigger (e.g., !custom).');
+                        commandInput.focus();
+                        return;
+                    }
+                    
+                    // Parse comma-separated commands
+                    const commands = commandText.split(',').map(cmd => cmd.trim().toLowerCase()).filter(cmd => cmd.length > 0);
+                    if (commands.length === 0) {
+                        commandInput.style.borderColor = '#f44336';
+                        alert('Command triggers cannot be empty. Please enter valid commands like !custom or !test.');
+                        commandInput.focus();
+                        return;
+                    }
+                    
+                    // Validate response message
+                    if (!message) {
+                        messageInput.style.borderColor = '#f44336';
+                        alert('Please enter a bot response message.');
+                        messageInput.focus();
+                        return;
+                    }
+                    
+                    // All validations passed - save the command
+                    let messages = await window.electronAPI.getBotMessages();
+                    
+                    // Generate unique ID
+                    const id = 'custom_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    
+                    messages.push({
+                        id: id,
+                        name: name,
+                        commands: commands,
+                        command: commands[0], // Keep backward compatibility
+                        message: message,
+                        enabled: true,
+                        silent: false,
+                        respondAllChats: true,
+                        allowNonCampers: false
+                    });
+                    
+                    await window.electronAPI.saveBotMessages(messages);
+                    modal.remove();
+                    await reloadCurrentCommandSubTab();
                 };
 
                 // Close on escape

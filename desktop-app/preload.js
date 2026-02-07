@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
     closeWindow: () => ipcRenderer.invoke('close-window'),
     onWindowSnapChanged: (callback) => ipcRenderer.on('window-snap-changed', (event, data) => callback(data)),
+    onSnapGuideChanged: (callback) => ipcRenderer.on('snap-guide-changed', (event, data) => callback(data)),
     openSettingsModal: () => ipcRenderer.invoke('open-settings-modal'),
     openMemberDashboard: (userId, username, mode = 'streamer') => ipcRenderer.invoke('open-member-dashboard', userId, username, mode),
     joinAllTestUsers: () => ipcRenderer.invoke('join-all-test-users'),

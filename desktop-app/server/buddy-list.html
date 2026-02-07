@@ -64,7 +64,7 @@
         }
         
         body.mode-modern .buddy-list-container {
-            background: rgba(22, 22, 22, 0.6);
+            background: transparent;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
         
@@ -384,6 +384,7 @@
         }
         
         .buddy-title {
+            font-family: 'W95FA', sans-serif;
             font-size: 12px;
             font-weight: bold;
             letter-spacing: 0.5px;
@@ -764,12 +765,20 @@
             display: flex;
             align-items: center;
             gap: 6px;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .connection-indicator.connected {
+            color: #ffffff;
         }
         
         .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
         }
         
         .status-dot.connected {
@@ -778,18 +787,26 @@
         }
         
         .status-dot.disconnected {
-            background: #FF0000;
-            box-shadow: 0 0 4px #FF0000;
+            background: #ff4444;
         }
         
         .status-dot.connecting {
             background: #FFA500;
-            animation: pulse 1s infinite;
         }
         
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 0.7;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
         
         /* Settings Dropdown */
@@ -864,22 +881,36 @@
             font-size: 12px;
         }
         
-        /* Settings button in header */
-        .header-settings-btn {
+        /* Settings button in header - match chat popout menu-button style */
+        .header-settings-btn,
+        .header-settings-btn:visited {
+            padding: 6px 12px;
+            min-height: 28px;
             background: rgba(28, 28, 28, 0.95);
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 6px;
+            color: #fff;
             cursor: pointer;
-            font-size: 14px;
-            padding: 6px 8px;
-            opacity: 0.7;
-            transition: all 0.2s;
             -webkit-app-region: no-drag;
+            transition: all 0.2s;
+            font-size: 12px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            text-decoration: none;
         }
         
         .header-settings-btn:hover {
-            opacity: 1;
             background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .header-settings-btn:active {
+            background: rgba(255, 255, 255, 0.15);
         }
         
         body.mode-nostalgia .header-settings-btn {
@@ -926,13 +957,15 @@
 <body class="mode-modern">
     <!-- Main window container -->
     <div class="buddy-window">
+        <!-- Snap guide overlays (purple glow when close to snapping) -->
+        <div class="snap-guide-overlay snap-left"></div>
+        <div class="snap-guide-overlay snap-right"></div>
         <!-- Header with title bar style -->
         <div class="buddy-header">
             <!-- Settings button (gear icon, far left) -->
             <button class="header-settings-btn" id="btnHeaderSettings" onclick="toggleSettings()" title="Settings">⚙️</button>
-            <!-- Title with silhouettes icon -->
+            <!-- Title -->
             <div class="buddy-header-left">
-                <div class="title-icon">👥</div>
                 <span class="buddy-title">Buddy List</span>
             </div>
             <!-- Window controls -->
@@ -1305,6 +1338,13 @@
                 });
             }
             
+            // Listen for snap guide visibility updates (purple glow when close to snapping)
+            if (window.electronAPI && window.electronAPI.onSnapGuideChanged) {
+                window.electronAPI.onSnapGuideChanged((data) => {
+                    updateSnapGuide(data.snapGuideVisible, data.snapPosition);
+                });
+            }
+            
             // Listen for Twitch connection status updates
             if (window.electronAPI && window.electronAPI.onTwitchConnected) {
                 window.electronAPI.onTwitchConnected((data) => {
@@ -1350,6 +1390,46 @@
                 document.body.classList.add('snapped-to-chat');
             } else {
                 document.body.classList.remove('snapped-to-chat');
+            }
+        }
+        
+        /**
+         * Update visual snap guide (purple glow when close to snapping)
+         * Shows overlay ONLY on the edge that will snap, not all sides
+         * @param {boolean} visible - Whether snap guide should be visible
+         * @param {string|null} snapPosition - 'buddy-left' or 'buddy-right'
+         */
+        function updateSnapGuide(visible, snapPosition) {
+            const buddyWindow = document.querySelector('.buddy-window');
+            if (!buddyWindow) return;
+            
+            // Remove all indicator classes first
+            buddyWindow.classList.remove('snap-left-indicator', 'snap-right-indicator');
+            
+            // Get both overlays
+            const leftOverlay = buddyWindow.querySelector('.snap-left');
+            const rightOverlay = buddyWindow.querySelector('.snap-right');
+            
+            // Hide all overlays first
+            if (leftOverlay) leftOverlay.style.display = 'none';
+            if (rightOverlay) rightOverlay.style.display = 'none';
+            
+            if (visible && snapPosition) {
+                buddyWindow.classList.add('snap-guide-active');
+                
+                if (snapPosition === 'buddy-left') {
+                    // Buddy on LEFT, Chat on RIGHT
+                    // Show Buddy's RIGHT edge (where Chat will snap to)
+                    buddyWindow.classList.add('snap-right-indicator');
+                    if (rightOverlay) rightOverlay.style.display = 'block';
+                } else if (snapPosition === 'buddy-right') {
+                    // Buddy on RIGHT, Chat on LEFT
+                    // Show Buddy's LEFT edge (where Chat will snap to)
+                    buddyWindow.classList.add('snap-left-indicator');
+                    if (leftOverlay) leftOverlay.style.display = 'block';
+                }
+            } else {
+                buddyWindow.classList.remove('snap-guide-active');
             }
         }
         
@@ -2141,11 +2221,26 @@
         function updateConnectionStatus(connected, text) {
             const dot = document.getElementById('statusDot');
             const textEl = document.getElementById('statusText');
+            const indicator = document.querySelector('.connection-indicator');
             
             state.isConnected = connected;
             
+            // Update indicator container class for text color
+            if (indicator) {
+                if (connected) {
+                    indicator.classList.add('connected');
+                } else {
+                    indicator.classList.remove('connected');
+                }
+            }
+            
             if (dot) {
-                dot.className = `status-dot ${connected ? 'connected' : 'disconnected'}`;
+                // Determine class based on connection state and text
+                let statusClass = connected ? 'connected' : 'disconnected';
+                if (!connected && text && text.toLowerCase().includes('connecting')) {
+                    statusClass = 'connecting';
+                }
+                dot.className = `status-dot ${statusClass}`;
             }
             if (textEl) {
                 textEl.textContent = text;

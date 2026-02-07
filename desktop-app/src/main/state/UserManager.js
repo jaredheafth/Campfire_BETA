@@ -8,10 +8,11 @@
 
 const EventEmitter = require('events');
 const User = require('./User');
-const { 
-  USER_STATES, 
+const AppSettingsStore = require('./AppSettingsStore');
+const {
+  USER_STATES,
   USER_STATE_TIMINGS,
-  CAMPFIRE_CIRCLE 
+  CAMPFIRE_CIRCLE
 } = require('../constants');
 
 /**
@@ -31,6 +32,7 @@ class UserManager extends EventEmitter {
    * @param {Object} options - Configuration options
    * @param {number} options.maxUsers - Maximum number of joined users (default: 50)
    * @param {UserPreferencesStore} options.preferencesStore - Store for persistent preferences
+   * @param {AppSettingsStore} options.appSettingsStore - Store for app-level settings
    */
   constructor(options = {}) {
     super();
@@ -43,6 +45,9 @@ class UserManager extends EventEmitter {
     
     /** @type {UserPreferencesStore|null} Preferences store */
     this.preferencesStore = options.preferencesStore || null;
+    
+    /** @type {AppSettingsStore|null} App settings store */
+    this.appSettingsStore = options.appSettingsStore || null;
     
     /** @type {NodeJS.Timeout|null} State update interval */
     this._stateUpdateInterval = null;
@@ -479,15 +484,16 @@ class UserManager extends EventEmitter {
     if (this._stateUpdatesRunning) return;
     
     this._stateUpdatesRunning = true;
+    const interval = this._getStateUpdateInterval();
     this._stateUpdateInterval = setInterval(
       this._updateUserStates,
-      USER_STATE_TIMINGS.STATE_UPDATE_INTERVAL
+      interval
     );
     
     // Run immediately
     this._updateUserStates();
     
-    console.log('[UserManager] Started automatic state updates');
+    console.log('[UserManager] Started automatic state updates', { intervalMs: interval });
   }
   
   /**
@@ -505,10 +511,14 @@ class UserManager extends EventEmitter {
   
   /**
    * Update user states based on activity timings
+   * Uses configurable settings from AppSettingsStore
    * @private
    */
   _updateUserStates() {
     const now = Date.now();
+    
+    // Get configurable timing thresholds from settings
+    const timings = this._getStateTimings();
     
     for (const user of this.users.values()) {
       // Skip users who haven't joined or are in manual states
@@ -516,18 +526,24 @@ class UserManager extends EventEmitter {
       if (user.state === USER_STATES.LURK) continue; // LURK is manual only
       if (user.manualAfk) continue; // Manual AFK doesn't auto-transition
       
+      // Skip excluded accounts (streamer/bot) from auto AFK/LURK transitions
+      // SLEEPY is still allowed for visibility
+      if (this._shouldExcludeFromAutoState(user)) {
+        continue;
+      }
+      
       const timeSinceActivity = now - user.lastActivity;
       const oldState = user.state;
       
       // Stacking timers: each threshold is ADDED to the previous one
       // Example: 5min sleepy + 15min afk = 20min total to become AFK
-      const sleepyToAfkThreshold = USER_STATE_TIMINGS.SLEEPY_THRESHOLD + USER_STATE_TIMINGS.AFK_THRESHOLD;
-      const afkToLeaveThreshold = USER_STATE_TIMINGS.SLEEPY_THRESHOLD + USER_STATE_TIMINGS.AFK_THRESHOLD + USER_STATE_TIMINGS.AUTO_LEAVE_THRESHOLD;
+      const sleepyToAfkThreshold = timings.sleepyThreshold + timings.afkThreshold;
+      const afkToLeaveThreshold = timings.autoLeaveThreshold > 0 
+        ? sleepyToAfkThreshold + timings.autoLeaveThreshold 
+        : null;
       
       // Check for auto-leave (longest stacked threshold)
-      if (timeSinceActivity >= afkToLeaveThreshold) {
-        // This would be handled by settings check in the actual implementation
-        // For now, just transition to AFK
+      if (afkToLeaveThreshold && timeSinceActivity >= afkToLeaveThreshold) {
         if (user.state !== USER_STATES.AFK) {
           user.state = USER_STATES.AFK;
           // Emit with 3 separate arguments to match UserIPCHandlers listener signature
@@ -548,7 +564,7 @@ class UserManager extends EventEmitter {
       
       // Check for SLEEPY transition
       // Both ACTIVE and JOINED users should transition to SLEEPY after inactivity
-      if (timeSinceActivity >= USER_STATE_TIMINGS.SLEEPY_THRESHOLD) {
+      if (timeSinceActivity >= timings.sleepyThreshold) {
         if (user.state === USER_STATES.ACTIVE || user.state === USER_STATES.JOINED) {
           user.state = USER_STATES.SLEEPY;
           // Emit with 3 separate arguments to match UserIPCHandlers listener signature
@@ -557,6 +573,75 @@ class UserManager extends EventEmitter {
         continue;
       }
     }
+  }
+  
+  /**
+   * Get state timing thresholds from settings or defaults
+   * @returns {Object} Timing thresholds in milliseconds
+   * @private
+   */
+  _getStateTimings() {
+    if (this.appSettingsStore) {
+      const settings = this.appSettingsStore.getSettings();
+      return {
+        sleepyThreshold: settings.stateTimings?.sleepyThreshold ?? USER_STATE_TIMINGS.SLEEPY_THRESHOLD,
+        afkThreshold: settings.stateTimings?.afkThreshold ?? USER_STATE_TIMINGS.AFK_THRESHOLD,
+        autoLeaveThreshold: settings.stateTimings?.autoLeaveThreshold ?? USER_STATE_TIMINGS.AUTO_LEAVE_THRESHOLD,
+        stateUpdateInterval: settings.stateTimings?.stateUpdateInterval ?? USER_STATE_TIMINGS.STATE_UPDATE_INTERVAL
+      };
+    }
+    
+    // Fallback to constants if no settings store
+    return {
+      sleepyThreshold: USER_STATE_TIMINGS.SLEEPY_THRESHOLD,
+      afkThreshold: USER_STATE_TIMINGS.AFK_THRESHOLD,
+      autoLeaveThreshold: USER_STATE_TIMINGS.AUTO_LEAVE_THRESHOLD,
+      stateUpdateInterval: USER_STATE_TIMINGS.STATE_UPDATE_INTERVAL
+    };
+  }
+  
+  /**
+   * Check if user should be excluded from automatic state transitions
+   * Excludes streamer and bot accounts from AFK/LURK (but allows SLEEPY)
+   * @param {User} user - User to check
+   * @returns {boolean} True if user should be skipped from auto state updates
+   * @private
+   */
+  _shouldExcludeFromAutoState(user) {
+    if (!this.appSettingsStore) {
+      return false;
+    }
+    
+    const settings = this.appSettingsStore.getSettings();
+    const exclusions = settings.exclusions || {};
+    
+    // Check streamer exclusion (broadcaster role)
+    if (exclusions.excludeStreamerFromAutoState && user.roles?.isBroadcaster) {
+      return true;
+    }
+    
+    // Check bot exclusion (bot role OR explicit bot user ID)
+    if (exclusions.excludeBotFromAutoState && 
+        (user.roles?.isBot || user.userId === exclusions.botUserId)) {
+      return true;
+    }
+    
+    // Check explicit user ID exclusions (from dashboard config)
+    if (exclusions.streamerUserId === user.userId || exclusions.botUserId === user.userId) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Get the current interval for state updates (used by startStateUpdates)
+   * @returns {number} Interval in milliseconds
+   * @private
+   */
+  _getStateUpdateInterval() {
+    const timings = this._getStateTimings();
+    return timings.stateUpdateInterval;
   }
   
   // ============================================

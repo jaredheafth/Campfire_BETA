@@ -91,6 +91,648 @@ const commandCooldowns = new Map();
 const DEFAULT_COOLDOWN_SECONDS = 3;
 const DEFAULT_WHO_COOLDOWN_SECONDS = 30;
 
+// ============================================
+// SNAP MANAGER - Centralized Window Snapping
+// ============================================
+// Problem: Electron's 'moving' event doesn't fire reliably during drag on Windows.
+// Solution: Use position polling at ~120fps with velocity tracking for leader detection.
+// Rules:
+// 1. When windows are snapped, they move together as a unit
+// 2. Only the dragged window (leader) controls position; follower moves immediately
+// 3. Unsnap only via explicit detach button, not by dragging
+// 4. Single source of truth - no distributed state across windows
+// 5. Supports both "buddy-left" and "buddy-right" snap positions
+
+class SnapManager {
+    // ==================== CONSTANTS ====================
+    
+    /** Polling interval in milliseconds (~120fps) */
+    static POLL_RATE_MS = 8;
+    
+    /** Minimum pixel movement to detect leader window */
+    static LEADER_THRESHOLD = 2;
+    
+    /** Time in ms after which drag is considered ended */
+    static DRAG_END_DELAY = 50;
+    
+    /** Gap between snapped windows (negative = overlap) */
+    static SNAP_GAP = -10;
+    
+    /** Distance threshold for snapping on release */
+    static SNAP_THRESHOLD = 30;
+    
+    /** Vertical tolerance for snapping */
+    static Y_TOLERANCE = 50;
+    
+    /** Proximity threshold to show visual snap guide */
+    static SNAP_GUIDE_THRESHOLD = 50;
+    
+    /** Minimum position change to trigger follower sync (0 = always sync) */
+    static SYNC_THRESHOLD = 0;
+    
+    /** Minimum size change to trigger resize sync */
+    static SIZE_SYNC_THRESHOLD = 2;
+    
+    // ==================== CONSTRUCTOR ====================
+    
+    constructor() {
+        // Window references
+        this.chatWindow = null;
+        this.buddyListWindow = null;
+        
+        // Snap state
+        this.isSnapped = false;
+        this.snapPosition = null; // 'buddy-left' | 'buddy-right' | null
+        
+        // Polling state
+        this.pollInterval = null;
+        this.lastChatBounds = null;
+        this.lastBuddyBounds = null;
+        this.lastPollTime = null;
+        
+        // Leader tracking - once established, stays until drag ends
+        this.leaderWindow = null; // 'chat' | 'buddy' | null
+        this.dragEndTimeout = null;
+        
+        // Visual guide state
+        this.snapGuideVisible = false;
+        this.guideTimeout = null;
+        
+        // Saved sizes for persistence after unsnap
+        this.savedChatBounds = null;
+        this.savedBuddyBounds = null;
+    }
+    
+    // ==================== PUBLIC API ====================
+    
+    /**
+     * Register windows with the snap manager.
+     * Called when both windows are created to establish event listeners.
+     * 
+     * @param {BrowserWindow} chatWindow - The Chat Popout window
+     * @param {BrowserWindow} buddyListWindow - The Buddy List window
+     */
+    registerWindows(chatWindow, buddyListWindow) {
+        this.chatWindow = chatWindow;
+        this.buddyListWindow = buddyListWindow;
+        
+        this.#setupMoveHandlers();
+        console.log('[SnapManager] Windows registered');
+    }
+    
+    /**
+     * Snap windows together in the specified position.
+     * 
+     * @param {'buddy-left' | 'buddy-right'} position - Snap position
+     */
+    snap(position) {
+        if (!this.#validateWindows()) return;
+        
+        const chatBounds = this.chatWindow.getBounds();
+        const buddyBounds = this.buddyListWindow.getBounds();
+        
+        // Save current sizes before snapping (for persistence after unsnap)
+        this.savedChatBounds = { ...chatBounds };
+        this.savedBuddyBounds = { ...buddyBounds };
+        
+        // Position windows based on snap direction
+        if (position === 'buddy-left') {
+            // Buddy on left, Chat on right
+            // Buddy's right edge = Chat's left edge - 10 (overlap)
+            this.buddyListWindow.setPosition(chatBounds.x - buddyBounds.width - SnapManager.SNAP_GAP, chatBounds.y);
+        } else if (position === 'buddy-right') {
+            // Buddy on right, Chat on left
+            // Buddy's left edge = Chat's right edge - 10 (overlap)
+            this.buddyListWindow.setPosition(chatBounds.x + chatBounds.width - SnapManager.SNAP_GAP, chatBounds.y);
+        }
+        
+        this.isSnapped = true;
+        this.snapPosition = position;
+        
+        // Sync both width and height
+        this.#syncHeights();
+        
+        // Start position polling
+        this.#startPolling();
+        
+        // Notify renderers
+        this.#notifySnapStateChanged();
+        
+        console.log(`[SnapManager] Windows snapped: ${position}`);
+    }
+    
+    /**
+     * Bring both snapped windows to the front
+     * Called when either window gains focus to keep them layered together
+     */
+    bringAllToTop() {
+        if (!this.isSnapped) return;
+        
+        // Both windows to top, leader first, then follower
+        if (this.leaderWindow && !this.leaderWindow.isDestroyed()) {
+            this.leaderWindow.moveTop();
+        }
+        if (this.followerWindow && !this.followerWindow.isDestroyed()) {
+            this.followerWindow.moveTop();
+        }
+        console.log('[SnapManager] Both windows brought to top');
+    }
+
+    /**
+     * Unsnap windows. Called by the detach button IPC handler.
+     * Restores saved sizes so adjustments persist.
+     */
+    unsnap() {
+        if (!this.isSnapped) return;
+        
+        // Save current sizes before unsnapping (capture any resize adjustments)
+        if (this.chatWindow && !this.chatWindow.isDestroyed()) {
+            this.savedChatBounds = { ...this.chatWindow.getBounds() };
+        }
+        if (this.buddyListWindow && !this.buddyListWindow.isDestroyed()) {
+            this.savedBuddyBounds = { ...this.buddyListWindow.getBounds() };
+        }
+        
+        this.isSnapped = false;
+        this.snapPosition = null;
+        this.leaderWindow = null;
+        
+        // Stop polling
+        this.#stopPolling();
+        
+        // Reset position tracking
+        this.lastChatBounds = null;
+        this.lastBuddyBounds = null;
+        this.lastPollTime = null;
+        
+        // Hide any visible snap guide
+        this.#hideSnapGuide();
+        
+        // Notify renderers
+        this.#notifySnapStateChanged();
+        
+        console.log('[SnapManager] Windows unsnapped');
+    }
+    
+    // ==================== PRIVATE METHODS ====================
+    
+    /**
+     * Start position polling for synchronized movement during drag.
+     * @private
+     */
+    #startPolling() {
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+        }
+        
+        this.pollInterval = setInterval(() => {
+            this.#pollPositions();
+        }, SnapManager.POLL_RATE_MS);
+        
+        console.log('[SnapManager] Position polling started');
+    }
+    
+    /**
+     * Stop position polling.
+     * @private
+     */
+    #stopPolling() {
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
+        this.leaderWindow = null;
+        console.log('[SnapManager] Position polling stopped');
+    }
+    
+    /**
+     * Poll window positions and synchronize snapped windows.
+     * Uses leader-follower pattern for smooth synchronized movement.
+     * Also syncs heights during resize for "resize as one" feel.
+     * @private
+     */
+    #pollPositions() {
+        if (!this.isSnapped || !this.#validateWindows()) return;
+        
+        try {
+            const chatBounds = this.chatWindow.getBounds();
+            const buddyBounds = this.buddyListWindow.getBounds();
+            
+            // Calculate movements since last poll
+            const chatDeltaX = this.lastChatBounds ? chatBounds.x - this.lastChatBounds.x : 0;
+            const chatDeltaY = this.lastChatBounds ? chatBounds.y - this.lastChatBounds.y : 0;
+            const buddyDeltaX = this.lastBuddyBounds ? buddyBounds.x - this.lastBuddyBounds.x : 0;
+            const buddyDeltaY = this.lastBuddyBounds ? buddyBounds.y - this.lastBuddyBounds.y : 0;
+            
+            // Calculate height changes
+            const chatDeltaHeight = this.lastChatBounds ? chatBounds.height - this.lastChatBounds.height : 0;
+            const buddyDeltaHeight = this.lastBuddyBounds ? buddyBounds.height - this.lastBuddyBounds.height : 0;
+            
+            const chatMovement = Math.abs(chatDeltaX) + Math.abs(chatDeltaY);
+            const buddyMovement = Math.abs(buddyDeltaX) + Math.abs(buddyDeltaY);
+            
+            // Sync heights during resize - "resize as one" feel
+            if (chatDeltaHeight !== 0 || buddyDeltaHeight !== 0) {
+                // If Chat resized, Buddy List follows Chat's height
+                if (chatDeltaHeight !== 0) {
+                    if (buddyBounds.height !== chatBounds.height) {
+                        this.buddyListWindow.setSize(buddyBounds.width, chatBounds.height);
+                    }
+                }
+                // If Buddy List resized, it should match Chat's height (Chat is master)
+                else if (buddyDeltaHeight !== 0) {
+                    if (buddyBounds.height !== chatBounds.height) {
+                        this.buddyListWindow.setSize(buddyBounds.width, chatBounds.height);
+                    }
+                }
+            }
+            
+            // Determine and maintain leader
+            if (this.leaderWindow === 'chat') {
+                this.#syncFollower('chat', chatBounds, buddyBounds);
+            } else if (this.leaderWindow === 'buddy') {
+                this.#syncFollower('buddy', chatBounds, buddyBounds);
+            } else {
+                // No leader established yet - determine from movement
+                if (chatMovement > SnapManager.LEADER_THRESHOLD && chatMovement >= buddyMovement) {
+                    this.leaderWindow = 'chat';
+                    this.#syncFollower('chat', chatBounds, buddyBounds);
+                } else if (buddyMovement > SnapManager.LEADER_THRESHOLD && buddyMovement > chatMovement) {
+                    this.leaderWindow = 'buddy';
+                    this.#syncFollower('buddy', chatBounds, buddyBounds);
+                } else if (chatMovement > 0 || buddyMovement > 0) {
+                    // Both moving - use larger movement
+                    if (chatMovement >= buddyMovement) {
+                        this.leaderWindow = 'chat';
+                        this.#syncFollower('chat', chatBounds, buddyBounds);
+                    } else {
+                        this.leaderWindow = 'buddy';
+                        this.#syncFollower('buddy', chatBounds, buddyBounds);
+                    }
+                }
+            }
+            
+            // Update last positions
+            this.lastChatBounds = { ...chatBounds };
+            this.lastBuddyBounds = { ...buddyBounds };
+            
+            // Check for drag end
+            this.#updateDragEndTimeout(chatMovement, buddyMovement);
+            
+            // Check snap guide visibility
+            this.#updateSnapGuide(chatBounds, buddyBounds);
+            
+        } catch (error) {
+            console.error('[SnapManager] Error in pollPositions:', error);
+        }
+    }
+    
+    /**
+     * Synchronize follower window position to maintain snap with leader.
+     * @param {'chat' | 'buddy'} leader - The window being dragged
+     * @param {Object} chatBounds - Current Chat window bounds
+     * @param {Object} buddyBounds - Current Buddy List bounds
+     * @private
+     */
+    #syncFollower(leader, chatBounds, buddyBounds) {
+        let targetX, targetY;
+        
+        if (this.snapPosition === 'buddy-left') {
+            // Buddy on left, Chat on right
+            // Buddy's right edge = Chat's left edge - 10 (overlap)
+            if (leader === 'chat') {
+                // Chat moved, Buddy follows
+                targetX = chatBounds.x - buddyBounds.width - SnapManager.SNAP_GAP;
+                targetY = chatBounds.y;
+                if (this.buddyListWindow && !this.buddyListWindow.isDestroyed() &&
+                    this.#shouldMove(buddyBounds.x, buddyBounds.y, targetX, targetY)) {
+                    this.buddyListWindow.setPosition(targetX, targetY, false);
+                }
+            } else {
+                // Buddy moved, Chat follows
+                targetX = buddyBounds.x + buddyBounds.width + SnapManager.SNAP_GAP;
+                targetY = buddyBounds.y;
+                if (this.chatWindow && !this.chatWindow.isDestroyed() &&
+                    this.#shouldMove(chatBounds.x, chatBounds.y, targetX, targetY)) {
+                    this.chatWindow.setPosition(targetX, targetY, false);
+                }
+            }
+        } else if (this.snapPosition === 'buddy-right') {
+            // Buddy on right, Chat on left
+            // Buddy's left edge = Chat's right edge - 10 (overlap)
+            if (leader === 'chat') {
+                // Chat moved, Buddy follows
+                // Buddy.x = Chat.x + Chat.width - 10
+                targetX = chatBounds.x + chatBounds.width - SnapManager.SNAP_GAP;
+                targetY = chatBounds.y;
+                if (this.buddyListWindow && !this.buddyListWindow.isDestroyed() &&
+                    this.#shouldMove(buddyBounds.x, buddyBounds.y, targetX, targetY)) {
+                    this.buddyListWindow.setPosition(targetX, targetY, false);
+                }
+            } else {
+                // Buddy moved, Chat follows
+                // Chat.x = Buddy.x - Chat.width - 10
+                targetX = buddyBounds.x - chatBounds.width - SnapManager.SNAP_GAP;
+                targetY = buddyBounds.y;
+                if (this.chatWindow && !this.chatWindow.isDestroyed() &&
+                    this.#shouldMove(chatBounds.x, chatBounds.y, targetX, targetY)) {
+                    this.chatWindow.setPosition(targetX, targetY, false);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Check if position differs enough to warrant a move.
+     * @private
+     */
+    #shouldMove(currentX, currentY, targetX, targetY) {
+        return Math.abs(currentX - targetX) > SnapManager.SYNC_THRESHOLD || 
+               Math.abs(currentY - targetY) > SnapManager.SYNC_THRESHOLD;
+    }
+    
+    /**
+     * Update drag end timeout based on movement.
+     * @private
+     */
+    #updateDragEndTimeout(chatMovement, buddyMovement) {
+        if (this.leaderWindow && chatMovement === 0 && buddyMovement === 0) {
+            if (!this.dragEndTimeout) {
+                this.dragEndTimeout = setTimeout(() => {
+                    this.leaderWindow = null;
+                    this.dragEndTimeout = null;
+                }, SnapManager.DRAG_END_DELAY);
+            }
+        } else if (chatMovement > 0 || buddyMovement > 0) {
+            if (this.dragEndTimeout) {
+                clearTimeout(this.dragEndTimeout);
+                this.dragEndTimeout = null;
+            }
+        }
+    }
+    
+    /**
+     * Update visual snap guide visibility based on proximity.
+     * Shows guide ONLY when windows are NOT snapped but close to snapping.
+     * @private
+     */
+    #updateSnapGuide(chatBounds, buddyBounds) {
+        // Only show snap guide when windows are NOT yet snapped
+        if (this.isSnapped) {
+            this.#hideSnapGuide();
+            return;
+        }
+        
+        const proximity = this.#calculateProximity(chatBounds, buddyBounds);
+        
+        if (proximity.position && !this.snapGuideVisible) {
+            // Show guide with the correct position
+            this.snapPosition = proximity.position;
+            this.#showSnapGuide();
+        } else if (!proximity.position && this.snapGuideVisible) {
+            this.#hideSnapGuide();
+        }
+    }
+    
+    /**
+     * Calculate proximity between windows for snap guide.
+     * Returns both the distance and which side is closer.
+     * @returns {Object} { distance: number, position: 'buddy-left' | 'buddy-right' | null }
+     * @private
+     */
+    #calculateProximity(chatBounds, buddyBounds) {
+        // Calculate distance if Buddy would be on left of Chat
+        const buddyRight = buddyBounds.x + buddyBounds.width;
+        const distanceLeft = chatBounds.x - buddyRight;
+        const yDiffLeft = Math.abs(chatBounds.y - buddyBounds.y);
+        
+        // Calculate distance if Buddy would be on right of Chat
+        const chatRight = chatBounds.x + chatBounds.width;
+        const distanceRight = buddyBounds.x - chatRight;
+        const yDiffRight = Math.abs(buddyBounds.y - chatBounds.y);
+        
+        // Check if left side snap is valid (within threshold and aligned vertically)
+        const leftValid = Math.abs(distanceLeft) < SnapManager.SNAP_GUIDE_THRESHOLD && yDiffLeft <= SnapManager.Y_TOLERANCE;
+        
+        // Check if right side snap is valid
+        const rightValid = Math.abs(distanceRight) < SnapManager.SNAP_GUIDE_THRESHOLD && yDiffRight <= SnapManager.Y_TOLERANCE;
+        
+        if (leftValid && rightValid) {
+            // Both valid - return the closer one
+            if (Math.abs(distanceLeft) <= Math.abs(distanceRight)) {
+                return { distance: Math.abs(distanceLeft), position: 'buddy-left' };
+            } else {
+                return { distance: Math.abs(distanceRight), position: 'buddy-right' };
+            }
+        } else if (leftValid) {
+            return { distance: Math.abs(distanceLeft), position: 'buddy-left' };
+        } else if (rightValid) {
+            return { distance: Math.abs(distanceRight), position: 'buddy-right' };
+        }
+        
+        return { distance: Infinity, position: null };
+    }
+    
+    /**
+     * Show visual snap guide (purple glow) on both windows.
+     * @private
+     */
+    #showSnapGuide() {
+        this.snapGuideVisible = true;
+        const state = { snapGuideVisible: true, snapPosition: this.snapPosition || 'buddy-left' };
+        
+        if (this.chatWindow && !this.chatWindow.isDestroyed()) {
+            this.chatWindow.webContents.send('snap-guide-changed', state);
+        }
+        if (this.buddyListWindow && !this.buddyListWindow.isDestroyed()) {
+            this.buddyListWindow.webContents.send('snap-guide-changed', state);
+        }
+        
+        console.log('[SnapManager] Snap guide shown');
+    }
+    
+    /**
+     * Hide visual snap guide.
+     * @private
+     */
+    #hideSnapGuide() {
+        if (!this.snapGuideVisible) return;
+        
+        this.snapGuideVisible = false;
+        const state = { snapGuideVisible: false, snapPosition: null };
+        
+        if (this.chatWindow && !this.chatWindow.isDestroyed()) {
+            this.chatWindow.webContents.send('snap-guide-changed', state);
+        }
+        if (this.buddyListWindow && !this.buddyListWindow.isDestroyed()) {
+            this.buddyListWindow.webContents.send('snap-guide-changed', state);
+        }
+        
+        console.log('[SnapManager] Snap guide hidden');
+    }
+    
+    /**
+     * Set up move handlers for snap detection on release.
+     * @private
+     */
+    #setupMoveHandlers() {
+        // Chat release handler
+        this.chatWindow.on('moved', () => this.#handleChatRelease());
+        
+        // Buddy List release handler
+        this.buddyListWindow.on('moved', () => this.#handleBuddyListRelease());
+        
+        // Note: Resize sync is handled by pollPositions() at ~120fps
+        // This gives "resize as one" feel without jitter
+        // No need for separate resize/resized handlers
+        
+        // Close handlers - unsnap on close
+        this.chatWindow.on('close', () => this.unsnap());
+        this.buddyListWindow.on('close', () => this.unsnap());
+    }
+    
+    /**
+     * Handle Chat window release (drag ended).
+     * @private
+     */
+    #handleChatRelease() {
+        if (!this.#validateWindows()) return;
+        
+        const chatBounds = this.chatWindow.getBounds();
+        const buddyBounds = this.buddyListWindow.getBounds();
+        
+        // Reset leader on release
+        this.leaderWindow = null;
+        
+        if (this.isSnapped) {
+            // Already snapped - position is maintained by polling, just reset leader
+            // The polling will continue to maintain the snap position
+            console.log('[SnapManager] Chat released - snap maintained by polling');
+        } else {
+            // Try to snap - check both left and right sides
+            this.#trySnapOnRelease(chatBounds, buddyBounds);
+        }
+    }
+    
+    /**
+     * Handle Buddy List window release (drag ended).
+     * @private
+     */
+    #handleBuddyListRelease() {
+        if (!this.#validateWindows()) return;
+        
+        const buddyBounds = this.buddyListWindow.getBounds();
+        const chatBounds = this.chatWindow.getBounds();
+        
+        // Reset leader on release
+        this.leaderWindow = null;
+        
+        if (this.isSnapped) {
+            // Already snapped - position is maintained by polling, just reset leader
+            // The polling will continue to maintain the snap position
+            console.log('[SnapManager] Buddy List released - snap maintained by polling');
+        } else {
+            // Try to snap - check both left and right sides
+            this.#trySnapOnRelease(chatBounds, buddyBounds);
+        }
+    }
+    
+    /**
+     * Attempt to snap windows when either is released.
+     * @private
+     */
+    #trySnapOnRelease(chatBounds, buddyBounds) {
+        // Check if Buddy should be on left of Chat
+        const buddyRight = buddyBounds.x + buddyBounds.width;
+        const distanceLeft = chatBounds.x - buddyRight;
+        const yDiffLeft = Math.abs(chatBounds.y - buddyBounds.y);
+        
+        // Check if Buddy should be on right of Chat
+        const chatRight = chatBounds.x + chatBounds.width;
+        const distanceRight = buddyBounds.x - chatRight;
+        const yDiffRight = Math.abs(buddyBounds.y - chatBounds.y);
+        
+        // Snap to left side (Buddy left, Chat right)
+        if (Math.abs(distanceLeft) < SnapManager.SNAP_THRESHOLD && yDiffLeft <= SnapManager.Y_TOLERANCE) {
+            this.snap('buddy-left');
+            console.log('[SnapManager] Buddy List snapped to left of Chat');
+            return;
+        }
+        
+        // Snap to right side (Buddy right, Chat left)
+        if (Math.abs(distanceRight) < SnapManager.SNAP_THRESHOLD && yDiffRight <= SnapManager.Y_TOLERANCE) {
+            this.snap('buddy-right');
+            console.log('[SnapManager] Buddy List snapped to right of Chat');
+            return;
+        }
+        
+        console.log(`[SnapManager] No snap - distances: left=${distanceLeft.toFixed(0)}, right=${distanceRight.toFixed(0)}`);
+    }
+    
+    /**
+     * Synchronize heights of snapped windows.
+     * Only syncs height (not width) - Buddy List follows Chat's height.
+     * @private
+     */
+    #syncHeights() {
+        try {
+            if (!this.isSnapped || !this.#validateWindows()) return;
+            
+            const chatBounds = this.chatWindow.getBounds();
+            const buddyBounds = this.buddyListWindow.getBounds();
+            
+            // Only sync height, not width - widths remain independent
+            if (Math.abs(buddyBounds.height - chatBounds.height) > SnapManager.SIZE_SYNC_THRESHOLD) {
+                this.buddyListWindow.setSize(buddyBounds.width, chatBounds.height);
+                console.log(`[SnapManager] Synced Buddy List height: ${chatBounds.height}px`);
+            }
+        } catch (error) {
+            console.error('[SnapManager] Failed to sync heights:', error);
+        }
+    }
+    
+    /**
+     * Notify renderer processes of snap state change.
+     * @private
+     */
+    #notifySnapStateChanged() {
+        try {
+            const status = {
+                bothSnapped: this.isSnapped,
+                snapState: this.snapPosition
+            };
+            
+            if (this.chatWindow && !this.chatWindow.isDestroyed()) {
+                this.chatWindow.webContents.send('window-snap-changed', status);
+            }
+            
+            if (this.buddyListWindow && !this.buddyListWindow.isDestroyed()) {
+                this.buddyListWindow.webContents.send('window-snap-changed', status);
+            }
+        } catch (error) {
+            console.error('[SnapManager] Failed to notify snap state:', error);
+        }
+    }
+    
+    /**
+     * Validate that both windows exist and are not destroyed.
+     * @returns {boolean} True if both windows are valid
+     * @private
+     */
+    #validateWindows() {
+        if (!this.chatWindow || this.chatWindow.isDestroyed()) {
+            return false;
+        }
+        if (!this.buddyListWindow || this.buddyListWindow.isDestroyed()) {
+            return false;
+        }
+        return true;
+    }
+}
+
+// Global SnapManager instance
+const snapManager = new SnapManager();
+
 /**
  * Check if a command is on cooldown for a user
  * @param {string} commandId - The command ID
@@ -1098,10 +1740,12 @@ function createChatPopoutWindow() {
         frame: false,
         transparent: true,
         resizable: true,
+        movable: true,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            preload: path.join(__dirname, 'preload.js')
+            preload: path.join(__dirname, 'preload.js'),
+            backgroundThrottling: false // Keep rendering when unfocused
         },
         icon: path.join(__dirname, 'assets', 'icon.png'),
         title: 'Campfire Widget - Chat',
@@ -1110,157 +1754,49 @@ function createChatPopoutWindow() {
 
     chatPopoutWindow.loadFile(path.join(__dirname, 'server', 'chat-popout.html'));
 
+    // Register window reference in UserIPCHandlers for event forwarding
+    if (userIPCHandlers && userIPCHandlers.windows) {
+        userIPCHandlers.windows.chatPopout = chatPopoutWindow;
+        console.log('[ChatPopout] Registered in UserIPCHandlers');
+    } else {
+        console.log('[ChatPopout] WARNING: userIPCHandlers.windows not available');
+    }
+
     chatPopoutWindow.on('closed', () => {
         chatPopoutWindow = null;
     });
     
     // ============================================
-    // SNAP-TO-EDGE WINDOW GROUPING
+    // SNAP MANAGER INTEGRATION (New)
     // ============================================
+    // Use SnapManager for synchronized movement during drag
+    // Problem: 'moving' event doesn't fire reliably on Windows
+    // Solution: Position polling at ~60fps via SnapManager
     
-    // Track snap state
-    chatPopoutWindow.snappedTo = null;      // 'widget-right', 'buddy-right', or null
-    chatPopoutWindow.snappedFrom = null;    // 'buddy-left' or null (who snapped to us)
-    chatPopoutWindow.isSnapped = false;     // Are we snapped to anyone?
-    
-    // When Chat moves, this fires at the end of the move
-    // Note: Position sync happens in the 'moving' handler
-    // We only unsnap here if the user explicitly detaches via the button
-    // (Detach is handled via IPC, not via drag distance)
-    chatPopoutWindow.on('move', () => {
-        // No automatic unsnap on move - only explicit detach works
-        // The 'moving' handler handles position sync during drag
-    });
-    
-    // When Chat moves while snapped, move Buddy List too
-    chatPopoutWindow.on('moving', () => {
-        // Check if Chat is snapped TO Buddy List OR if Buddy List is snapped TO Chat
-        const isSnappedToBuddy = (chatPopoutWindow.snappedTo === 'buddy-right');
-        const buddySnappedToChat = (buddyListWindow?.snappedTo === 'chat-left');
-        const isSnapped = isSnappedToBuddy || buddySnappedToChat;
-        
-        console.log(`[Snap] Chat moving - isSnapped: ${isSnapped}, snappedTo: ${chatPopoutWindow.snappedTo}, buddy.snappedTo: ${buddyListWindow?.snappedTo}`);
-        
-        if (isSnapped && buddyListWindow && !buddyListWindow.isDestroyed()) {
-            const chatBounds = chatPopoutWindow.getBounds();
-            const buddyBounds = buddyListWindow.getBounds();
-            
-            // Move Buddy List to be adjacent to Chat
-            // Chat's left edge minus Buddy List width (no gap for clean drop shadow merge)
-            const SNAP_GAP = 0;
-            const targetX = chatBounds.x - SNAP_GAP - buddyBounds.width;
-            const targetY = chatBounds.y;
-            
-            console.log(`[Snap] Moving Buddy List to x:${targetX}, y:${targetY}`);
-            
-            // Only move if significantly different to avoid jitter
-            if (Math.abs(buddyBounds.x - targetX) > 2 || Math.abs(buddyBounds.y - targetY) > 2) {
-                buddyListWindow.setPosition(targetX, targetY);
-            }
-        }
-    });
-    
-    // When Chat is released (move ended), check if it should snap or unsnap from Buddy List
-    chatPopoutWindow.on('moved', () => {
-        if (!buddyListWindow || buddyListWindow.isDestroyed()) return;
-        
-        const chatBounds = chatPopoutWindow.getBounds();
-        const buddyBounds = buddyListWindow.getBounds();
-        
-        // Check if Buddy List is to the left of Chat
-        const buddyRight = buddyBounds.x + buddyBounds.width;
-        const distance = chatBounds.x - buddyRight;
-        
-        // Snap threshold (pixels)
-        const SNAP_THRESHOLD = 30;
-        const Y_TOLERANCE = 50; // Allow 50 pixels Y difference for snapping (more forgiving)
-        
-        // If already snapped, check if user dragged it far enough to unsnap
-        if (chatPopoutWindow.snappedTo === 'buddy-right') {
-            // Check if dragged beyond snap threshold
-            if (Math.abs(distance) > SNAP_THRESHOLD * 2 || Math.abs(chatBounds.y - buddyBounds.y) > Y_TOLERANCE) {
-                // User dragged far enough - unsnap
-                chatPopoutWindow.snappedTo = null;
-                chatPopoutWindow.snappedFrom = null;
-                buddyListWindow.snappedTo = null;
-                buddyListWindow.snappedFrom = null;
-                chatPopoutWindow.isSnapped = false;
-                buddyListWindow.isSnapped = false;
-                notifySnapStateChanged(null);
-                console.log('[Snap] Chat unsnapped from Buddy List (dragged away)');
-            } else {
-                console.log('[Snap] Chat already snapped to Buddy List');
-            }
-            return;
-        }
-        
-        // Try to snap if not already snapped
-        if (Math.abs(distance) < SNAP_THRESHOLD && Math.abs(chatBounds.y - buddyBounds.y) <= Y_TOLERANCE) {
-            // Snap Chat to the right edge of Buddy List
-            chatPopoutWindow.setPosition(buddyRight, buddyBounds.y);
-            chatPopoutWindow.snappedTo = 'buddy-right';
-            chatPopoutWindow.snappedFrom = null;
-            buddyListWindow.snappedTo = null;
-            buddyListWindow.snappedFrom = 'chat-left';
-            
-            chatPopoutWindow.isSnapped = true;
-            buddyListWindow.isSnapped = true;
-            
-            // Resize Buddy List to match Chat height
-            const newChatBounds = chatPopoutWindow.getBounds();
-            const newBuddyBounds = buddyListWindow.getBounds();
-            buddyListWindow.setSize(newBuddyBounds.width, newChatBounds.height);
-            
-            // Notify renderer processes of snap state change
-            notifySnapStateChanged('buddy-right');
-            
-            console.log('[Snap] Chat snapped to Buddy List (released)');
+    // Register with SnapManager (will be activated when buddyListWindow also exists)
+    // We use setImmediate to defer this call, allowing buddyListWindow to be set first
+    setImmediate(() => {
+        if (buddyListWindow && !buddyListWindow.isDestroyed()) {
+            snapManager.registerWindows(chatPopoutWindow, buddyListWindow);
         } else {
-            console.log('[Snap] Chat released - distance:', distance, 'yDiff:', Math.abs(chatBounds.y - buddyBounds.y));
+            // Store reference for later registration
+            snapManager.chatWindow = chatPopoutWindow;
         }
     });
     
+    // NOTE: The old 'moving', 'move', 'moved', and 'resize' handlers have been
+    // replaced by SnapManager's position polling and moved handlers.
+    // Snap detection on release is now handled by SnapManager's moved handlers.
+    // Unsnap is only allowed via detach button (IPC), not by dragging.
+
     // ============================================
-    // SYNCHRONIZED RESIZE HANDLERS
+    // CHAT POPOUT - DETACH BUDDY LIST IPC
     // ============================================
     
-    // When Chat resizes while snapped, sync Buddy List height
-    chatPopoutWindow.on('resize', () => {
-        if (!buddyListWindow || buddyListWindow.isDestroyed()) return;
-        
-        const isSnappedToBuddy = (chatPopoutWindow.snappedTo === 'buddy-right');
-        const buddySnappedToChat = (buddyListWindow?.snappedTo === 'chat-left');
-        const isSnapped = isSnappedToBuddy || buddySnappedToChat;
-        
-        if (isSnapped) {
-            const chatBounds = chatPopoutWindow.getBounds();
-            const buddyBounds = buddyListWindow.getBounds();
-            
-            // Sync Buddy List height to match Chat
-            if (buddyBounds.height !== chatBounds.height) {
-                buddyListWindow.setSize(buddyBounds.width, chatBounds.height);
-                console.log(`[Snap] Synced Buddy List height to Chat: ${chatBounds.height}px`);
-            }
-        }
-    });
+    // Listen for detach command from renderer
     
-    // When Chat is released after resize, ensure Buddy List is synced
-    chatPopoutWindow.on('resized', () => {
-        if (!buddyListWindow || buddyListWindow.isDestroyed()) return;
-        
-        const isSnappedToBuddy = (chatPopoutWindow.snappedTo === 'buddy-right');
-        const buddySnappedToChat = (buddyListWindow?.snappedTo === 'chat-left');
-        const isSnapped = isSnappedToBuddy || buddySnappedToChat;
-        
-        if (isSnapped) {
-            const chatBounds = chatPopoutWindow.getBounds();
-            const buddyBounds = buddyListWindow.getBounds();
-            
-            // Final sync of Buddy List height
-            buddyListWindow.setSize(buddyBounds.width, chatBounds.height);
-            console.log(`[Snap] Final sync of Buddy List height after Chat resize: ${chatBounds.height}px`);
-        }
-    });
+    // Note: Resize sync is now handled by SnapManager (line ~534)
+    // Removed duplicate resized handler to avoid conflicts
     
     // When Chat closes, unsnap Buddy List
     chatPopoutWindow.on('close', () => {
@@ -1269,6 +1805,19 @@ function createChatPopoutWindow() {
             buddyListWindow.snappedFrom = null;
             buddyListWindow.isSnapped = false;
         }
+    });
+    
+    // Focus handlers to ensure snapped windows stay layered together
+    chatPopoutWindow.on('focus', () => {
+        console.log('[ChatPopout] Window gained focus');
+        // Bring snapped buddy list to front as well
+        if (snapManager && snapManager.isSnapped) {
+            snapManager.bringAllToTop();
+        }
+    });
+    
+    chatPopoutWindow.on('blur', () => {
+        console.log('[ChatPopout] Window lost focus');
     });
 }
 
@@ -1292,10 +1841,12 @@ function createBuddyListWindow() {
         frame: false,
         transparent: true,
         resizable: true,
+        movable: true,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            preload: path.join(__dirname, 'preload.js')
+            preload: path.join(__dirname, 'preload.js'),
+            backgroundThrottling: false // Keep rendering when unfocused
         },
         icon: path.join(__dirname, 'assets', 'icon.png'),
         title: 'Campfire Widget - Buddy List',
@@ -1304,17 +1855,12 @@ function createBuddyListWindow() {
 
     buddyListWindow.loadFile(path.join(__dirname, 'server', 'buddy-list.html'));
     
-    // Update windows object for IPC event forwarding
-    if (typeof windows !== 'undefined' && windows) {
-        windows.buddyList = buddyListWindow;
-    }
-    
-    // Also update the userIPCHandlers windows reference if it exists
-    if (typeof userIPCHandlers !== 'undefined' && userIPCHandlers) {
+    // Register window reference in UserIPCHandlers for event forwarding
+    if (userIPCHandlers && userIPCHandlers.windows) {
         userIPCHandlers.windows.buddyList = buddyListWindow;
         console.log('[BuddyList] Registered in UserIPCHandlers');
     } else {
-        console.log('[BuddyList] WARNING: userIPCHandlers not available');
+        console.log('[BuddyList] WARNING: userIPCHandlers.windows not available');
     }
     
     // Store original height for restore on detach
@@ -1324,161 +1870,40 @@ function createBuddyListWindow() {
         buddyListWindow = null;
     });
     
-    // ============================================
-    // SNAP-TO-EDGE WINDOW GROUPING (Buddy List)
-    // ============================================
-    
-    // Track snap state
-    buddyListWindow.snappedTo = null;      // 'chat-left' or null
-    buddyListWindow.snappedFrom = null;    // 'widget-right' or null
-    buddyListWindow.isSnapped = false;
-    
-    // When Buddy List moves, this fires at the end of the move
-    // Note: Position sync happens in the 'moving' handler
-    // We only unsnap here if the user explicitly detaches via the button
-    // (Detach is handled via IPC, not via drag distance)
-    buddyListWindow.on('move', () => {
-        // No automatic unsnap on move - only explicit detach works
-        // The 'moving' handler handles position sync during drag
-    });
-    
-    // When Buddy List moves while snapped, move Chat too
-    buddyListWindow.on('moving', () => {
-        // Check if Buddy List is snapped TO Chat OR if Chat is snapped TO Buddy List
-        const isSnappedToChat = (buddyListWindow.snappedTo === 'chat-left');
-        const chatSnappedToBuddy = (chatPopoutWindow?.snappedTo === 'buddy-right');
-        const isSnapped = isSnappedToChat || chatSnappedToBuddy;
-        
-        console.log(`[Snap] Buddy List moving - isSnapped: ${isSnapped}, snappedTo: ${buddyListWindow.snappedTo}, chat.snappedTo: ${chatPopoutWindow?.snappedTo}`);
-        
-        if (isSnapped && chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
-            const buddyBounds = buddyListWindow.getBounds();
-            const chatBounds = chatPopoutWindow.getBounds();
-            
-            // Move Chat to be adjacent to Buddy List
-            // Buddy List's right edge (no gap for clean drop shadow merge)
-            const SNAP_GAP = 0;
-            const targetX = buddyBounds.x + buddyBounds.width + SNAP_GAP;
-            const targetY = buddyBounds.y;
-            
-            console.log(`[Snap] Moving Chat to x:${targetX}, y:${targetY}`);
-            
-            // Only move if significantly different to avoid jitter
-            if (Math.abs(chatBounds.x - targetX) > 2 || Math.abs(chatBounds.y - targetY) > 2) {
-                chatPopoutWindow.setPosition(targetX, targetY);
-            }
+    // Focus handlers to ensure snapped windows stay layered together
+    buddyListWindow.on('focus', () => {
+        console.log('[BuddyList] Window gained focus');
+        // Bring snapped chat to front as well
+        if (snapManager && snapManager.isSnapped) {
+            snapManager.bringAllToTop();
         }
     });
     
-    // When Buddy List is released (move ended), check if it should snap or unsnap from Chat
-    buddyListWindow.on('moved', () => {
-        if (!chatPopoutWindow || chatPopoutWindow.isDestroyed()) return;
-        
-        const buddyBounds = buddyListWindow.getBounds();
-        const chatBounds = chatPopoutWindow.getBounds();
-        
-        // Check if Chat is to the right of Buddy List
-        const buddyRight = buddyBounds.x + buddyBounds.width;
-        const distance = chatBounds.x - buddyRight;
-        
-        // Snap threshold (pixels)
-        const SNAP_THRESHOLD = 30;
-        const Y_TOLERANCE = 50; // Allow 50 pixels Y difference for snapping (more forgiving)
-        
-        // If already snapped, check if user dragged it far enough to unsnap
-        if (buddyListWindow.snappedTo === 'chat-left') {
-            // Check if dragged beyond snap threshold
-            if (Math.abs(distance) > SNAP_THRESHOLD * 2 || Math.abs(buddyBounds.y - chatBounds.y) > Y_TOLERANCE) {
-                // User dragged far enough - unsnap
-                buddyListWindow.snappedTo = null;
-                buddyListWindow.snappedFrom = null;
-                chatPopoutWindow.snappedTo = null;
-                chatPopoutWindow.snappedFrom = null;
-                buddyListWindow.isSnapped = false;
-                chatPopoutWindow.isSnapped = false;
-                notifySnapStateChanged(null);
-                console.log('[Snap] Buddy List unsnapped from Chat (dragged away)');
-            } else {
-                console.log('[Snap] Buddy List already snapped to Chat');
-            }
-            return;
-        }
-        
-        // Try to snap if not already snapped
-        if (Math.abs(distance) < SNAP_THRESHOLD && Math.abs(buddyBounds.y - chatBounds.y) <= Y_TOLERANCE) {
-            // Snap Buddy List to the left edge of Chat
-            buddyListWindow.setPosition(chatBounds.x - buddyBounds.width, chatBounds.y);
-            buddyListWindow.snappedTo = 'chat-left';
-            buddyListWindow.snappedFrom = null;
-            chatPopoutWindow.snappedTo = null;
-            chatPopoutWindow.snappedFrom = 'buddy-right';
-            
-            buddyListWindow.isSnapped = true;
-            chatPopoutWindow.isSnapped = true;
-            
-            // Resize Buddy List to match Chat height
-            const newChatBounds = chatPopoutWindow.getBounds();
-            buddyListWindow.setSize(buddyBounds.width, newChatBounds.height);
-            
-            // Notify renderer processes of snap state change
-            notifySnapStateChanged('chat-left');
-            
-            console.log('[Snap] Buddy List snapped to Chat (released)');
-        } else {
-            console.log('[Snap] Buddy List released - distance:', distance, 'yDiff:', Math.abs(buddyBounds.y - chatBounds.y));
-        }
+    buddyListWindow.on('blur', () => {
+        console.log('[BuddyList] Window lost focus');
     });
     
     // ============================================
-    // SYNCHRONIZED RESIZE HANDLERS (Buddy List)
+    // SNAP MANAGER INTEGRATION (New)
     // ============================================
+    // Use SnapManager for synchronized movement during drag
+    // Problem: 'moving' event doesn't fire reliably on Windows
+    // Solution: Position polling at ~60fps via SnapManager
     
-    // When Buddy List resizes while snapped, sync Chat height
-    buddyListWindow.on('resize', () => {
-        if (!chatPopoutWindow || chatPopoutWindow.isDestroyed()) return;
-        
-        const isSnappedToChat = (buddyListWindow.snappedTo === 'chat-left');
-        const chatSnappedToBuddy = (chatPopoutWindow?.snappedTo === 'buddy-right');
-        const isSnapped = isSnappedToChat || chatSnappedToBuddy;
-        
-        if (isSnapped) {
-            const buddyBounds = buddyListWindow.getBounds();
-            const chatBounds = chatPopoutWindow.getBounds();
-            
-            // Sync Chat height to match Buddy List
-            if (chatBounds.height !== buddyBounds.height) {
-                chatPopoutWindow.setSize(chatBounds.width, buddyBounds.height);
-                console.log(`[Snap] Synced Chat height to Buddy List: ${buddyBounds.height}px`);
-            }
-        }
-    });
-    
-    // When Buddy List is released after resize, ensure Chat is synced
-    buddyListWindow.on('resized', () => {
-        if (!chatPopoutWindow || chatPopoutWindow.isDestroyed()) return;
-        
-        const isSnappedToChat = (buddyListWindow.snappedTo === 'chat-left');
-        const chatSnappedToBuddy = (chatPopoutWindow?.snappedTo === 'buddy-right');
-        const isSnapped = isSnappedToChat || chatSnappedToBuddy;
-        
-        if (isSnapped) {
-            const buddyBounds = buddyListWindow.getBounds();
-            const chatBounds = chatPopoutWindow.getBounds();
-            
-            // Final sync of Chat height
-            chatPopoutWindow.setSize(chatBounds.width, buddyBounds.height);
-            console.log(`[Snap] Final sync of Chat height after Buddy List resize: ${buddyBounds.height}px`);
-        }
-    });
-    
-    // When Buddy List closes, unsnap Chat
-    buddyListWindow.on('close', () => {
+    // Register with SnapManager (activates if chatPopoutWindow already exists)
+    setImmediate(() => {
         if (chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
-            chatPopoutWindow.snappedTo = null;
-            chatPopoutWindow.snappedFrom = null;
-            chatPopoutWindow.isSnapped = false;
+            snapManager.registerWindows(chatPopoutWindow, buddyListWindow);
+        } else {
+            // Store reference for later registration
+            snapManager.buddyListWindow = buddyListWindow;
         }
     });
+    
+    // NOTE: The old 'moving', 'move', 'moved', and 'resize' handlers have been
+    // replaced by SnapManager's position polling and moved handlers.
+    // Snap detection on release is now handled by SnapManager's moved handlers.
+    // Unsnap is only allowed via detach button (IPC), not by dragging.
 
     // Log successful creation
     console.log('[Main] Buddy List window created');
@@ -5259,53 +5684,34 @@ ipcMain.handle('unsnap-all-windows', () => {
 ipcMain.handle('detach-buddy-list', () => {
     console.log('[Snap] Detaching buddy list...');
     
-    // Unsnap both windows
-    if (chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
-        chatPopoutWindow.snappedTo = null;
-        chatPopoutWindow.snappedFrom = null;
-        chatPopoutWindow.isSnapped = false;
-    }
+    // Save snap position before unsnap() clears it
+    const snapPosition = snapManager.snapPosition;
+    
+    // Use SnapManager to unsnap (stops polling, notifies renderers)
+    snapManager.unsnap();
+    
+    // Additional cleanup - move buddy list away from chat based on snap position
     if (buddyListWindow && !buddyListWindow.isDestroyed()) {
-        // Store current dimensions before detaching
         const bounds = buddyListWindow.getBounds();
         
-        // Move buddy list slightly to the left to show it's detached
-        buddyListWindow.setPosition(bounds.x - 20, bounds.y);
+        // Move buddy list AWAY from chat based on which side it's on
+        // buddy-left: buddy is on left, chat on right → move buddy left
+        // buddy-right: buddy is on right, chat on left → move buddy right
+        const moveDirection = snapPosition === 'buddy-right' ? 20 : -20;
+        buddyListWindow.setPosition(bounds.x + moveDirection, bounds.y);
         
-        // Restore original height when detaching
-        if (buddyListWindow.originalHeight) {
-            buddyListWindow.setSize(bounds.width, buddyListWindow.originalHeight);
-            console.log(`[Snap] Restored buddy list to original height: ${buddyListWindow.originalHeight}px`);
-        }
-        
-        buddyListWindow.snappedTo = null;
-        buddyListWindow.snappedFrom = null;
-        buddyListWindow.isSnapped = false;
+        console.log(`[Snap] Detached buddy list, moved ${moveDirection > 0 ? 'right' : 'left'} (snapPosition: ${snapPosition})`);
+        // Keep the current height - do NOT restore original height
     }
-    
-    // Notify renderer processes of snap state change
-    notifySnapStateChanged(null);
     
     console.log('[Snap] Buddy list detached');
     return { success: true };
 });
 
 // Helper function to notify all windows of snap state changes
+// Now delegates to SnapManager's notifySnapStateChanged
 function notifySnapStateChanged(snapState) {
-    const status = {
-        bothSnapped: snapState !== null,
-        snapState: snapState
-    };
-    
-    // Send to Chat Popout window
-    if (chatPopoutWindow && !chatPopoutWindow.isDestroyed()) {
-        chatPopoutWindow.webContents.send('window-snap-changed', status);
-    }
-    
-    // Send to Buddy List window
-    if (buddyListWindow && !buddyListWindow.isDestroyed()) {
-        buddyListWindow.webContents.send('window-snap-changed', status);
-    }
+    snapManager.notifySnapStateChanged();
 }
 
 // Sync window dimensions when attached (for synchronized height)
