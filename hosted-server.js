@@ -20,12 +20,13 @@ const cookieParser = require('cookie-parser');
 // Load environment variables
 require('dotenv').config();
 
-// Import new modules
+// Import modules
 const { initializeDatabase, runMigrations, runSeeds, healthCheck } = require('./database/connection');
 const { initializeWebSocket, getSocketCount, getUserCount } = require('./server/socket');
+const { isConfigured: isSupabaseConfigured } = require('./server/supabase');
 
-// Import routes
-const authRoutes = require('./server/routes/auth');
+// Import routes (use Supabase auth if configured)
+const authRoutes = process.env.SUPABASE_URL ? require('./server/routes/supabase-auth') : require('./server/routes/auth');
 const { requireAuth } = require('./server/middleware/auth');
 const { Campfire, User } = require('./database/models');
 

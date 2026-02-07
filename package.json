@@ -23,6 +23,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
@@ -39,8 +40,8 @@
   "devDependencies": {
     "gifencoder": "^2.0.1",
     "glob": "^13.0.0",
+    "jest": "^29.0.0",
     "pngjs": "^7.0.0",
-    "sharp": "^0.33.0",
-    "jest": "^29.0.0"
+    "sharp": "^0.33.0"
   }
 }
