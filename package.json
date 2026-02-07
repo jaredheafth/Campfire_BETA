@@ -4,7 +4,10 @@
   "description": "Interactive campfire widget for Twitch streams",
   "main": "server.js",
   "scripts": {
-    "start": "cd desktop-app && npm start",
+    "start": "node server.js",
+    "dev": "node server.js",
+    "db:migrate": "node database/run-migrations.js",
+    "db:seed": "node database/run-seeds.js",
     "sprite-to-gif": "node sprite-to-gif-simple.js",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -20,9 +23,18 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^9.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
     "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
-    "tmi.js": "^1.8.5"
+    "pg": "^8.11.3",
+    "socket.io": "^4.7.4",
+    "tmi.js": "^1.8.5",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "gifencoder": "^2.0.1",
