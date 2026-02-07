@@ -5,7 +5,7 @@
  * Supports:
  * - Railway PostgreSQL (DATABASE_URL)
  * - Local PostgreSQL (CAMPFIRE_DB_URL)
- * - SQLite fallback for development
+ * - SQLite fallback for development (sql.js - pure JS, no compilation needed)
  */
 
 const { Pool } = require('pg');
@@ -18,9 +18,9 @@ const config = {
     databaseUrl: process.env.DATABASE_URL || process.env.CAMPFIRE_DB_URL,
     
     // Connection pool settings
-    max: 20,                    // Max connections in pool
-    idleTimeoutMillis: 30000,   // Close idle connections after 30s
-    connectionTimeoutMillis: 2000, // Fail if can't connect in 2s
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
     
     // SSL for production
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
@@ -28,6 +28,8 @@ const config = {
 
 // Create connection pool
 let pool = null;
+let sqliteDb = null;
+let sqlJsInit = null;
 
 /**
  * Initialize database connection
@@ -42,7 +44,7 @@ async function initializeDatabase() {
     
     if (useSqlite) {
         console.log('📦 Using SQLite for development (set DATABASE_URL for PostgreSQL)');
-        pool = createSqlitePool();
+        pool = await createSqlitePool();
     } else {
         console.log('🗄️ Connecting to PostgreSQL...');
         pool = createPostgresPool();
@@ -59,7 +61,7 @@ async function initializeDatabase() {
         // Fallback to SQLite if PostgreSQL fails
         if (!useSqlite) {
             console.log('⚠️ Falling back to SQLite...');
-            pool = createSqlitePool();
+            pool = await createSqlitePool();
         }
     }
 
@@ -80,40 +82,54 @@ function createPostgresPool() {
 }
 
 /**
- * Create SQLite pool (development fallback)
- * Uses better-sqlite3 for sync operations
+ * Create SQLite pool using sql.js (pure JavaScript, no native compilation)
  */
-function createSqlitePool() {
+async function createSqlitePool() {
     try {
-        const Database = require('better-sqlite3');
-        const dbPath = path.join(__dirname, 'campfire_dev.sqlite');
-        
-        // Ensure directory exists
-        const dbDir = path.dirname(dbPath);
-        if (!fs.existsSync(dbDir)) {
-            fs.mkdirSync(dbDir, { recursive: true });
+        // Initialize sql.js only once
+        if (!sqlJsInit) {
+            const initSqlJs = require('sql.js');
+            sqlJsInit = await initSqlJs();
         }
         
-        const db = new Database(dbPath);
-        db.pragma('journal_mode = WAL');
+        const dbPath = path.join(__dirname, 'campfire_dev.sqlite');
+        
+        // Load existing database or create new one
+        if (fs.existsSync(dbPath)) {
+            const fileBuffer = fs.readFileSync(dbPath);
+            sqliteDb = new sqlJsInit.Database(fileBuffer);
+            console.log(`📦 SQLite database loaded from: ${dbPath}`);
+        } else {
+            sqliteDb = new sqlJsInit.Database();
+            console.log(`📦 SQLite database created at: ${dbPath}`);
+        }
         
         // Enable foreign keys
-        db.pragma('foreign_keys = ON');
-        
-        console.log(`📦 SQLite database created at: ${dbPath}`);
+        sqliteDb.run('PRAGMA foreign_keys = ON');
         
         return {
             query: (sql, params) => {
                 try {
-                    const stmt = db.prepare(sql);
-                    const result = stmt.all(...(params || []));
-                    return { rows: result };
+                    const stmt = sqliteDb.prepare(sql);
+                    
+                    if (params && params.length > 0) {
+                        stmt.bind(params);
+                    } else {
+                        stmt.bind();
+                    }
+                    
+                    const results = [];
+                    while (stmt.step()) {
+                        results.push(stmt.getAsObject());
+                    }
+                    stmt.free();
+                    
+                    return { rows: results };
                 } catch (error) {
                     // Try as run operation for INSERT/UPDATE/DELETE
                     try {
-                        const stmt = db.prepare(sql);
-                        const result = stmt.run(...(params || []));
-                        return { rows: [result], affectedRows: result.changes };
+                        sqliteDb.run(sql, params || []);
+                        return { rows: [], affectedRows: sqliteDb.getRowsModified() };
                     } catch (runError) {
                         throw error;
                     }
@@ -122,14 +138,25 @@ function createSqlitePool() {
             connect: () => ({
                 query: (sql, params) => {
                     try {
-                        const stmt = db.prepare(sql);
-                        const result = stmt.all(...(params || []));
-                        return { rows: result };
+                        const stmt = sqliteDb.prepare(sql);
+                        
+                        if (params && params.length > 0) {
+                            stmt.bind(params);
+                        } else {
+                            stmt.bind();
+                        }
+                        
+                        const results = [];
+                        while (stmt.step()) {
+                            results.push(stmt.getAsObject());
+                        }
+                        stmt.free();
+                        
+                        return { rows: results };
                     } catch (error) {
                         try {
-                            const stmt = db.prepare(sql);
-                            const result = stmt.run(...(params || []));
-                            return { rows: [result], affectedRows: result.changes };
+                            sqliteDb.run(sql, params || []);
+                            return { rows: [], affectedRows: sqliteDb.getRowsModified() };
                         } catch (runError) {
                             throw error;
                         }
@@ -137,11 +164,17 @@ function createSqlitePool() {
                 },
                 release: () => {}
             }),
-            end: () => db.close()
+            end: () => {
+                if (sqliteDb) {
+                    const data = sqliteDb.export();
+                    const buffer = Buffer.from(data);
+                    fs.writeFileSync(dbPath, buffer);
+                    sqliteDb.close();
+                }
+            }
         };
     } catch (error) {
         console.error('SQLite not available, using memory fallback');
-        // Return a memory-based mock for testing
         return createMemoryPool();
     }
 }
