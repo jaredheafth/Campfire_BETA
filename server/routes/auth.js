@@ -19,8 +19,42 @@ const { query } = require('../../database/connection');
 // ============================================
 
 /**
+ * POST /api/auth/twitch
+ * Start Twitch OAuth authorization flow
+ * Accepts: { stayLoggedIn: boolean, authType: 'create' | 'login' }
+ */
+router.post('/twitch', asyncHandler(async (req, res) => {
+    const { stayLoggedIn, authType } = req.body;
+    
+    // Generate state for CSRF protection
+    const state = twitchAuth.generateState();
+    
+    // Store auth context in signed cookie
+    res.cookie('oauth_context', JSON.stringify({
+        state,
+        stayLoggedIn: stayLoggedIn !== false, // default to true
+        authType: authType || 'login'
+    }), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 10 * 60 * 1000 // 10 minutes
+    });
+
+    // Generate authorization URL
+    const authUrl = twitchAuth.getAuthorizationUrl(state, {
+        forceVerify: req.query.forceVerify === 'true'
+    });
+
+    res.json({
+        url: authUrl,
+        state
+    });
+}));
+
+/**
  * GET /api/auth/twitch
- * Redirect to Twitch OAuth authorization page
+ * Redirect to Twitch OAuth authorization page (legacy - GET version)
  */
 router.get('/twitch', (req, res) => {
     // Generate state for CSRF protection
@@ -54,17 +88,42 @@ router.get('/twitch/callback', asyncHandler(async (req, res) => {
 
     // Handle user cancellation
     if (error) {
-        return res.redirect(`${process.env.FRONTEND_URL}/auth/cancelled?error=${error}`);
+        return res.redirect(`${process.env.FRONTEND_URL}/login?auth=cancelled&error=${error}`);
+    }
+
+    // Get oauth_context cookie (new format) or fall back to oauth_state
+    let oauthContext = null;
+    let storedState = null;
+    
+    if (req.cookies.oauth_context) {
+        try {
+            oauthContext = JSON.parse(req.cookies.oauth_context);
+            storedState = oauthContext.state;
+        } catch (e) {
+            console.error('[Auth] Failed to parse oauth_context cookie');
+        }
+    }
+    
+    // Fall back to old oauth_state cookie
+    if (!storedState && req.cookies.oauth_state) {
+        storedState = req.cookies.oauth_state;
     }
 
     // Validate state
-    const storedState = req.cookies.oauth_state;
     if (!twitchAuth.validateState(state, storedState)) {
-        return res.redirect(`${process.env.FRONTEND_URL}/auth/error?message=invalid_state`);
+        return res.redirect(`${process.env.FRONTEND_URL}/login?auth=error&message=invalid_state`);
     }
 
-    // Clear state cookie
+    // Clear oauth cookies
+    res.clearCookie('oauth_context');
     res.clearCookie('oauth_state');
+
+    // Get stayLoggedIn from context (default to true)
+    const stayLoggedIn = oauthContext?.stayLoggedIn !== false;
+    
+    // Session expiry based on stayLoggedIn
+    const sessionExpiryDays = stayLoggedIn ? 30 : 7;
+    const sessionExpiryMs = sessionExpiryDays * 24 * 60 * 60 * 1000;
 
     // Exchange code for tokens
     const twitchTokens = await twitchAuth.exchangeCodeForTokens(code);
@@ -103,7 +162,7 @@ router.get('/twitch/callback', asyncHandler(async (req, res) => {
 
     // Store refresh token hash for revocation
     const refreshTokenHash = hashToken(tokens.refreshToken);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + sessionExpiryMs);
 
     await query(`
         INSERT INTO sessions (user_id, token_hash, token_type, expires_at, user_agent, ip_address)
@@ -125,11 +184,24 @@ router.get('/twitch/callback', asyncHandler(async (req, res) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        maxAge: sessionExpiryMs
     });
 
-    // Redirect to frontend with success
-    res.redirect(`${process.env.FRONTEND_URL}/auth/success`);
+    // Store user info in a separate cookie for quick access (not httpOnly)
+    res.cookie('user_info', JSON.stringify({
+        id: user.id,
+        username: user.username,
+        displayName: user.display_name,
+        avatarUrl: user.avatar_url
+    }), {
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: sessionExpiryMs
+    });
+
+    // Redirect to home/dashboard
+    const redirectUrl = oauthContext?.authType === 'create' ? '/home?welcome=new' : '/home';
+    res.redirect(`${process.env.FRONTEND_URL}${redirectUrl}`);
 }));
 
 /**

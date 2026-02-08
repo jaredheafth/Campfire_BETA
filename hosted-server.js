@@ -121,10 +121,20 @@ if (fs.existsSync(fontsDir)) {
     app.use('/fonts', express.static(fontsDir));
 }
 
-// Landing page - redirect to viewer dashboard
+// Landing page - serve login page (MUST be before static middleware)
 app.get('/', (req, res) => {
-    res.redirect('/desktop/viewer-dashboard.html');
+    res.sendFile(path.join(__dirname, 'pages', 'login.html'));
 });
+
+// Serve pages (login, home, etc.) - AFTER the explicit / route
+const pagesDir = path.join(__dirname, 'pages');
+if (fs.existsSync(pagesDir)) {
+    app.use(express.static(pagesDir, { 
+        extensions: ['html'],
+        index: 'login.html'
+    }));
+    console.log('✅ Serving pages from:', pagesDir);
+}
 
 // ============================================
 // API ROUTES
@@ -226,6 +236,39 @@ app.get('/api/buddies/requests', requireAuth, async (req, res) => {
     res.json({ requests });
 });
 
+// Creator applications (public - anyone can apply)
+app.post('/api/creator-applications', async (req, res) => {
+    const { twitchChannel, email, reason } = req.body;
+    
+    if (!twitchChannel || !email || !reason) {
+        return res.status(400).json({ 
+            error: 'missing_fields',
+            message: 'twitchChannel, email, and reason are required'
+        });
+    }
+    
+    try {
+        const { query } = require('./database/connection');
+        
+        // Insert creator application
+        await query(`
+            INSERT INTO creator_applications (twitch_channel, email, reason, status, created_at)
+            VALUES ($1, $2, $3, 'pending', NOW())
+        `, [twitchChannel, email, reason]);
+        
+        res.json({ 
+            success: true,
+            message: 'Application submitted successfully. We will review it soon.'
+        });
+    } catch (error) {
+        console.error('Creator application error:', error);
+        res.status(500).json({ 
+            error: 'submission_failed',
+            message: 'Failed to submit application: ' + error.message
+        });
+    }
+});
+
 // Public campfire discovery
 app.get('/api/campfires/discover', async (req, res) => {
     const { query, platform, tags, limit = 20 } = req.query;
@@ -264,15 +307,25 @@ app.get('/api/healthcheck', (req, res) => {
 
 // Serve index.html for SPA routes
 app.get('*', (req, res, next) => {
-    // Skip API routes
-    if (req.path.startsWith('/api') || req.path.startsWith('/sprites') || req.path.startsWith('/fonts')) {
+    // Skip API routes and root
+    if (req.path.startsWith('/api') || 
+        req.path.startsWith('/sprites') || 
+        req.path.startsWith('/fonts') ||
+        req.path === '/' ||
+        req.path.startsWith('/desktop')) {
         return next();
     }
     
-    // Serve static HTML if exists
-    const htmlPath = path.join(__dirname, 'desktop-app/server', req.path + '.html');
-    if (fs.existsSync(htmlPath)) {
-        return res.sendFile(htmlPath);
+    // Serve static HTML if exists in pages directory
+    const pagesHtmlPath = path.join(__dirname, 'pages', req.path + '.html');
+    if (fs.existsSync(pagesHtmlPath)) {
+        return res.sendFile(pagesHtmlPath);
+    }
+    
+    // Also check desktop-app/server for legacy HTML files
+    const desktopHtmlPath = path.join(__dirname, 'desktop-app/server', req.path + '.html');
+    if (fs.existsSync(desktopHtmlPath)) {
+        return res.sendFile(desktopHtmlPath);
     }
     
     next();
@@ -305,15 +358,15 @@ async function startServer() {
         console.log('📦 Initializing database...');
         await initializeDatabase();
         
-        // Run migrations
-        console.log('🔄 Running database migrations...');
-        await runMigrations();
+        // Run migrations (disabled for SQLite local dev - runs on Railway PostgreSQL)
+        // console.log('🔄 Running database migrations...');
+        // await runMigrations();
         
-        // Run seeds (optional)
-        if (process.env.RUN_SEEDS === 'true') {
-            console.log('🌱 Running database seeds...');
-            await runSeeds();
-        }
+        // Run seeds (disabled for SQLite local dev - runs on Railway PostgreSQL)
+        // if (process.env.RUN_SEEDS === 'true') {
+        //     console.log('🌱 Running database seeds...');
+        //     await runSeeds();
+        // }
         
         // Initialize WebSocket
         console.log('🔌 Initializing WebSocket server...');
